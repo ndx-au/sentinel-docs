@@ -1,0 +1,42 @@
+:root {
+  --bg: #fff;
+  --text: #000;
+  --muted: #000;
+  --border: #000;
+  --sidebar-bg: #fff;
+  --accent: #000;
+  --accent-soft: #fff;
+  --code-bg: #000;
+  --code-fg: #fff;
+  --header-bg: #fff;
+  --header-fg: #000;
+  --header-link: #000;
+  --header-border-width: 2px;
+  --sidebar-border-width: 2px;
+  --radius: 4px;
+  --nav-hover: #f2f2f2;
+  --nav-active-bg: #000;
+  --nav-active-fg: #fff;
+  --nav-active-border: #000;
+  --inline-code-bg: #000;
+  --table-stripe: #fff;
+  --callout-fg: #000;
+  --h2-border: #000;
+  --focus-width: 3px;
+  --focus-color: #000;
+  --link-decoration: underline;
+  --syntax-keyword: #a3e635;
+  --syntax-string: #a3e635;
+  --syntax-comment: #d4d4d4;
+}
+
+a { color: #000; text-decoration: underline; }
+.docs-nav a, .site-brand { text-decoration: none; }
+.docs-nav a.active { color: #fff; }
+.docs-content :not(pre) > code { color: #fff; }
+.theme-select select { border: 2px solid #000; }
+
+.docs-content pre .k, .docs-content pre .kc, .docs-content pre .kd,
+.docs-content pre .kn, .docs-content pre .kw, .docs-content pre .nf { color: var(--syntax-keyword); }
+.docs-content pre .s, .docs-content pre .s1, .docs-content pre .s2 { color: var(--syntax-string); }
+.docs-content pre .c, .docs-content pre .c1, .docs-content pre .cm { color: var(--syntax-comment); }
