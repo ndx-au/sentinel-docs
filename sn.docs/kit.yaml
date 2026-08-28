@@ -1,0 +1,11 @@
+name: Sentinel Docs
+description: Public documentation for Sentinel, served via the fcms plane
+namespace: sn
+kit-name: docs
+version: 0.1.0
+public: true
+cms_full_html: true
+cms_render_cache_ttl_sec: 600
+branding:
+  title: Sentinel Docs
+  favicon: /pb/favicon.ico
