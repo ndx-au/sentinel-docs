@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sentinel Docs - Getting Started</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        'paper': '#f7f2e9',
+                        'ink': '#1a1a1a',
+                        'ink-code': '#2b2620',
+                        'ink-rust': '#b4552d',
+                        'amber-syntax': '#d97736'
+                    },
+                    fontFamily: {
+                        'display': ['"Source Serif 4"', 'serif'],
+                        'body': ['"Source Serif 4"', 'serif'],
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { background-color: #f7f2e9; color: #1a1a1a; font-family: "Source Serif 4", serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0; }
+        /* Syntax highlighting simulation */
+        .token.keyword { color: #d97736; }
+        .token.string { color: #a1b56c; }
+        .token.function { color: #7cafc2; }
+    </style>
+</head>
+<body class="bg-paper text-ink antialiased min-h-screen flex flex-col font-body">
+<!-- TopNavBar (Shared Component) -->
+<nav class="sticky top-0 w-full z-50 bg-[#f7f2e9] border-b border-[#1a1a1a]/20 flex justify-between items-center px-6 py-4 max-w-screen-2xl mx-auto">
+<div class="flex items-center space-x-8">
+<a class="text-xl font-bold font-display text-[#1a1a1a] tracking-tight" href="#">Sentinel</a>
+<div class="hidden md:flex space-x-6">
+<a class="text-[#1a1a1a]/70 hover:text-ink transition-colors duration-200" href="#">Docs</a>
+<a class="text-[#1a1a1a]/70 hover:text-ink transition-colors duration-200" href="#">API</a>
+<a class="text-[#1a1a1a]/70 hover:text-ink transition-colors duration-200" href="#">Changelog</a>
+</div>
+</div>
+<div class="flex items-center space-x-4">
+<div class="hidden sm:block">
+<select class="bg-transparent border border-ink/30 text-ink text-sm rounded-none focus:ring-0 focus:border-ink py-1 px-2 font-body italic">
+<option>Paper &amp; Ink</option>
+<option>Terminal</option>
+</select>
+</div>
+<button class="text-[#1a1a1a]/70 hover:text-ink transition-colors duration-200 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="dark_mode">dark_mode</span>
+</button>
+<button class="text-[#1a1a1a]/70 hover:text-ink transition-colors duration-200 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<a class="text-xs uppercase tracking-widest font-semibold border-l border-ink/20 pl-4 ml-4" href="#">GitHub</a>
+</div>
+</nav>
+<div class="flex flex-1 max-w-screen-2xl mx-auto w-full">
+<!-- SideNavBar (Shared Component) -->
+<aside class="hidden md:flex flex-col gap-y-1 p-6 overflow-y-auto w-64 border-r border-[#1a1a1a]/10 shrink-0 sticky top-[73px] h-[calc(100vh-73px)] bg-[#f7f2e9]">
+<div class="mb-6">
+<h2 class="font-display font-semibold text-[#1a1a1a] mb-1">Documentation</h2>
+<p class="text-xs text-ink/60 italic">v2.4.0-stable</p>
+</div>
+<nav class="flex flex-col space-y-2 font-body text-sm leading-loose">
+<a class="flex items-center text-[#1a1a1a]/60 px-3 py-1 hover:text-ink transition-all duration-150 group" href="#">
+<span class="material-symbols-outlined mr-3 text-lg opacity-60 group-hover:opacity-100" data-icon="menu_book">menu_book</span>
+                    Introduction
+                </a>
+<a class="flex items-center text-ink font-semibold border-b border-ink px-3 py-1" href="#">
+<span class="material-symbols-outlined mr-3 text-lg" data-icon="rocket_launch">rocket_launch</span>
+                    Getting Started
+                </a>
+<a class="flex items-center text-[#1a1a1a]/60 px-3 py-1 hover:text-ink transition-all duration-150 group" href="#">
+<span class="material-symbols-outlined mr-3 text-lg opacity-60 group-hover:opacity-100" data-icon="account_tree">account_tree</span>
+                    Architecture
+                </a>
+<a class="flex items-center text-[#1a1a1a]/60 px-3 py-1 hover:text-ink transition-all duration-150 group" href="#">
+<span class="material-symbols-outlined mr-3 text-lg opacity-60 group-hover:opacity-100" data-icon="settings">settings</span>
+                    Configuration
+                </a>
+<a class="flex items-center text-[#1a1a1a]/60 px-3 py-1 hover:text-ink transition-all duration-150 group" href="#">
+<span class="material-symbols-outlined mr-3 text-lg opacity-60 group-hover:opacity-100" data-icon="cloud_upload">cloud_upload</span>
+                    Deployment
+                </a>
+</nav>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 p-8 md:p-12 lg:p-16 max-w-3xl mx-auto">
+<article class="prose prose-lg prose-ink max-w-none font-body leading-relaxed">
+<header class="mb-12">
+<h1 class="text-4xl md:text-5xl font-display font-bold text-ink mb-4 tracking-tight">Getting Started</h1>
+<p class="text-xl text-ink/70 italic leading-relaxed">A brief guide to orchestrating your first git-native deployment with Sentinel.</p>
+</header>
+<p class="mb-6 text-lg text-ink/90 leading-loose">
+                    Before we begin, ensure you have the necessary prerequisites installed on your local machine. Sentinel relies heavily on standard git workflows, so a solid understanding of branch management will serve you well as we progress through these initial steps.
+                </p>
+<h2 class="text-2xl font-display font-semibold mt-12 mb-4 text-ink">Installation</h2>
+<p class="mb-6 text-ink/80 leading-relaxed">
+                    We recommend installing the Sentinel CLI via our official brew tap for MacOS users, or via the provided installation script for Linux environments. Windows support is currently handled via WSL2.
+                </p>
+<div class="bg-ink-code rounded-sm p-4 mb-8 overflow-x-auto text-sm text-paper/90 font-mono shadow-inner">
+<pre><code><span class="token keyword">brew</span> tap sentinel/core
+<span class="token keyword">brew</span> install sentinel-cli</code></pre>
+</div>
+<div class="pl-6 border-l-2 border-ink/20 my-8 italic text-ink/80">
+<p class="m-0">— Note: If you encounter permission errors during installation, ensure your user has appropriate rights to the designated bin directory, or consider running the installation script with elevated privileges as detailed in our <a class="text-ink-rust hover:underline underline-offset-4 decoration-ink/30 transition-all" href="#">troubleshooting guide</a>.</p>
+</div>
+<h2 class="text-2xl font-display font-semibold mt-12 mb-4 text-ink">Initialization</h2>
+<p class="mb-6 text-ink/80 leading-relaxed">
+                    Once installed, navigate to your project directory and initialize the Sentinel harness. This command will create a `.sentinel` directory containing the base configuration schema.
+                </p>
+<div class="bg-ink-code rounded-sm p-4 mb-8 overflow-x-auto text-sm text-paper/90 font-mono shadow-inner">
+<pre><code><span class="token function">cd</span> /path/to/your/project
+<span class="token keyword">sentinel</span> init <span class="token string">--template=standard</span></code></pre>
+</div>
+</article>
+<!-- Content Pager -->
+<div class="mt-20 pt-8 border-t border-ink/10 flex justify-between items-center font-display">
+<a class="text-ink/60 hover:text-ink transition-colors flex items-center group" href="#">
+<span class="material-symbols-outlined mr-2 text-sm group-hover:-translate-x-1 transition-transform" data-icon="arrow_back">arrow_back</span>
+<span class="border-b border-transparent group-hover:border-ink/30 pb-0.5">Previous: Introduction</span>
+</a>
+<a class="text-ink hover:text-ink-rust transition-colors flex items-center group font-semibold" href="#">
+<span class="border-b border-transparent group-hover:border-ink-rust pb-0.5">Next: Architecture</span>
+<span class="material-symbols-outlined ml-2 text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</main>
+</div>
+<!-- Footer (Shared Component) -->
+<footer class="w-full mt-20 border-t border-[#1a1a1a]/10 max-w-[800px] mx-auto py-12 flex flex-col items-center gap-4 bg-transparent text-[#1a1a1a]">
+<div class="flex gap-6 font-body text-xs uppercase tracking-widest text-[#1a1a1a]/40">
+<a class="hover:text-ink transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="hover:text-ink transition-colors opacity-80 hover:opacity-100" href="#">Discord</a>
+<a class="hover:text-ink transition-colors opacity-80 hover:opacity-100" href="#">Status</a>
+<a class="hover:text-ink transition-colors opacity-80 hover:opacity-100" href="#">Security</a>
+</div>
+<p class="font-body text-xs uppercase tracking-widest text-[#1a1a1a]/40">© 2024 Sentinel Orchestration. Built for the git-native era.</p>
+</footer>
+</body></html>
