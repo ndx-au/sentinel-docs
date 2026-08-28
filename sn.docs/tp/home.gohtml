@@ -18,10 +18,55 @@
   {{if .post}}{{with index .post.frontmatter "description"}}<meta name="description" content="{{.}}">{{end}}{{end}}
   <link rel="stylesheet" href="/kt/sn/docs/pb/style.css">
   <link rel="icon" href="/kt/sn/docs/pb/favicon.ico">
+  <script>
+  (function () {
+    var KEY = "snDocsTheme";
+    var BASE = "/kt/sn/docs/pb/themes/";
+    var OK = {"terminal-dark":1,"blueprint":1,"paper-ink":1,"high-contrast":1};
+    function read() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+    function write(v) { try { localStorage.setItem(KEY, v); } catch (e) {} }
+    function apply(name) {
+      var html = document.documentElement;
+      var el = document.getElementById("sn-docs-theme");
+      if (!name || name === "default" || !OK[name]) {
+        html.removeAttribute("data-theme");
+        if (el) el.remove();
+        return;
+      }
+      html.setAttribute("data-theme", name);
+      if (!el) {
+        el = document.createElement("link");
+        el.id = "sn-docs-theme";
+        el.rel = "stylesheet";
+        var main = document.querySelector('link[href$="pb/style.css"]');
+        if (main) main.after(el); else document.head.appendChild(el);
+      }
+      el.href = BASE + name + ".css";
+    }
+    var saved = read();
+    if (saved) apply(saved);
+    document.addEventListener("DOMContentLoaded", function () {
+      var sel = document.getElementById("theme-picker");
+      if (!sel) return;
+      sel.value = document.documentElement.getAttribute("data-theme") || "default";
+      sel.addEventListener("change", function () { apply(sel.value); write(sel.value); });
+    });
+  })();
+  </script>
 </head>
 <body>
   <header class="site-header">
     <a class="site-brand" href="/">Sentinel Docs</a>
+    <label class="theme-select">
+      <span class="theme-select-label">Theme</span>
+      <select id="theme-picker" aria-label="Color theme">
+        <option value="default">Default Light</option>
+        <option value="terminal-dark">Terminal Dark</option>
+        <option value="blueprint">Blueprint</option>
+        <option value="paper-ink">Paper &amp; Ink</option>
+        <option value="high-contrast">High Contrast</option>
+      </select>
+    </label>
     <a class="site-github" href="https://github.com/ndx-au/sentinel">GitHub</a>
   </header>
   <div class="docs-shell">
