@@ -1,0 +1,38 @@
+{{define "nav"}}
+{{- $items := split "index|Overview,getting-started|Getting Started,api-reference|API Reference,lua-api|Lua API,cli-reference|CLI Reference,configuration-guide|Configuration Guide,kit-development|Kit Development,workflows-and-patterns|Workflows & Patterns,troubleshooting-faq|Troubleshooting & FAQ,triple-access-pattern|Triple Access Pattern,edge-deployment|Edge Deployment,adversarial-testing|Adversarial Testing,storage|Storage,licensing|Licensing,docker-and-containers|Docker & Containers,wordpress|WordPress,harness-http-routes|Harness HTTP Routes,sentinel-directory|The .sentinel/ Directory,sentinel-cms|fcms (file CMS),mcp-agent-integration|MCP & Agent Integration,internals|Internals,agentic-ai-operator|Agentic AI Operator,rag-evaluation|RAG Evaluation,ai-provider-extension|AI Provider Extension,content-planes|Content Planes,ndx-trust-soc2|NDX Trust & SOC 2,agentic-ai-uat|Agentic AI UAT" "," -}}
+<nav class="docs-nav" aria-label="Documentation">
+{{- range $items -}}
+{{- $p := split . "|" -}}
+{{- $s := index $p 0 -}}
+{{- $t := index $p 1 -}}
+<a href="/{{$s}}"{{if eq $s $.slug}} class="active" aria-current="page"{{end}}>{{$t}}</a>
+{{- end -}}
+</nav>
+{{end}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .post}}{{with index .post.frontmatter "title"}}{{.}} — {{end}}{{end}}Sentinel Docs</title>
+  {{if .post}}{{with index .post.frontmatter "description"}}<meta name="description" content="{{.}}">{{end}}{{end}}
+  <link rel="stylesheet" href="/kt/sn/docs/pb/style.css">
+  <link rel="icon" href="/kt/sn/docs/pb/favicon.ico">
+</head>
+<body>
+  <header class="site-header">
+    <a class="site-brand" href="/">Sentinel Docs</a>
+    <a class="site-github" href="https://github.com/ndx-au/sentinel">GitHub</a>
+  </header>
+  <div class="docs-shell">
+    <aside class="docs-sidebar">
+      {{template "nav" .}}
+    </aside>
+    <main class="docs-main">
+      <article class="docs-content">
+        {{if .post}}{{index .post "full_html" | safeHTML}}{{end}}
+      </article>
+    </main>
+  </div>
+</body>
+</html>
