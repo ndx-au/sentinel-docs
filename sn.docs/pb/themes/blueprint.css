@@ -20,9 +20,11 @@
   --callout-fg: #0f2d4e;
   --h2-border: #1d6fd0;
   --focus-color: var(--accent);
-  --syntax-keyword: #67e8f9;
-  --syntax-string: #7dd3fc;
-  --syntax-comment: #7aa0c2;
+  --syntax-operator: #79b8ff;
+  --syntax-keyword: #c9d8ff;
+  --syntax-string: #a5d6ff;
+  --syntax-string2: #a5d6ff;
+  --syntax-comment: #8ea9c5;
 }
 
 .site-header .theme-select select {

@@ -23,8 +23,10 @@
   --h2-border: #242a35;
   --focus-color: var(--accent);
   --syntax-keyword: #3ddc84;
+  --syntax-operator: #79c0ff;
   --syntax-string: #e3b341;
-  --syntax-comment: #6b7585;
+  --syntax-string2: #f2cc60;
+  --syntax-comment: #8b949e;
 }
 
 .docs-content pre .k, .docs-content pre .kc, .docs-content pre .kd,

@@ -6,8 +6,13 @@
   --sidebar-bg: #fafaf9;
   --accent: #1d4ed8;
   --accent-soft: #eff6ff;
-  --code-bg: #1e1e2e;
-  --code-fg: #cdd6f4;
+  --code-bg: #f7f7f7;
+  --code-fg: #1f2328;
+  --syntax-operator: #0550ae;
+  --syntax-keyword: #6639ba;
+  --syntax-string: #cf222e;
+  --syntax-string2: #0a3069;
+  --syntax-comment: #57606a;
   --header-h: 3.25rem;
   --sidebar-w: 260px;
   --content-max: 800px;
@@ -159,9 +164,10 @@ a:focus-visible { outline: var(--focus-width) solid var(--focus-color); outline-
   border-radius: min(4px, var(--radius));
 }
 
+.docs-content pre[style],
 .docs-content pre {
-  background: var(--code-bg);
-  color: var(--code-fg);
+  background: var(--code-bg) !important;
+  color: var(--code-fg) !important;
   font-family: var(--mono);
   font-size: 0.85rem;
   line-height: 1.5;

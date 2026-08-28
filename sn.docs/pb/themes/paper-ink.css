@@ -21,9 +21,11 @@
   --callout-fg: #221d16;
   --h2-border: var(--border);
   --link-decoration: underline;
-  --syntax-keyword: #d97736;
-  --syntax-string: #c4a574;
-  --syntax-comment: #8a7f70;
+  --syntax-operator: #e09a5c;
+  --syntax-keyword: #e8944a;
+  --syntax-string: #e0b070;
+  --syntax-string2: #e0b070;
+  --syntax-comment: #c4b8a8;
 }
 
 a { text-decoration: underline; }

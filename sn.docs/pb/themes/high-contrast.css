@@ -25,9 +25,11 @@
   --focus-width: 3px;
   --focus-color: #000;
   --link-decoration: underline;
+  --syntax-operator: #fff;
   --syntax-keyword: #a3e635;
   --syntax-string: #a3e635;
-  --syntax-comment: #d4d4d4;
+  --syntax-string2: #fff;
+  --syntax-comment: #c4c4c4;
 }
 
 a { color: #000; text-decoration: underline; }
