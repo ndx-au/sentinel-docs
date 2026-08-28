@@ -23,8 +23,38 @@
     var KEY = "snDocsTheme";
     var BASE = "/kt/sn/docs/pb/themes/";
     var OK = {"terminal-dark":1,"blueprint":1,"paper-ink":1,"high-contrast":1};
+    var CHROMA_MAP = {
+      "#1f2328": "var(--code-fg)",
+      "#57606a": "var(--syntax-comment)",
+      "#0550ae": "var(--syntax-operator)",
+      "#6639ba": "var(--syntax-keyword)",
+      "#cf222e": "var(--syntax-string)",
+      "#0a3069": "var(--syntax-string2)",
+      "#fff": "var(--code-fg)"
+    };
     function read() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
     function write(v) { try { localStorage.setItem(KEY, v); } catch (e) {} }
+    function chromaKey(c) {
+      c = String(c || "").replace(/\s+/g, "").toLowerCase();
+      var m = c.match(/^rgba?\((\d+),(\d+),(\d+)/);
+      if (m) {
+        function hx(n) { n = parseInt(n, 10).toString(16); return n.length < 2 ? "0" + n : n; }
+        c = "#" + hx(m[1]) + hx(m[2]) + hx(m[3]);
+      }
+      if (c === "#ffffff") c = "#fff";
+      return c;
+    }
+    function remapChroma() {
+      var pres = document.querySelectorAll(".docs-content pre");
+      for (var i = 0; i < pres.length; i++) {
+        pres[i].style.backgroundColor = "transparent";
+        var spans = pres[i].querySelectorAll("span[style]");
+        for (var j = 0; j < spans.length; j++) {
+          var mapped = CHROMA_MAP[chromaKey(spans[j].style.color)];
+          if (mapped) spans[j].style.color = mapped;
+        }
+      }
+    }
     function apply(name) {
       var html = document.documentElement;
       var el = document.getElementById("sn-docs-theme");
@@ -46,6 +76,7 @@
     var saved = read();
     if (saved) apply(saved);
     document.addEventListener("DOMContentLoaded", function () {
+      remapChroma();
       var sel = document.getElementById("theme-picker");
       if (!sel) return;
       sel.value = document.documentElement.getAttribute("data-theme") || "default";
