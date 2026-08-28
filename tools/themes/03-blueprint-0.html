@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sentinel Docs - Getting Started</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        blueprint: {
+                            nav: '#0f2d4e',
+                            sidebar: '#eef3f8',
+                            code: '#12263f',
+                            accent: '#06b6d4', // cyan-500 equivalent for accents
+                            primary: '#2563eb', // blue-600 equivalent
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0rem", // overriding to 0 for blueprint feel
+                        "lg": "0rem",
+                        "xl": "0rem",
+                        "full": "0rem"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Public Sans", "sans-serif"]
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom syntax highlighting for blueprint theme */
+        .token.keyword { color: #60a5fa; }
+        .token.string { color: #34d399; }
+        .token.function { color: #22d3ee; }
+        .token.operator { color: #9ca3af; }
+        .token.comment { color: #6b7280; font-style: italic; }
+    </style>
+</head>
+<body class="bg-white text-neutral-900 font-body antialiased min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-blueprint-nav text-white sticky top-0 w-full z-50 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between px-6 h-14 w-full max-w-screen-2xl mx-auto flat no shadows">
+<div class="flex items-center gap-6">
+<div class="text-lg font-black text-neutral-900 dark:text-neutral-50 tracking-tighter border-b-2 border-blueprint-accent pb-0.5 text-white">
+                Sentinel Docs
+            </div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="font-body text-sm leading-relaxed text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer transition-opacity active:opacity-80" href="#">Docs</a>
+<a class="font-body text-sm leading-relaxed text-neutral-600 dark:text-neutral-400 text-neutral-300 hover:text-white transition-colors cursor-pointer transition-opacity active:opacity-80" href="#">API</a>
+<a class="font-body text-sm leading-relaxed text-neutral-600 dark:text-neutral-400 text-neutral-300 hover:text-white transition-colors cursor-pointer transition-opacity active:opacity-80" href="#">Changelog</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden md:flex items-center gap-2 text-sm text-neutral-300 border border-neutral-600 px-3 py-1 bg-blueprint-code">
+<span>Theme:</span>
+<span class="font-semibold text-white">Blueprint</span>
+<span class="material-symbols-outlined text-sm">arrow_drop_down</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-neutral-300 hover:text-white cursor-pointer transition-colors" data-icon="dark_mode">dark_mode</span>
+<span class="material-symbols-outlined text-neutral-300 hover:text-white cursor-pointer transition-colors" data-icon="code">code</span>
+</div>
+</div>
+</header>
+<div class="flex flex-1 max-w-screen-2xl mx-auto w-full">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col py-8 gap-y-1 bg-blueprint-sidebar border-r border-neutral-300 w-64 flex-shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto">
+<div class="px-6 mb-6">
+<h2 class="text-neutral-900 dark:text-neutral-50 font-bold text-sm tracking-tight">Documentation</h2>
+<p class="text-xs text-neutral-500 mt-1 font-label">v1.2.0</p>
+</div>
+<nav class="flex flex-col gap-1 w-full">
+<a class="flex items-center gap-3 px-6 py-2 font-label text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-all duration-150 ease-in-out pl-4" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="info">info</span>
+<span>Introduction</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 font-label text-xs uppercase tracking-widest text-blue-600 dark:text-blue-400 font-medium border-l-2 border-blue-600 dark:border-blue-400 pl-4 bg-white shadow-sm border-l-4 border-blueprint-primary text-blueprint-primary font-bold" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="rocket_launch">rocket_launch</span>
+<span>Getting Started</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 font-label text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-all duration-150 ease-in-out pl-4" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="account_tree">account_tree</span>
+<span>Core Concepts</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 font-label text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-all duration-150 ease-in-out pl-4" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="terminal">terminal</span>
+<span>CLI Reference</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 font-label text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-all duration-150 ease-in-out pl-4" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="settings">settings</span>
+<span>Configuration</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 font-label text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-all duration-150 ease-in-out pl-4" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="cloud_upload">cloud_upload</span>
+<span>Deployment</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0">
+<div class="max-w-[800px] mx-auto w-full px-8 py-12 flex-1">
+<!-- Content Header -->
+<div class="mb-10 border-b border-blueprint-primary pb-4">
+<h1 class="text-4xl font-headline font-bold text-neutral-900 tracking-tight">Getting Started</h1>
+<p class="text-neutral-600 mt-4 text-lg leading-relaxed">Initialize your first Sentinel orchestration environment and understand the core workflow loop.</p>
+</div>
+<!-- Content Body -->
+<div class="prose prose-neutral max-w-none text-neutral-800">
+<h2 class="text-2xl font-headline font-semibold mt-10 mb-4 flex items-center gap-2 group">
+<span class="text-blueprint-primary text-xl font-mono select-none opacity-50 group-hover:opacity-100 transition-opacity">#</span>
+                        Installation
+                    </h2>
+<p class="mb-6 leading-relaxed">Sentinel can be installed globally via your preferred package manager. We recommend using npm or yarn for the most seamless integration with existing CI/CD pipelines.</p>
+<div class="bg-blueprint-code text-neutral-200 p-4 font-mono text-sm mb-6 border border-neutral-800 shadow-sm overflow-x-auto">
+<div class="flex items-center justify-between mb-2 pb-2 border-b border-neutral-700">
+<span class="text-xs text-neutral-400 uppercase tracking-wider">Terminal</span>
+<span class="material-symbols-outlined text-neutral-500 text-sm hover:text-white cursor-pointer" title="Copy code">content_copy</span>
+</div>
+<pre><code><span class="token comment"># Install globally via npm</span>
+npm install -g sentinel-cli
+
+<span class="token comment"># Verify installation</span>
+sentinel --version
+<span class="token string">v1.2.0</span></code></pre>
+</div>
+<div class="bg-blue-50 border-l-4 border-blueprint-primary p-4 mb-8 flex gap-4 text-sm">
+<span class="material-symbols-outlined text-blueprint-primary shrink-0" data-icon="lightbulb">lightbulb</span>
+<div>
+<strong class="text-blueprint-primary font-semibold block mb-1">Pro Tip: Local Installations</strong>
+<span class="text-neutral-700">While global installation is convenient for quick starts, we highly recommend installing Sentinel as a devDependency in your project for team consistency and reproducible builds.</span>
+</div>
+</div>
+<h2 class="text-2xl font-headline font-semibold mt-10 mb-4 flex items-center gap-2 group">
+<span class="text-blueprint-primary text-xl font-mono select-none opacity-50 group-hover:opacity-100 transition-opacity">#</span>
+                        Initialization
+                    </h2>
+<p class="mb-6 leading-relaxed">Once installed, navigate to your project root and initialize a new Sentinel configuration. This will generate a <code>sentinel.yaml</code> file that dictates your orchestration logic.</p>
+<div class="bg-blueprint-code text-neutral-200 p-4 font-mono text-sm mb-6 border border-neutral-800 shadow-sm overflow-x-auto">
+<div class="flex items-center justify-between mb-2 pb-2 border-b border-neutral-700">
+<span class="text-xs text-neutral-400 uppercase tracking-wider">sentinel.yaml</span>
+<span class="material-symbols-outlined text-neutral-500 text-sm hover:text-white cursor-pointer" title="Copy code">content_copy</span>
+</div>
+<pre><code><span class="token keyword">version:</span> <span class="token string">"1.0"</span>
+<span class="token keyword">project:</span>
+  <span class="token keyword">name:</span> <span class="token string">"my-service"</span>
+  <span class="token keyword">environment:</span> <span class="token string">"development"</span>
+
+<span class="token keyword">workflows:</span>
+  <span class="token keyword">build:</span>
+    <span class="token keyword">steps:</span>
+      - <span class="token keyword">name:</span> <span class="token string">"Compile assets"</span>
+        <span class="token keyword">run:</span> <span class="token string">"npm run build"</span>
+      - <span class="token keyword">name:</span> <span class="token string">"Run tests"</span>
+        <span class="token keyword">run:</span> <span class="token string">"npm test"</span></code></pre>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<footer class="w-full mt-12 pb-12 border-t border-neutral-200 pt-8 max-w-[800px] mx-auto px-8 flex flex-col sm:flex-row justify-between items-center gap-6">
+<div class="flex flex-col sm:flex-row w-full justify-between gap-4">
+<a class="group flex flex-col gap-1 border border-neutral-200 p-4 hover:border-blueprint-primary transition-colors flex-1 w-full sm:w-auto" href="#">
+<span class="text-xs text-neutral-500 uppercase tracking-wider font-label group-hover:text-blueprint-primary transition-colors">Previous</span>
+<span class="font-semibold text-blueprint-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                            Introduction
+                        </span>
+</a>
+<a class="group flex flex-col gap-1 border border-neutral-200 p-4 hover:border-blueprint-primary transition-colors flex-1 w-full sm:w-auto text-right items-end" href="#">
+<span class="text-xs text-neutral-500 uppercase tracking-wider font-label group-hover:text-blueprint-primary transition-colors">Next</span>
+<span class="font-semibold text-blueprint-primary flex items-center gap-2">
+                            Core Concepts
+                            <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</span>
+</a>
+</div>
+<div class="w-full text-center mt-8 text-sm text-neutral-500 font-body">
+                    © 2024 Sentinel Orchestration
+                </div>
+</footer>
+</main>
+</div>
+</body></html>

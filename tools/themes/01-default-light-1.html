@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Getting Started with Sentinel - Documentation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Public+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb', // Primary Blue Accent
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                            950: '#172554',
+                        },
+                        paper: {
+                            DEFAULT: '#fcfaf7', // Default Light Paper Background
+                            alt: '#f5f3f0'
+                        },
+                        ink: {
+                            DEFAULT: '#111827', // Near-black text
+                            muted: '#4b5563',
+                            lighter: '#6b7280'
+                        },
+                        code: {
+                            bg: '#0f172a', // Dark slate code blocks
+                            border: '#1e293b'
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Public Sans", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.paper.DEFAULT');
+            color: theme('colors.ink.DEFAULT');
+        }
+        
+        /* Typography adjustments for technical docs */
+        .prose p {
+            line-height: 1.75;
+            margin-bottom: 1.25em;
+        }
+        .prose h1 {
+            letter-spacing: -0.025em;
+        }
+        .prose h2, .prose h3 {
+            letter-spacing: -0.015em;
+        }
+        
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+    </style>
+</head>
+<body class="font-body antialiased min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400 font-body leading-relaxed sticky top-0 w-full z-50 border-b border-neutral-200 dark:border-neutral-800 flat no shadows transition-all duration-200">
+<div class="flex justify-between items-center h-16 px-6 w-full max-w-screen-2xl mx-auto">
+<!-- Brand Left -->
+<div class="flex items-center gap-3">
+<img alt="Sentinel Logo Mark" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuASpb6WXKgd8s4k9wui4OY8JUS1uCFsCY_IsySeXc65qniQa0DVSre0NfQmZKVWwmHj76WF5MjeoKMh_mGCPUYHjJBO_BByOxrVNGVcbgtjIBKG7HgYSeV11x0hjgVqt8YRXwrxz7-7gwh8AS-OHr3eVOt3LOyZy2a35hjadhEaZogD7lS1-_xuQQOCJVc8EsyFqtBD5xg8qrjLbwZdz00W0RAirDNPjsjMYIO5rwoELYmlFXwJ5w6pIomVFhfe1Ibw3j0ijPvzuVRx"/>
+<span class="text-xl font-bold tracking-tight text-neutral-900 dark:text-white font-headline">Sentinel Docs</span>
+</div>
+<!-- Top Nav Links (Desktop) -->
+<nav class="hidden md:flex items-center gap-8 text-sm font-label">
+<a class="text-neutral-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Docs</a>
+<a class="text-neutral-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">API</a>
+<a class="text-neutral-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Changelog</a>
+</nav>
+<!-- Right Actions -->
+<div class="flex items-center gap-4">
+<!-- Theme Selector Dropdown (Simulated) -->
+<div class="relative hidden sm:block">
+<button class="flex items-center gap-2 text-sm font-label text-ink-muted hover:text-ink transition-colors px-3 py-1.5 rounded-md border border-neutral-200 bg-paper-alt">
+<span class="material-symbols-outlined text-[18px]">light_mode</span>
+<span>Theme: Default Light</span>
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+</div>
+<div class="h-5 w-px bg-neutral-200 hidden sm:block"></div>
+<button aria-label="Toggle Dark Mode" class="text-neutral-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center justify-center h-8 w-8 rounded-full">
+<span class="material-symbols-outlined text-[20px]">dark_mode</span>
+</button>
+<button aria-label="View Source Code" class="text-neutral-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center justify-center h-8 w-8 rounded-full">
+<span class="material-symbols-outlined text-[20px]">code</span>
+</button>
+<!-- GitHub Icon (Custom SVG since it's not standard material symbol) -->
+<a aria-label="GitHub Repository" class="text-neutral-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors ml-2" href="#">
+<svg aria-hidden="true" class="w-5 h-5 fill-current" viewbox="0 0 24 24">
+<path clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z" fill-rule="evenodd"></path>
+</svg>
+</a>
+<!-- Mobile Menu Toggle -->
+<button class="md:hidden text-ink hover:text-brand-600 transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</div>
+</header>
+<div class="flex-1 flex max-w-screen-2xl mx-auto w-full">
+<!-- SideNavBar -->
+<!-- Note: Using semantic intent, the active tab should map to "Introduction" or "Getting Started" equivalent from JSON -->
+<!-- We will build the Sidebar based on the JSON specs but integrating the user's specific items -->
+<aside class="hidden md:flex flex-col p-4 overflow-y-auto bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400 text-sm font-label fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 border-r border-neutral-200 dark:border-neutral-800 flat no shadows transition-colors duration-150 z-40">
+<div class="mb-6 px-3">
+<h2 class="text-xs font-bold text-ink-muted uppercase tracking-wider">Documentation</h2>
+<span class="text-xs text-ink-lighter mt-1 block">v1.2.0</span>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Overview -->
+<a class="flex items-center gap-3 px-3 py-2 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px] text-neutral-400 group-hover:text-neutral-600">info</span>
+<span>Overview</span>
+</a>
+<!-- Getting Started (ACTIVE) -> Maps to JSON 'Introduction' intent -->
+<a class="flex items-center gap-3 px-3 py-2 text-blue-600 dark:text-blue-400 font-medium bg-blue-50/50 dark:bg-blue-900/20 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px] text-blue-600" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<span>Getting Started</span>
+</a>
+<!-- API Reference -> Maps to JSON 'Core Concepts' intent -->
+<div class="mt-4 pt-4">
+<button class="flex items-center justify-between w-full px-3 py-2 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg group text-left">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px] text-neutral-400 group-hover:text-neutral-600">api</span>
+<span class="font-semibold text-ink-muted">References</span>
+</div>
+<span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+<div class="pl-11 pr-3 py-1 space-y-1">
+<a class="block py-1.5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg px-2" href="#">API Reference</a>
+<a class="block py-1.5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg px-2" href="#">Lua API</a>
+<a class="block py-1.5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg px-2" href="#">CLI Reference</a>
+</div>
+</div>
+<!-- Advanced Usage -->
+<div class="mt-2">
+<button class="flex items-center justify-between w-full px-3 py-2 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg group text-left">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px] text-neutral-400 group-hover:text-neutral-600">psychology</span>
+<span class="font-semibold text-ink-muted">Advanced</span>
+</div>
+<span class="material-symbols-outlined text-[18px]">expand_less</span>
+</button>
+<div class="pl-11 pr-3 py-1 space-y-1">
+<a class="block py-1.5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg px-2" href="#">Configuration Guide</a>
+<a class="block py-1.5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg px-2" href="#">Kit Development</a>
+<a class="block py-1.5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg px-2" href="#">Workflows &amp; Patterns</a>
+</div>
+</div>
+</nav>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:pl-64 min-w-0">
+<!-- Canvas container -->
+<div class="max-w-[800px] mx-auto px-6 md:px-12 pt-10 pb-20">
+<!-- Breadcrumbs -->
+<nav aria-label="Breadcrumb" class="flex items-center text-sm text-ink-lighter mb-8 font-label">
+<a class="hover:text-brand-600 transition-colors" href="#">Docs</a>
+<span class="material-symbols-outlined mx-2 text-[16px]">chevron_right</span>
+<span class="text-ink-muted font-medium">Getting started</span>
+</nav>
+<!-- Document Header -->
+<header class="mb-12">
+<h1 class="text-4xl md:text-5xl font-headline font-bold text-ink mb-4 leading-tight tracking-tight">Getting Started with Sentinel</h1>
+<div class="flex items-center text-sm text-ink-lighter font-label">
+<span class="material-symbols-outlined text-[16px] mr-1.5">calendar_today</span>
+<span>Updated Oct 24, 2023</span>
+</div>
+</header>
+<!-- Document Body (Prose) -->
+<article class="prose max-w-none text-ink-muted text-lg">
+<p class="text-xl text-ink leading-relaxed mb-8">
+                        Welcome to Sentinel, the git-native orchestration harness designed for modern engineering teams. This guide will walk you through the essential steps to install, configure, and run your first Sentinel workflow.
+                    </p>
+<h2 class="text-2xl font-headline font-bold text-ink mt-12 mb-6 border-b border-neutral-200 pb-2">What is Sentinel?</h2>
+<p class="mb-6">
+                        Sentinel bridges the gap between infrastructure as code and dynamic orchestration. By treating your Git repository as the immutable source of truth, Sentinel ensures that every deployment, configuration change, and orchestration sequence is versioned, auditable, and repeatable.
+                    </p>
+<!-- Tip Callout Box -->
+<div class="my-8 bg-brand-50 border-l-4 border-brand-500 p-5 rounded-r-lg flex gap-4 items-start">
+<div class="flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-brand-600" style="font-variation-settings: 'FILL' 1;">lightbulb</span>
+</div>
+<div>
+<h4 class="text-sm font-bold text-brand-900 font-label uppercase tracking-wide mb-1">Tip</h4>
+<p class="text-brand-800 text-base m-0 font-medium">Sentinel uses Git as the source of truth for your orchestration logic.</p>
+</div>
+</div>
+<p class="mb-6">
+                        To get started immediately, you can install the Sentinel CLI using our automated installation script. This will download the latest binary for your architecture and place it in your system's PATH.
+                    </p>
+<h3 class="text-lg font-headline font-semibold text-ink mt-8 mb-4">Installation</h3>
+<!-- Dark Code Block -->
+<div class="relative group my-6 rounded-lg overflow-hidden border border-code-border bg-code-bg shadow-sm">
+<div class="flex items-center justify-between px-4 py-2 bg-neutral-900/50 border-b border-code-border/50">
+<span class="text-xs font-mono text-neutral-400">bash</span>
+<button aria-label="Copy code" class="text-neutral-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+</button>
+</div>
+<div class="p-4 overflow-x-auto">
+<pre class="text-sm font-mono leading-relaxed"><code class="text-gray-300"><span class="text-pink-400">curl</span> -sSL <span class="text-green-300">https://sentinel.sh/install</span> | <span class="text-blue-300">sh</span></code></pre>
+</div>
+</div>
+<p class="mt-6">
+                        Once installed, verify the installation by running <code>sentinel version</code> in your terminal. You are now ready to initialize your first project workspace.
+                    </p>
+</article>
+<!-- Footer (Pager) -->
+<!-- Translating JSON styles: w-full mt-12 pb-12, border-t border-neutral-200 pt-8, flex justify-between items-center -->
+<footer class="bg-transparent text-blue-600 dark:text-blue-400 text-sm font-body w-full mt-16 pb-12 border-t border-neutral-200 dark:border-neutral-800 pt-8 flat no shadows transition-all flex justify-between items-center max-w-[800px] mx-auto">
+<a class="group flex flex-col gap-1 items-start" href="#">
+<span class="text-neutral-500 dark:text-neutral-500 text-xs font-label uppercase tracking-wider group-hover:text-ink-muted transition-colors">Previous</span>
+<div class="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold group-hover:underline">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+<span>API Reference</span>
+</div>
+</a>
+<a class="group flex flex-col gap-1 items-end text-right" href="#">
+<span class="text-neutral-500 dark:text-neutral-500 text-xs font-label uppercase tracking-wider group-hover:text-ink-muted transition-colors">Next</span>
+<div class="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold group-hover:underline">
+<span>Lua API</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</div>
+</a>
+</footer>
+<!-- Minimal Copyright derived from JSON Footer -->
+<div class="text-center text-xs text-ink-lighter mt-4 pb-8 font-label">
+                    © 2024 Sentinel Orchestration. Git-native harness.
+                </div>
+</div>
+</main>
+</div>
+</body></html>

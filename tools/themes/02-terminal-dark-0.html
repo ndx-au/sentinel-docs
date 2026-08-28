@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sentinel Docs - Getting Started</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=Public+Sans:wght@400;500;600;700&amp;family=Fira+Code:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface": "#171a21",
+                        "surface-container-low": "#111318",
+                        "on-surface": "#e6e9ee",
+                        "on-surface-variant": "#9ca3af",
+                        "primary": "#3ddc84",
+                        "outline-variant": "#374151",
+                        "code-bg": "#0d1117",
+                        "accent-gold": "#e3b341"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Fira Code", "monospace"],
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Public Sans", "sans-serif"],
+                        "mono": ["Fira Code", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.surface');
+            color: theme('colors.on-surface');
+        }
+        pre {
+            background-color: theme('colors.code-bg');
+            border-radius: theme('borderRadius.DEFAULT');
+        }
+        .prose code {
+            font-family: theme('fontFamily.mono');
+            background-color: theme('colors.code-bg');
+            padding: 0.2em 0.4em;
+            border-radius: 0.25rem;
+            color: theme('colors.primary');
+            font-size: 0.875em;
+        }
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+    </style>
+</head>
+<body class="font-body text-on-surface antialiased">
+<!-- TopNavBar -->
+<nav class="bg-surface-container-low sticky top-0 z-50 w-full border-b border-outline-variant">
+<div class="flex justify-between items-center px-6 py-3 max-w-[1440px] mx-auto">
+<div class="flex items-center gap-6">
+<a class="text-xl font-headline font-black text-on-surface flex items-center gap-2 group" href="#">
+<span class="text-primary group-hover:animate-pulse">&gt;_</span>Sentinel Docs
+                </a>
+<div class="hidden md:flex gap-4">
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body leading-relaxed text-sm" href="#">Docs</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body leading-relaxed text-sm" href="#">API</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body leading-relaxed text-sm" href="#">Changelog</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center bg-surface border border-outline-variant rounded px-3 py-1.5 cursor-pointer hover:border-primary transition-colors">
+<span class="text-xs font-mono text-on-surface-variant mr-2">Theme:</span>
+<span class="text-xs font-mono text-primary">Terminal Dark</span>
+<span class="material-symbols-outlined text-[16px] ml-1 text-on-surface-variant">arrow_drop_down</span>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined text-xl">dark_mode</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined text-xl">terminal</span>
+</button>
+</div>
+</div>
+</nav>
+<div class="max-w-[1440px] mx-auto flex">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col py-8 px-4 overflow-y-auto bg-surface h-[calc(100vh-64px)] sticky top-[64px] w-64 border-r border-outline-variant shrink-0">
+<div class="mb-6 px-3">
+<h2 class="text-lg font-bold text-on-surface">Documentation</h2>
+<p class="text-xs text-on-surface-variant mt-1 font-mono">v1.2.0-stable</p>
+</div>
+<nav class="flex flex-col gap-1 font-label text-sm">
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low transition-all duration-150 ease-in-out group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-primary">info</span>
+<span>Introduction</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-primary font-bold bg-surface-container-low border-l-2 border-primary transition-all duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">rocket_launch</span>
+<span>Getting Started</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low transition-all duration-150 ease-in-out group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-primary">account_tree</span>
+<span>Core Concepts</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low transition-all duration-150 ease-in-out group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-primary">architecture</span>
+<span>Architecture</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low transition-all duration-150 ease-in-out group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-primary">terminal</span>
+<span>CLI Reference</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low transition-all duration-150 ease-in-out group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-primary">menu_book</span>
+<span>Guides</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 py-10 px-6 lg:px-12 max-w-[800px] mx-auto min-h-screen">
+<article class="prose prose-invert max-w-none">
+<div class="mb-8">
+<h1 class="text-3xl md:text-4xl font-headline font-bold text-on-surface mb-4">Getting Started</h1>
+<p class="text-lg text-on-surface-variant leading-relaxed">Initialize Sentinel in your environment and run your first orchestration harness.</p>
+</div>
+<div class="space-y-8">
+<section>
+<h2 class="text-2xl font-headline font-semibold text-on-surface mb-4 flex items-center gap-2 before:content-['#'] before:text-primary">Installation</h2>
+<p class="mb-4 text-on-surface/90 leading-relaxed">Sentinel is distributed as a single static binary. Download the latest release for your platform.</p>
+<div class="relative group mt-4 mb-6">
+<div class="absolute top-0 right-0 bg-outline-variant/30 px-2 py-1 text-xs font-mono text-on-surface-variant rounded-bl rounded-tr z-10">bash</div>
+<pre class="p-4 overflow-x-auto text-sm font-mono leading-relaxed border border-outline-variant/50"><code class="text-on-surface-variant">curl -sSL https://install.sentinel.dev | bash</code></pre>
+<button class="absolute top-2 right-12 text-on-surface-variant hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+</section>
+<div class="bg-surface-container-low border-l-4 border-primary p-4 rounded-r-md flex gap-4 my-8 items-start">
+<span class="material-symbols-outlined text-primary shrink-0 mt-0.5">lightbulb</span>
+<div>
+<h4 class="font-bold text-on-surface text-sm mb-1">Pro Tip: Path Configuration</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed">Ensure that <code>~/.sentinel/bin</code> is in your system's PATH to execute commands globally without specifying the absolute path.</p>
+</div>
+</div>
+<section>
+<h2 class="text-2xl font-headline font-semibold text-on-surface mb-4 flex items-center gap-2 before:content-['#'] before:text-primary">Initialization</h2>
+<p class="mb-4 text-on-surface/90 leading-relaxed">Navigate to your project root and initialize a new Sentinel configuration file. This will create a <code>.sentinel.yaml</code> file.</p>
+<div class="relative group mt-4 mb-6">
+<div class="absolute top-0 right-0 bg-outline-variant/30 px-2 py-1 text-xs font-mono text-on-surface-variant rounded-bl rounded-tr z-10">bash</div>
+<pre class="p-4 overflow-x-auto text-sm font-mono leading-relaxed border border-outline-variant/50"><code><span class="text-primary">$</span> sentinel init --template minimal
+<span class="text-on-surface-variant">Initialized empty Sentinel repository in /path/to/project</span>
+<span class="text-accent-gold">WARN:</span> No upstream Git remote detected.</code></pre>
+</div>
+</section>
+<section>
+<h2 class="text-2xl font-headline font-semibold text-on-surface mb-4 flex items-center gap-2 before:content-['#'] before:text-primary">Configuration Structure</h2>
+<p class="mb-4 text-on-surface/90 leading-relaxed">The configuration file defines your orchestration jobs, environment variables, and trigger conditions.</p>
+<div class="relative group mt-4">
+<div class="absolute top-0 right-0 bg-outline-variant/30 px-2 py-1 text-xs font-mono text-on-surface-variant rounded-bl rounded-tr z-10">yaml</div>
+<pre class="p-4 overflow-x-auto text-sm font-mono leading-relaxed border border-outline-variant/50"><code><span class="text-primary">version:</span> "1.0"
+<span class="text-primary">project:</span>
+  <span class="text-on-surface">name:</span> <span class="text-accent-gold">"core-services"</span>
+  
+<span class="text-primary">harness:</span>
+  <span class="text-on-surface">default_runner:</span> <span class="text-accent-gold">"ubuntu-latest"</span>
+  <span class="text-on-surface">stages:</span>
+    - build
+    - test
+    - deploy</code></pre>
+</div>
+</section>
+</div>
+</article>
+<!-- Pager Footer -->
+<div class="mt-16 pt-8 border-t border-outline-variant flex justify-between items-center">
+<a class="flex flex-col group text-left" href="#">
+<span class="text-xs text-on-surface-variant font-mono mb-1 group-hover:text-primary transition-colors">PREVIOUS</span>
+<span class="text-sm font-medium text-on-surface flex items-center gap-1 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[16px]">arrow_back</span>
+                        Introduction
+                    </span>
+</a>
+<a class="flex flex-col group text-right" href="#">
+<span class="text-xs text-on-surface-variant font-mono mb-1 group-hover:text-primary transition-colors">NEXT</span>
+<span class="text-sm font-medium text-on-surface flex items-center gap-1 group-hover:text-primary transition-colors">
+                        Core Concepts
+                        <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</span>
+</a>
+</div>
+</main>
+</div>
+</body></html>
