@@ -1191,7 +1191,7 @@ pb/kt.hero.jpg
 **Project public URL** — set in `sentinel.yaml` (returned on `GET /hl/runtime` as `public_url`):
 
 ```yaml
-public_url: https://sn-harness.gandalf.lan
+public_url: https://harness.example.com
 ```
 
 The dashboard **Instances** attach address remains the API endpoint the console can reach (often `localhost:8080`). `public_url` is for browser-facing kit images and **Launch** links (reverse proxies, TLS).

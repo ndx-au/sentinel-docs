@@ -1,8 +1,8 @@
 # sentinel-docs
 
 Public documentation for Sentinel, implemented as a Sentinel SRE served through
-the **fcms** plane (file CMS). Staging: **https://sn-docs.dwp.solutions**
-(bilbo). Production: **https://docs.ndx-sentinel.com** (dedicated VM).
+the **fcms** plane (file CMS). Staging: **https://sn-docs.dwp.solutions**.
+Production: **https://docs.ndx-sentinel.com** (dedicated VM).
 
 ## Layout
 
@@ -58,9 +58,9 @@ The prod VM runs the same SRE repo. Required setup:
 1. **Checkout**: clone `github.com/ndx-au/sentinel-docs` to the VM (polling
    target: `main` branch).
 2. **Harness**: `sentinel harness start -p <repo> -d --port 8290`. The harness
-   binds `0.0.0.0` — firewall the port to the reverse proxy only (on bilbo:
-   UFW allows 172.17/172.18 docker bridges so the caddy container reaches the
-   host process; replicate that pattern).
+   binds `0.0.0.0` — firewall the port so only the host reverse proxy can reach
+   it (for example, allow the proxy container’s bridge network to the host
+   process).
 3. **public_url**: production overrides `public_url` in `sentinel.yaml` to
    `https://docs.ndx-sentinel.com` (or use an env/config override if the
    harness supports one — staging keeps the sn-docs value; do not commit the
@@ -84,15 +84,14 @@ The prod VM runs the same SRE repo. Required setup:
 5. **Deploy model**: harness-native polling of `main` (a Sentinel trigger/flow
    inside this SRE, not crontab). On new `main`: pull, and the file watcher
    picks up `ct/` changes automatically; `kit.yaml`/`tp/`/`pg/` changes need a
-   kit reload (`POST /hl/kt/sn/docs/rl`) or harness restart. Later: a GH CI
-   workflow (proxmox runner) replaces dumb polling and conditionally issues the
-   kit reload.
+   kit reload (`POST /hl/kt/sn/docs/rl`) or harness restart. Later: a CI
+   workflow can replace polling and conditionally issue the kit reload.
 6. **main protection**: enable branch protection + PR workflow once prod is
    operational.
 
-## Staging (bilbo) wiring
+## Staging wiring
 
-- Zone `sn-docs.dwp.solutions` → bilbo Tailscale IP, covered by the
-  `*.dwp.solutions` wildcard cert.
-- `/opt/caddy/Caddyfile`: `@sndocs host` handle → `host.docker.internal:8290`
-  (same rewrite rules as the prod block above).
+- Point the staging DNS name (`sn-docs.dwp.solutions`) at the staging host
+  behind a private reverse proxy, with TLS appropriate for that zone.
+- Reverse-proxy to the local harness (`127.0.0.1:8290` or the Docker host
+  gateway equivalent) using the same rewrite rules as the prod block above.

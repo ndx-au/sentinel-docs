@@ -1,6 +1,6 @@
 # sentinel-docs
 
-Sentinel SRE serving the public Sentinel docs via the fcms plane. Staging: https://sn-docs.dwp.solutions (bilbo, harness :8290). Production: https://docs.ndx-sentinel.com (user-managed VM).
+Sentinel SRE serving the public Sentinel docs via the fcms plane. Staging: https://sn-docs.dwp.solutions (harness :8290). Production: https://docs.ndx-sentinel.com (user-managed VM).
 
 - Content lives in `sn.docs/ct/*.md` (frontmatter: `title`, `description`, required `type`, plus `tags` / `status`).
 - `ct/index.md` is the fcms landing page. `ct/README.md` is the filename MAP. Do not generate over either.
