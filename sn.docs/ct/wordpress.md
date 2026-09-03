@@ -1,6 +1,9 @@
 ---
 title: "WordPress with Sentinel"
 description: "This document describes the WordPress platform architecture for Sentinel, covering the central origin, preview rendering, and edge content delivery."
+type: Guide
+tags: [wordpress]
+status: stable
 ---
 
 # WordPress with Sentinel

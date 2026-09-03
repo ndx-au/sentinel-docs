@@ -1,6 +1,9 @@
 ---
 title: "Workflows and Patterns Guide"
 description: "This guide is a comprehensive collection of battle-tested patterns for building automation workflows with Sentinel."
+type: Guide
+tags: [workflows]
+status: stable
 ---
 
 # Workflows and Patterns Guide

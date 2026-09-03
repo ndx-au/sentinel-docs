@@ -1,6 +1,9 @@
 ---
 title: "RAG retrieval evaluation"
 description: "Offline, fixture-driven retrieval benchmarks for the harness RAG stack. Live PG-backed eval against a running SRE is optional; CI gates on embedded fixtures in internal/rag/testdata/retrieval_eval_fixtures.json."
+type: Guide
+tags: [ai, rag]
+status: stable
 ---
 
 # RAG retrieval evaluation

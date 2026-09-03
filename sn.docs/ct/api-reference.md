@@ -1,6 +1,9 @@
 ---
 title: "HTTP API Reference"
 description: "Complete reference for every Sentinel HTTP endpoint. This document covers request formats, response structures, authentication, error handling, pagination, streaming, and WebSocket protocols."
+type: Reference
+tags: [api]
+status: stable
 ---
 
 # HTTP API Reference

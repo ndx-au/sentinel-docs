@@ -1,6 +1,9 @@
 ---
 title: "Edge Deployment Guide"
 description: "This guide walks you through deploying Sentinel in a production environment behind a reverse proxy with edge security."
+type: Guide
+tags: [deployment]
+status: stable
 ---
 
 # Edge Deployment Guide

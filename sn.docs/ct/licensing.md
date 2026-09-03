@@ -1,6 +1,9 @@
 ---
 title: "Registration, occupy, and editions"
 description: "Sentinel is proprietary software of NDX Pty Ltd (GitHub org ndx-au, public sites on ndx.au). Every production harness must register and occupy a live slot while it is online. There is no business grace: if occupy fails past the lease TTL (~180s), flows do not start."
+type: Guide
+tags: [licensing]
+status: stable
 ---
 
 # Registration, occupy, and editions

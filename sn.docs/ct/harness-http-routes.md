@@ -1,6 +1,9 @@
 ---
 title: "Harness HTTP route reference"
 description: "This document is the canonical catalog of HTTP paths the Sentinel harness exposes on api.port (default 8080)."
+type: Reference
+tags: [api, routes]
+status: stable
 ---
 
 # Harness HTTP route reference

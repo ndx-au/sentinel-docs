@@ -11,13 +11,16 @@ sentinel.yaml          SRE root config (port 8290, default_kit: sn.docs)
 sn.docs/
   kit.yaml             fcms kit (public, cms_full_html, 600s render cache)
   ct/                  Markdown source of truth — one .md per doc, frontmatter:
-                       title, description. index.md is the landing page.
+                       title, description, type, tags, status.
+                       index.md is the public landing page (do not overwrite).
   ct/README.md         old-filename → slug mapping (MAP block, used by relink)
   tp/                  Go templates (docs.gohtml = render, home.gohtml = landing)
   pb/                  static assets (style.css, favicon.ico)
   pg/home.yaml         default-kit catch-all page at /
   fl/                  smoke tests (validated by `sentinel sre validate`)
 tools/relink.py        rewrites old relative doc links → /slug links
+tools/bundle_docs.py   OKF / NotebookLM sidecar (writes notebooklm/ only)
+notebooklm/            generated index.md + sentinel-docs.md — not fcms content
 ```
 
 ## Run locally
@@ -32,8 +35,18 @@ curl http://127.0.0.1:8290/hl
 
 ## Adding a doc
 
-Add `sn.docs/ct/<slug>.md` with `title`/`description` frontmatter, add the slug
-to the sidebar nav in `sn.docs/tp/docs.gohtml`, and link it from `index.md`.
+Add `sn.docs/ct/<slug>.md` with `title`, `description`, and a required OKF
+`type` (`Overview`, `Guide`, `Reference`, or `Playbook`), plus `tags` and
+`status`. Add the slug to the sidebar nav in `sn.docs/tp/docs.gohtml`, and
+link it from `index.md`. Then regenerate the NotebookLM sidecar:
+
+```bash
+python3 tools/bundle_docs.py
+```
+
+That writes `notebooklm/index.md` and `notebooklm/sentinel-docs.md` only.
+Never put generated output in `ct/` — `ct/index.md` is the public homepage.
+
 `ct/` changes are picked up by the harness file watcher — no reload needed.
 Changes to `kit.yaml`, `tp/`, or `pg/` require `POST /hl/kt/sn/docs/rl` (kit
 reload) or a harness restart.

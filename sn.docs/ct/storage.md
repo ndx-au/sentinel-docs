@@ -1,6 +1,9 @@
 ---
 title: "Storage Points"
 description: "Storage points provide a way to manage S3-compatible object storage endpoints for keeping binary files (images, video, documents, and other media assets) out of the SRE git repository."
+type: Guide
+tags: [storage]
+status: stable
 ---
 
 # Storage Points

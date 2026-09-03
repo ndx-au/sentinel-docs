@@ -1,6 +1,9 @@
 ---
 title: "AI provider extension guide"
 description: "How to add a Go runtime adapter for a new meta.runtime.provider value in API Library. Operators register vendors in the dashboard; the harness wires adapters at bootstrap via BuildClientFromLibrary."
+type: Guide
+tags: [ai]
+status: stable
 ---
 
 # AI provider extension guide

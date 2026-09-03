@@ -1,6 +1,9 @@
 ---
 title: "Agentic AI — UAT trail"
 description: "Hands-on acceptance trail for M1 — Agentic AI completion. Work through each section in order; sample payloads are copy-paste ready."
+type: Playbook
+tags: [ai, uat]
+status: stable
 ---
 
 # Agentic AI — UAT trail

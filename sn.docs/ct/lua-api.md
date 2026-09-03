@@ -1,6 +1,9 @@
 ---
 title: "Lua API Reference"
 description: "Complete reference for the Lua API available inside Sentinel flows. This document covers the sandboxed execution environment, the flow lifecycle, every available API function, and common patterns for building robust automation flows."
+type: Reference
+tags: [lua-api]
+status: stable
 ---
 
 # Lua API Reference

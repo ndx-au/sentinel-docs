@@ -1,6 +1,9 @@
 ---
 title: "Agentic AI — operator guide"
 description: "End-to-end path for enabling LLM flows in an SRE: API Library + Vault → Agents validate → release controls → flow (sn.ai.chat) → trace in dashboard."
+type: Playbook
+tags: [ai]
+status: stable
 ---
 
 # Agentic AI — operator guide

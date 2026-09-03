@@ -1,6 +1,9 @@
 ---
 title: "CLI Reference"
 description: "Complete reference for the sentinel command-line interface, covering every command, flag, environment variable, and common workflow."
+type: Reference
+tags: [cli]
+status: stable
 ---
 
 # CLI Reference

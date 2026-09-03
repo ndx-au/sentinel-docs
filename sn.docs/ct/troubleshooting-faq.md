@@ -1,6 +1,9 @@
 ---
 title: "Troubleshooting & FAQ"
 description: "This guide is your comprehensive reference for diagnosing and resolving problems with Sentinel."
+type: Playbook
+tags: [troubleshooting]
+status: stable
 ---
 
 # Troubleshooting & FAQ

@@ -1,6 +1,9 @@
 ---
 title: "fcms (file CMS) — Operator Guide"
 description: "Git-native file content in Sentinel: Markdown files in a kit’s ct/ directory are the source of truth."
+type: Guide
+tags: [cms, fcms]
+status: stable
 ---
 
 # fcms (file CMS) — Operator Guide

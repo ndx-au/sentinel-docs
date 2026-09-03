@@ -1,6 +1,9 @@
 ---
 title: "Kit Development Guide"
 description: "Complete guide to building kits -- the fundamental unit of organization in Sentinel -- with flows, connectors, modules, forms, pages, databases, CMS content, and templates."
+type: Guide
+tags: [kits]
+status: stable
 ---
 
 # Kit Development Guide

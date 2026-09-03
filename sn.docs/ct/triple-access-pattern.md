@@ -1,6 +1,9 @@
 ---
 title: "Triple-Access Pattern for Sentinel Services"
 description: "The Triple-Access Pattern is a core internal architecture principle used throughout the Sentinel codebase."
+type: Guide
+tags: [architecture]
+status: stable
 ---
 
 # Triple-Access Pattern for Sentinel Services

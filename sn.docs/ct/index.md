@@ -1,6 +1,9 @@
 ---
 title: "Sentinel Documentation"
 description: "Sentinel is a git-native orchestration harness -- a single Go binary that discovers, manages, and executes Lua-based workflows from a plain folder of files."
+type: Overview
+tags: [overview]
+status: stable
 ---
 
 # Sentinel Documentation

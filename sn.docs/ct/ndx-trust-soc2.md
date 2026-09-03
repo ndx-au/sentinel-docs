@@ -1,6 +1,9 @@
 ---
 title: "NDX Trust — SOC2 Type II preparation"
 description: "This document prepares hosted NDX systems for a SOC2 Type II observation period."
+type: Guide
+tags: [trust]
+status: stable
 ---
 
 # NDX Trust — SOC2 Type II preparation
