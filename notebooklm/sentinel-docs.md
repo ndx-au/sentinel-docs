@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-09-03T00:49:25Z"
+  at: "2026-09-03T02:47:30Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -19296,7 +19296,7 @@ Embedded template: `graphile-dataplane` (`internal/static/docker-templates/graph
 
 Image pin: **`graphile/postgraphile:4`** (PostGraphile v4) with `--simple-collections both` and **localhost-only** host binds for Postgres (`127.0.0.1:15432` by default) and Graphile (`127.0.0.1:1880`).
 
-**Port conflicts:** template default Postgres host port is **15432**. If that port is already taken (e.g. another local Postgres such as workhours on staging-host), set `SENTINEL_CCMS_PG_HOST_PORT` (compose) and point `data_plane.database_url` at the same host port. Graphile stays on **1880** unless you override `SENTINEL_GRAPHILE_PORT`.
+**Port conflicts:** template default Postgres host port is **15432**. If that port is already taken by another local Postgres, set `SENTINEL_CCMS_PG_HOST_PORT` (compose) and point `data_plane.database_url` at the same host port. Graphile stays on **1880** unless you override `SENTINEL_GRAPHILE_PORT`.
 
 ```yaml
 # sentinel.yaml

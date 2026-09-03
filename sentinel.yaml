@@ -2,7 +2,7 @@ name: sentinel-docs
 description: Public Sentinel documentation, served via the fcms plane
 version: 0.1.0
 
-# Staging on staging-host. Production VM overrides public_url (see README Deployment).
+# Staging public_url below. Production VM overrides public_url (see README Deployment).
 port: 8290
 default_kit: sn.docs
 public_url: "https://sn-docs.dwp.solutions"
