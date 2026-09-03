@@ -1,6 +1,9 @@
 ---
 title: "Harness Internals — Code Architecture"
 description: "Contributor reference for the Sentinel harness Go codebase."
+type: Reference
+tags: [internals]
+status: stable
 ---
 
 # Harness Internals — Code Architecture

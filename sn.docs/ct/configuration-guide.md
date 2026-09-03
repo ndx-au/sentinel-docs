@@ -1,6 +1,9 @@
 ---
 title: "Configuration Guide"
 description: "Comprehensive guide to Sentinel configuration, security, deployment, and performance tuning."
+type: Guide
+tags: [configuration]
+status: stable
 ---
 
 # Configuration Guide

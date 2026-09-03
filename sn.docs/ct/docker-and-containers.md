@@ -1,6 +1,9 @@
 ---
 title: "Docker And Container Deployment"
 description: "This document explains how Sentinel uses Docker, how the harness detects Docker availability, what changes when Sentinel itself is running inside a container, and the security implications of mounting the Docker socket."
+type: Guide
+tags: [docker]
+status: stable
 ---
 
 # Docker And Container Deployment

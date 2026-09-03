@@ -1,6 +1,9 @@
 ---
 title: "Getting Started with Sentinel"
 description: "Welcome to Sentinel. This guide is your starting point -- whether you are a developer who wants to automate workflows, an operations engineer evaluating orchestration tools, or an AI agent consuming this documentation programmatically."
+type: Guide
+tags: [getting-started]
+status: stable
 ---
 
 # Getting Started with Sentinel

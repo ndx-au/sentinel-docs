@@ -1,6 +1,9 @@
 ---
 title: "MCP Agent Integration"
 description: "Connect AI coding agents (Cursor, Claude Desktop, Hermes, custom MCP clients) to a running Sentinel harness so they can inspect SREs, validate kits, run executions, reload kits, read source, and scaffold components — without round-tripping through the HTTP API."
+type: Guide
+tags: [mcp]
+status: stable
 ---
 
 # MCP Agent Integration

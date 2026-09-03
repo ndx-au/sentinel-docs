@@ -1,6 +1,9 @@
 ---
 title: "Adversarial Testing & Probe Runner"
 description: "Adversarial testing is the practice of deliberately trying to break your system to find bugs before your users do."
+type: Guide
+tags: [testing]
+status: stable
 ---
 
 # Adversarial Testing & Probe Runner

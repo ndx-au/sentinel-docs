@@ -1,6 +1,9 @@
 ---
 title: "Content planes — fcms, ccms, wpcms"
 description: "Sentinel is pluralistic: orchestration always works without a content plane. When you publish content, pick one primary public plane per site origin (dual-primary on the same origin is unsupported)."
+type: Guide
+tags: [cms]
+status: stable
 ---
 
 # Content planes — fcms, ccms, wpcms

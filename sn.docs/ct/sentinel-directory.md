@@ -1,6 +1,9 @@
 ---
 title: "The `.sentinel/` Directory"
 description: "Machine-local harness state for one SRE. Gitignored (see repo .gitignore)."
+type: Reference
+tags: [configuration]
+status: stable
 ---
 
 # The `.sentinel/` Directory
