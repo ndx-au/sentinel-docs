@@ -1,10 +1,12 @@
 ---
 title: "Lua API Reference"
-description: "Complete reference for the Lua API available inside Sentinel flows. This document covers the sandboxed execution environment, the flow lifecycle, every available API function, and common patterns for building robust automation flows."
+description: "Reference for Lua flow APIs, context, HTTP, WebSockets, databases, secrets, AI, memory, and retrieval."
 type: Reference
 tags: [lua-api]
 status: stable
 ---
+
+<!-- ndx-ste-mode: description -->
 
 # Lua API Reference
 
@@ -14,17 +16,17 @@ Complete reference for the Lua API available inside Sentinel flows. This documen
 
 ## Introduction
 
-Sentinel flows are written in Lua and executed inside a sandboxed virtual machine (VM). The sandbox provides a controlled environment where flow code can make HTTP requests, interact with databases, send WebSocket messages, access secrets, and emit events -- but cannot access the host file system, execute system commands, or load arbitrary libraries.
+Sentinel runs Lua flows in a sandboxed VM. Flows can make HTTP requests, use databases, send WebSocket messages, access secrets, and emit events. The sandbox blocks direct host filesystem access, system commands, and arbitrary library loading.
 
 ### Why a Sandbox?
 
 Flows are user-authored code. In a multi-tenant or production environment, you need guarantees that a flow cannot:
 
-- Read or write arbitrary files on the server
-- Execute shell commands or spawn processes
-- Load malicious Lua libraries
-- Access memory or state from other flows
-- Interfere with the harness process itself
+- Read or write arbitrary files on the server.
+- Execute shell commands or spawn processes.
+- Load malicious Lua libraries.
+- Access memory or state from other flows.
+- Interfere with the harness process itself.
 
 The sandbox achieves this by providing a curated set of APIs (the `sn.*` namespace) while removing dangerous Lua standard library functions. Think of it as a "browser for server automation" -- powerful enough to do useful work, restricted enough to be safe.
 
@@ -56,12 +58,12 @@ Every flow has access to:
 
 The following Lua standard library functions are removed from the sandbox:
 
-- `io.*` -- No file I/O (use `sn.cn.file.exec()` for controlled file operations)
-- `os.*` -- No system commands (exception: `os.date` is available for time formatting)
-- `debug.*` -- No debug introspection
-- `package.*` -- No `require()` or module loading
-- `load()`, `loadstring()` -- No dynamic code evaluation
-- `dofile()` -- No file execution
+- `io.*` -- No file I/O (use `sn.cn.file.exec()` for controlled file operations).
+- `os.*` -- No system commands (exception: `os.date` is available for time formatting).
+- `debug.*` -- No debug introspection.
+- `package.*` -- No `require()` or module loading.
+- `load()`, `loadstring()` -- No dynamic code evaluation.
+- `dofile()` -- No file execution.
 
 If you need file operations, use the built-in file connector (`sn.cn.file.exec()`). If you need to call an external service, use `sn.http`. The sandbox channels all external interaction through auditable, rate-limitable APIs.
 
@@ -69,7 +71,9 @@ Long-running operational work such as scheduled backups remains harness-owned. L
 
 The AI-facing namespaces are feature-gated from the Agents dashboard release controls. When a subsystem is off, outside the canary cohort, or under rollback, calls return explicit errors such as `"sn.ai is disabled"`, `"sn.memory is disabled"`, or `"sn.rag is disabled"`.
 
-Canary rollout uses stable hashing on `ctx.execution_id` (fallback: `ctx.flow_name`). With `canary_percent` at 25, roughly 25% of executions land in the active cohort; `rollback_active` disables all three subsystems regardless of canary. Check `sn.ai.enabled` (refreshed per execution after `ctx` exists) before calling, or handle the disabled error in `pcall`.
+Canary rollout hashes `ctx.execution_id` (fallback: `ctx.flow_name`) consistently. A `canary_percent` of 25 enables roughly 25% of executions. `rollback_active` disables all three subsystems regardless of the cohort.
+
+Before an AI call, examine `sn.ai.enabled` or handle the disabled error in `pcall`. The harness refreshes this value for each execution after `ctx` exists.
 
 ---
 
@@ -106,16 +110,16 @@ end
 
 ### Lifecycle Order
 
-1. Success: `setup` → `main` → `cleanup`
-2. Setup fails: `setup` → `failed` → `cleanup`
-3. Main fails: `setup` → `main` → `failed` → `cleanup`
+1. Success: `setup` → `main` → `cleanup`.
+2. Setup fails: `setup` → `failed` → `cleanup`.
+3. Main fails: `setup` → `main` → `failed` → `cleanup`.
 
 ### Important Notes
 
 - **`ctx` is a global, not a parameter.** Unlike some frameworks, `ctx` is injected into the global scope before your functions are called. You access it directly: `ctx.log("info", "hello")`, not `function main(ctx)`.
-- **`main(params)` receives a params table.** The `params` argument is a Lua table containing trigger-specific data. For webhooks, it contains the merged query string and body fields plus trigger metadata (`trigger_type`, `trigger_id`, `trigger_path`). For cron triggers, it contains `trigger_type`, `trigger_id`, `trigger_name`, and `scheduled_at`. For event triggers, it contains `event_id`, `event_pattern`, `event_source`, `event_payload`, and `event_time`. For manual runs via `POST /fl/{id}/run`, it contains the request body fields. If no params are available, `params` may be `nil` -- always guard access.
-- **`ctx.params` mirrors the parsed request fields.** For webhook and manual triggers, `ctx.params` is a Lua table containing the merged query string and body fields (same data as the top-level keys in `params`). For cron and event triggers, `ctx.params` is not set.
-- **`ctx.req` contains HTTP request metadata.** For webhook and manual triggers, `ctx.req` is a table with `method` (string), `path` (string), `headers` (table of lowercase key-value pairs), and `files` (array of file objects with `field`, `name`, `type`, `size`, `data` fields). For cron and event triggers, `ctx.req` is not set.
+- **`main(params)` receives a params table.** The `params` argument is a Lua table containing trigger-specific data. For webhooks, it contains the merged query string and body fields plus trigger metadata (`trigger_type`, `trigger_id`, `trigger_path`). For cron triggers, it contains `trigger_type`, `trigger_id`, `trigger_name`, and `scheduled_at`. For event triggers, it contains `event_id`, `event_pattern`, `event_source`, `event_payload`, and `event_time`. For manual runs through `POST /fl/{id}/run`, it contains the request body fields. If no params are available, `params` can be `nil`. Guard access before you read it.
+- **`ctx.params` mirrors the parsed request fields.** For webhook and manual triggers, `ctx.params` contains merged query and body fields. These match the top-level fields in `params`. For cron and event triggers, `ctx.params` is not set.
+- **`ctx.req` contains HTTP request metadata.** For webhook and manual triggers, `ctx.req` includes `method` (string), `path` (string), and `headers` (table). Header keys use lowercase. It also includes `files`, an array of file objects. Each file has `field`, `name`, `type`, `size`, and `data` fields. For cron and event triggers, `ctx.req` is not set.
 - **Return values from `main()` are captured.** If `main()` returns a Lua table, it is serialized as JSON and stored as the execution result. It is also returned to the caller for synchronous webhook triggers.
 - **Flow metadata is auto-discovered.** You do not need a `flow = {}` metadata table. Flows are discovered from the `fl/` directory and their ID is derived from the kit name and filename.
 
@@ -238,10 +242,10 @@ Indicates how this flow execution was triggered. This is useful when a flow can 
 
 | Value | Meaning |
 |-------|---------|
-| `"manual"` | Triggered via `POST /fl/{id}/run` API call |
+| `"manual"` | Triggered through `POST /fl/{id}/run` API call |
 | `"cron"` | Triggered by a cron schedule |
 | `"webhook"` | Triggered by an incoming webhook request |
-| `"event"` | Triggered by an internal event (via `sentinel.emit()`) |
+| `"event"` | Triggered by an internal event (through `sentinel.emit()`) |
 | `"form"` | Triggered by a form submission |
 
 **Type:** string
@@ -266,8 +270,8 @@ end
 #### `sn.backup.runs(opts)`
 
 Returns recent backup runs. Optional `opts` fields:
-- `limit`
-- `status`
+- `limit`.
+- `status`.
 
 ```lua
 local runs, err = sn.backup.runs({ limit = 10, status = "failed" })
@@ -292,10 +296,10 @@ end
 #### `sn.backup.status()`
 
 Returns a small backup summary:
-- `plan_count`
-- `enabled_count`
-- `running_count`
-- `recent_failures`
+- `plan_count`.
+- `enabled_count`.
+- `running_count`.
+- `recent_failures`.
 
 ```lua
 local status, err = sn.backup.status()
@@ -308,10 +312,10 @@ end
 
 Flows can subscribe to backup lifecycle events through normal event triggers:
 
-- `backup.schedule.synced`
-- `backup.run.started`
-- `backup.run.completed`
-- `backup.run.failed`
+- `backup.schedule.synced`.
+- `backup.run.started`.
+- `backup.run.completed`.
+- `backup.run.failed`.
 
 ```lua
 triggers = {
@@ -342,13 +346,15 @@ local name = ctx.params.name
 local email = ctx.params.email
 ```
 
-Available for **webhook** and **manual** triggers. Contains the merged query string and parsed body fields as a Lua table. For JSON request bodies, each top-level key becomes a field in `ctx.params` with its value stringified. For form-urlencoded bodies, each field becomes a string entry. Query parameters are included; body fields take precedence on key conflicts.
+Available for **webhook** and **manual** triggers. Contains the merged query string and parsed body fields as a Lua table. For JSON request bodies, each top-level key becomes a field in `ctx.params` with its value stringified. For form-urlencoded bodies, each field becomes a string entry. Query parameters are included. Body fields take precedence on key conflicts.
 
-This is the same data available as top-level keys in the `params` argument to `main(params)`, but without the trigger metadata keys (`trigger_type`, `trigger_id`, etc.).
+These fields match the top-level fields in `params` for `main(params)`. They exclude trigger metadata such as `trigger_type` and `trigger_id`.
 
 **Type:** table or nil (nil for cron/event triggers)
 
-**Note:** All values in `ctx.params` are strings. JSON objects and arrays are stringified. Use `sn.json.dec()` to parse complex values.
+**Note:** All values in `ctx.params` are strings. The parser encodes JSON objects and arrays as strings.
+
+Use `sn.json.dec()` to parse complex values.
 
 #### ctx.req
 
@@ -363,7 +369,7 @@ Available for **webhook** and **manual** triggers. Contains HTTP request metadat
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `method` | string | HTTP method (`"GET"`, `"POST"`, etc.) |
+| `method` | string | HTTP method (for example `"GET"` and `"POST"`) |
 | `path` | string | Request path |
 | `headers` | table | Request headers with **lowercase** keys |
 | `files` | table (array) | Uploaded files (multipart only) |
@@ -406,7 +412,7 @@ local submission_id = ctx.fm.contact.uuid
 | `date` | string | `"2026-02-10"` (YYYY-MM-DD) |
 | `file` | string | Upload ID (for file retrieval) |
 
-**Note:** When `ctx.trigger_type` is `"form"`, the additional fields `ctx.kit` (kit directory name) are also available.
+**Note:** When `ctx.trigger_type` is `"form"`, `ctx.kit` also contains the kit directory name.
 
 #### ctx.kit
 
@@ -436,7 +442,7 @@ Kit identity for policy matching uses the same first-hyphen flow-id parse as `sn
 
 #### ctx.log(level, message)
 
-Writes a log entry associated with this execution. Logs are stored in the state database and can be streamed in real-time via the SSE API (`GET /ex/{id}/lg`).
+Writes a log entry associated with this execution. Logs are stored in the state database and can be streamed in real-time through the SSE API (`GET /ex/{id}/lg`).
 
 ```lua
 ctx.log("info", "Processing order " .. order_id)
@@ -454,18 +460,20 @@ ctx.log("debug", "Full response: " .. sn.json.enc(data))
 
 **Log level guidance:**
 - `debug`: Verbose information useful only during development. Hidden in Dashboard by default.
-- `info`: Normal operational messages. "Processing started", "Order completed", etc.
+- `info`: Normal operational messages. Examples include "Processing started" and "Order completed".
 - `warn`: Something unexpected but not fatal. "Retrying after timeout", "Missing optional field".
 - `error`: Something went wrong. "API call failed", "Database write error".
 
 **Visibility:**
 - The Dashboard execution view shows the last 100 log entries.
-- Stream logs in real-time via `GET /ex/{id}/lg?follow=true`.
+- Stream logs in real-time through `GET /ex/{id}/lg?follow=true`.
 - Filter logs by level in the API: `GET /lg?lv=error`.
 
 #### ctx.get(key)
 
-**Status: Not yet wired.** This function currently always returns `nil`. It is reserved for a future execution-scoped key-value state store. Do not use `ctx.get()` to access trigger parameters -- use the `params` argument to `main(params)` instead, or `ctx.params` for the parsed request fields.
+**Status: Not yet wired.** This function always returns `nil`. It is reserved for a future state store scoped to an execution.
+
+Do not use `ctx.get()` for trigger parameters. Use the `params` argument to `main(params)`. For parsed request fields, use `ctx.params`.
 
 ```lua
 -- WRONG: ctx.get() does not return trigger data
@@ -495,7 +503,7 @@ local api_key = ctx.secret("stripe_api_key")
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `key` | string | The secret name (as stored via `POST /sc`) |
+| `key` | string | The secret name (as stored through `POST /sc`) |
 
 **Returns:** The decrypted secret value as a string.
 
@@ -511,7 +519,7 @@ end
 
 #### ctx.pg(name)
 
-Returns a PostgreSQL database handle for the named connection pool. Connection pools are configured via the `/pg` API endpoints and their credentials are stored in the vault.
+Returns a PostgreSQL database handle for the named connection pool. Connection pools are configured through the `/pg` API endpoints and their credentials are stored in the vault.
 
 ```lua
 local db = ctx.pg("main")
@@ -536,11 +544,11 @@ end
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `name` | string | The PostgreSQL connection pool name (as configured via `POST /pg`) |
+| `name` | string | The PostgreSQL connection pool name (as configured through `POST /pg`) |
 
 **Returns:** A database handle object with `query()`, `query_one()`, and `exec()` methods.
 
-**Note:** PostgreSQL uses `$1`, `$2`, etc. for parameter placeholders (not `?` like SQLite).
+**Note:** PostgreSQL uses numbered placeholders such as `$1` and `$2`. SQLite uses `?` placeholders.
 
 ---
 
@@ -667,7 +675,7 @@ All HTTP methods return a response object with the following fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | integer | HTTP status code (200, 404, 500, etc.) |
+| `status` | integer | HTTP status code (for example 200, 404, and 500) |
 | `body` | string | Response body as a raw string. Parse JSON with `sn.json.dec()`. |
 | `headers` | table | Response headers. Header names are lowercased. |
 
@@ -749,10 +757,14 @@ end
 
 ## WebSocket Bus (sn.ws)
 
-The WebSocket bus provides harness-managed WebSocket connections. Unlike the HTTP client where each request is independent, WebSocket connections persist beyond flow execution. The Go harness owns all socket I/O -- flows open connections, send messages, and receive responses, but the actual TCP sockets are managed by the harness process. The subsystem is disabled by default; an administrator must enable it in `.sentinel/config.json` or from the dashboard Sockets page before `sn.ws.*` operations will work. This means:
+The WebSocket bus provides connections that the harness manages. Connections persist after a flow ends. The harness owns TCP sockets and all socket I/O. Flows open connections, send messages, and receive responses. The subsystem is disabled by default.
 
-1. **Connections survive flow completion.** A flow can open a connection in `setup()`, use it in `main()`, and it remains open for other flows or subsequent executions to use.
-2. **Multiple flows can share connections.** A connection opened by one flow can be used by any other flow in the same kit (or any flow, if the connection is not private).
+Before using `sn.ws.*`, enable WebSockets in `.sentinel/config.json` or on the dashboard Sockets page.
+
+This model provides these behaviors:
+
+1. **Connections survive flow completion.** A flow can open a connection in `setup()` and use it in `main()`. The connection stays open for later flows or executions.
+2. **Multiple flows can share connections.** Other flows in the same kit can use a connection. If the connection is not private, any flow can use it.
 3. **Kit scoping for security.** Connections can be marked `private = true`, which restricts access to flows within the owning kit.
 4. **Automatic reconnection.** Connections can be configured with exponential backoff reconnection, and reconnect attempts reuse the original headers and subprotocol.
 
@@ -857,7 +869,9 @@ ctx.log("info", "Query result: " .. data.result)
 
 **Raises:** Error on timeout or if the connection is closed.
 
-**Important:** This function returns the first message observed after the send, regardless of whether it is a response to your specific request. If the server sends unsolicited messages, you may receive one of those instead. For protocols that multiplex multiple request-response pairs over a single connection, use `send()` and `receive()` separately with your own correlation logic.
+**Important:** This function returns the first message after the send. That message can be an unsolicited message instead of the expected response.
+
+For protocols with concurrent request-response pairs, use `send()` and `receive()` separately. Add correlation logic for each pair.
 
 ### sn.ws.receive(name, timeout_ms?)
 
@@ -881,7 +895,7 @@ ctx.log("info", "Received: " .. msg.data)
 
 ### sn.ws.broadcast(channel, data, binary?)
 
-Sends a message to all clients subscribed to a bus channel. This is the bridge between Lua flows and browser clients connected via `/ws` or `/ws/{channel}` endpoints. Returns the number of connections that received the message.
+Sends a message to all clients subscribed to a bus channel. This is the bridge between Lua flows and browser clients connected through `/ws` or `/ws/{channel}` endpoints. Returns the number of connections that received the message.
 
 ```lua
 local count = sn.ws.broadcast("notifications", sn.json.enc({
@@ -997,7 +1011,7 @@ SQLite is a full-featured relational database that supports transactions, indexe
 
 ### sn.db.exec(sql, params?)
 
-Executes a SQL statement that modifies data (INSERT, UPDATE, DELETE) or schema (CREATE TABLE, ALTER TABLE, etc.). Returns a result object with metadata about the operation.
+Executes a SQL statement that modifies data (INSERT, UPDATE, DELETE) or schema (including CREATE TABLE and ALTER TABLE). Returns a result object with metadata about the operation.
 
 ```lua
 -- Create a table
@@ -1037,7 +1051,7 @@ sn.db.exec("DELETE FROM users WHERE id = ?", {"user_1"})
 
 **Returns:** `{ok = true, rows_affected = N, last_insert_id = N}`
 
-**Note:** Use `?` for parameter placeholders. Never concatenate user input into SQL strings -- this prevents SQL injection.
+Use `?` for parameter placeholders. Never concatenate user input into SQL strings. These placeholders prevent SQL injection.
 
 ### sn.db.query(sql, params?)
 
@@ -1075,7 +1089,7 @@ local users = sn.db.query("SELECT * FROM users WHERE id = ?", {"nonexistent"})
 
 ### sn.db.query_one(sql, params?)
 
-Convenience function that executes a SELECT query and returns only the first row. Useful when you expect exactly one result (e.g., looking up by primary key).
+Convenience function that executes a SELECT query and returns only the first row. Useful when you expect exactly one result (for example looking up by primary key).
 
 ```lua
 local user = sn.db.query_one(
@@ -1121,7 +1135,7 @@ end)
 
 ### Schema Design Best Practices
 
-1. **Always use `CREATE TABLE IF NOT EXISTS`.** Flows may run many times. Putting table creation in `setup()` with `IF NOT EXISTS` makes flows idempotent.
+1. **Always use `CREATE TABLE IF NOT EXISTS`.** Flows can run many times. Putting table creation in `setup()` with `IF NOT EXISTS` makes flows idempotent.
 
 2. **Use TEXT for IDs.** SQLite does not have a native UUID type. Store IDs as TEXT. Generate them with `sn.crypto.random_bytes(16)`.
 
@@ -1139,9 +1153,9 @@ end)
 ### Database Isolation
 
 Each kit gets its own database file:
-- **Location:** `.sentinel/data/{kit-name}.db`
+- **Location:** `.sentinel/data/{kit-name}.db`.
 - **Access:** By default, only flows within the kit can access its database.
-- **Cross-kit access:** If explicitly imported in `kit.yaml`, one kit can read another kit's database. This is unusual and should be avoided unless necessary.
+- **Cross-kit access:** An import in `kit.yaml` can permit a kit to read another kit's database. Avoid this access unless necessary.
 
 ---
 
@@ -1176,7 +1190,9 @@ local json_str = sn.json.enc(data)
 
 **Returns:** JSON string.
 
-**Note:** Lua tables with string keys become JSON objects. Lua tables with integer keys become JSON arrays. Mixed tables (both string and integer keys) produce undefined results -- avoid them.
+**Note:** Lua tables with string keys become JSON objects. Tables with integer keys become JSON arrays. Mixed key types produce undefined results.
+
+Avoid tables with mixed key types.
 
 ### sn.json.dec(string)
 
@@ -1209,7 +1225,7 @@ if not ok then
 end
 ```
 
-**Null handling:** JSON `null` values are decoded to a special sentinel value `sn.null` (not Lua's `nil`, because `nil` would make the key disappear from the table entirely):
+**Null handling:** The decoder maps JSON `null` to `sn.null`, instead of Lua's `nil`. A `nil` value removes the key from the table:
 
 ```lua
 local json_str = '{"name":"Alice","middle":null}'
@@ -1278,7 +1294,9 @@ ctx.log("info", "Hash: " .. hash)
 
 **Returns:** Hex-encoded SHA-256 hash string (64 characters).
 
-**Note:** SHA-256 alone is not suitable for password hashing. For password storage, use a purpose-built algorithm like bcrypt or argon2 (via an external API).
+**Note:** SHA-256 alone is unsuitable for password hashing.
+
+For password storage, use a dedicated algorithm such as bcrypt or argon2 through an external API.
 
 ### sn.crypto.random_bytes(n)
 
@@ -1321,7 +1339,7 @@ local ts = sn.time.now()
 ctx.log("info", "Current time: " .. ts)
 ```
 
-**Returns:** ISO8601 timestamp string in UTC (e.g., `"2026-02-10T12:00:00Z"`).
+**Returns:** ISO8601 timestamp string in UTC (for example `"2026-02-10T12:00:00Z"`).
 
 **Note:** `os.date` is also available in the sandbox for more flexible time formatting:
 
@@ -1354,7 +1372,7 @@ return {ok = false, error = "All retries exhausted"}
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `seconds` | number | Number of seconds to sleep (can be fractional, e.g., `0.5`) |
+| `seconds` | number | Number of seconds to sleep (can be fractional, for example `0.5`) |
 
 **Limits:**
 - **Maximum sleep:** 300 seconds (5 minutes). Sleeping longer raises an error.
@@ -1364,7 +1382,7 @@ return {ok = false, error = "All retries exhausted"}
 
 ## AI (sn.ai)
 
-Harness-provided LLM API. Providers are configured by operators through the dashboard (API Library + Vault); flows call `sn.ai` and do not make raw provider HTTP requests.
+Harness-provided LLM API. Providers are configured by operators through the dashboard (API Library + Vault). Flows call `sn.ai` and do not make raw provider HTTP requests.
 
 `sn.ai.enabled` is a boolean reflecting release controls. When AI is disabled, every function returns `nil` and an error string `"sn.ai is disabled"`.
 
@@ -1381,7 +1399,7 @@ end
 
 ### sn.ai.chat(params)
 
-Chat completion with optional tool calling. When `tools` are supplied, the harness runs a bounded tool loop: the model may request tools, Lua targets execute, results are fed back, and the loop repeats until the model finishes or limits are hit.
+This function provides chat completion with optional tool calls. When `tools` are supplied, the harness runs a bounded tool loop. The model can request tools. Lua targets execute the calls and return results to the model. The loop ends when the model finishes or reaches a limit.
 
 ```lua
 local function get_status(args)
@@ -1418,8 +1436,8 @@ local resp, err = sn.ai.chat({
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `messages` | array | Chat messages (`role`, `content`; optional `tool_call_id` for tool results) |
-| `model` | string | Model id (optional; uses API Library default) |
+| `messages` | array | Chat messages (`role`, `content`. Optional `tool_call_id` for tool results) |
+| `model` | string | Model id (optional. Uses API Library default) |
 | `provider` | string | Provider id (optional) |
 | `system` | string | System prompt (optional) |
 | `tools` | array | Tool definitions (see example above) |
@@ -1432,7 +1450,7 @@ local resp, err = sn.ai.chat({
 | `tool_timeout_ms` | integer | Per-tool timeout in ms (default `10000`) |
 | `max_tool_payload_bytes` | integer | Max encoded tool-result payload (default `65536`) |
 
-**Tool `target`:** A Lua function, or a string resolved to a global function (e.g. `"sn.md.my_tools.fetch"`). The function receives one table (`args`) and must return `(result, err)` where `err` is `nil` on success.
+**Tool `target`:** A Lua function, or a string resolved to a global function (for example `"sn.md.my_tools.fetch"`). The function receives one table (`args`) and must return `(result, err)` where `err` is `nil` on success.
 
 **Returns:** Table with `message`, `usage`, `finish_reason`, `model`, and optional `tool_calls`.
 
@@ -1441,7 +1459,7 @@ local resp, err = sn.ai.chat({
 | `message` | `{ role, content, tool_call_id?, name? }` |
 | `tool_calls` | Array of `{ id, name, args }` when the model requested tools |
 | `usage` | `{ input_tokens, output_tokens, total_tokens, estimated_cost_cents, cost_available }` |
-| `finish_reason` | e.g. `stop`, `tool_use`, `max_tokens` |
+| `finish_reason` | for example `stop`, `tool_use`, `max_tokens` |
 
 #### Tool-loop error classes
 
@@ -1535,7 +1553,7 @@ Message helpers for building `messages` arrays:
 
 ### Agent flow pattern
 
-Guard when AI may be disabled; compose memory and tools in kit logic:
+Before you use AI, guard against a disabled subsystem. Combine memory and tools in kit logic:
 
 ```lua
 function main(params)
@@ -1565,7 +1583,7 @@ Operator setup: enable `sn.ai` on the Agents dashboard, register an AI-capable A
 
 Episodic conversational memory backed by harness SQLite storage. Enable from the Agents dashboard (Memory tab). Isolated by `agent_id` and `session_id`.
 
-`sn.memory.enabled` reflects release and settings. When disabled, functions return `nil, "sn.memory is disabled"`.
+`sn.memory.enabled` reflects release and configuration. When disabled, functions return `nil, "sn.memory is disabled"`.
 
 ### sn.memory.add(agent_id, session_id, role, content)
 
@@ -1596,13 +1614,13 @@ local result, err = sn.memory.compact("support-bot", "sess-42")
 
 ### sn.memory.cleanup()
 
-Deletes expired sessions per TTL settings. Returns `{ deleted_sessions }`.
+Deletes expired sessions per TTL configuration. Returns `{ deleted_sessions }`.
 
 ### sn.memory.status(agent_id?, session_id?)
 
 Returns configuration and, when ids are provided, session stats (`exists`, `message_count`, `token_count`, `compact_count`, `last_checkpoint`, `lineage_depth`).
 
-Kit wrappers (e.g. `sn.md.agent_memory` in `sn.core-agent`) add validation and defaults on top of this API.
+Kit wrappers (for example `sn.md.agent_memory` in `sn.core-agent`) add validation and defaults on top of this API.
 
 ---
 
@@ -1610,7 +1628,7 @@ Kit wrappers (e.g. `sn.md.agent_memory` in `sn.core-agent`) add validation and d
 
 Document ingestion and retrieval backed by PostgreSQL (with pgvector when configured). Initialize and enable RAG from the dashboard RAG page before calling these functions.
 
-`sn.rag.enabled` reflects release and settings. When disabled, functions return `nil, "sn.rag is disabled"` (or `false, err` for `delete`).
+`sn.rag.enabled` reflects release and configuration. When disabled, functions return `nil, "sn.rag is disabled"` (or `false, err` for `delete`).
 
 ### sn.rag.search(params)
 
@@ -1753,7 +1771,7 @@ local result, err = sn.cn.rag_ingest.call({
 
 ### SMTP Connector (sn.cn.smtp)
 
-Sends email via SMTP. Useful for notifications and alerts.
+Sends email through SMTP. Useful for notifications and alerts.
 
 ```lua
 sn.cn.smtp.exec({
@@ -2028,13 +2046,13 @@ function main(params)
 end
 ```
 
-**Cross-reference:** CMS content is also accessible via the REST API. See [HTTP API Reference: Content (CMS)](/api-reference#content-cms) for external endpoint documentation.
+**Cross-reference:** CMS content is also accessible through the REST API. See [HTTP API Reference: Content (CMS)](/api-reference#content-cms) for external endpoint documentation.
 
 ---
 
 ## Accessing Services from Lua
 
-Beyond the built-in APIs documented above, Sentinel flows can access additional services that implement the Triple-Access Pattern. These services expose Lua APIs alongside their CLI and REST interfaces, ensuring consistent behavior across all access methods.
+Beyond the built-in APIs documented above, Sentinel flows can access more services that implement the Triple-Access Pattern. These services expose Lua APIs alongside their CLI and REST interfaces, ensuring consistent behavior across all access methods.
 
 ### API Library Service (sn.lib)
 
@@ -2070,13 +2088,15 @@ sn.lib.import(sn.json.enc({
 
 ### Building New Services
 
-If you are building a new service that needs to be accessible from CLI, REST API, and Lua flows simultaneously, follow the [Triple-Access Pattern](/triple-access-pattern) guide.
+For a service with CLI, REST API, and Lua access, follow the [Triple-Access Pattern](/triple-access-pattern) guide.
 
 ---
 
 ## Error Handling
 
-Lua errors in flows are caught by the harness and recorded in the execution log. However, for robust flows, you should handle errors explicitly using `pcall` (protected call).
+The harness catches Lua errors and records them in the execution log.
+
+For errors that the flow must handle, use `pcall` (protected call).
 
 ### Basic Error Handling with pcall
 
@@ -2318,7 +2338,7 @@ end
    end
    ```
 
-4. **Check `ctx.trigger_type`.** If your flow behaves differently depending on the trigger, log the trigger type to verify you are in the right code path:
+4. **Examine `ctx.trigger_type`.** If behavior depends on the trigger, log its type. Make sure that the type selects the expected code path:
    ```lua
    ctx.log("info", "Triggered by: " .. ctx.trigger_type)
    ```
@@ -2330,13 +2350,13 @@ end
    ```
    This gives you a real-time view of all log output as you trigger flows.
 
-6. **Inspect the execution result.** After running a flow, check the execution details:
+6. **Inspect the execution result.** After a flow runs, examine its execution details:
    ```bash
    curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/ex/{exec_id}
    ```
    The `err` field contains the error message if the flow failed.
 
-7. **Use the Dashboard.** The Dashboard's execution view shows logs, timing, and results in a graphical interface. It is often easier to debug visually than via curl commands.
+7. **Use the Dashboard.** The Dashboard's execution view shows logs, timing, and results in a graphical interface. It is often easier to debug visually than through curl commands.
 
 ---
 
@@ -2349,12 +2369,12 @@ For security, the following Lua standard library functions are **NOT available**
 | `io.*` | File I/O -- use `sn.cn.file.exec()` instead |
 | `os.execute`, `os.remove`, `os.rename`, `os.tmpname`, `os.getenv`, `os.exit` | System commands -- too dangerous |
 | `os.date` | **Available** (exception) -- safe for time formatting |
-| `debug.*` | Debug introspection -- could inspect harness internals |
+| `debug.*` | Debug introspection can expose harness internals |
 | `package.*` | Module loading -- prevents loading untrusted libraries |
 | `load()`, `loadstring()` | Dynamic code evaluation -- prevents code injection |
 | `dofile()`, `require()` | File loading -- sandbox escape vector |
 
-**Why these restrictions exist:** Flows are user-authored code running on your server. Without sandboxing, a malicious or buggy flow could read your secrets, delete files, execute shell commands, or exfiltrate data. The sandbox provides a safe execution environment while still giving flows access to powerful, auditable APIs.
+**Why these restrictions exist:** Flows contain user code that runs on the host. Without the sandbox, malicious or faulty code can expose secrets, delete files, or execute commands. The sandbox restricts access to the APIs that the harness provides and audits.
 
 **What to use instead:**
 - Need file I/O? Use `sn.cn.file.exec()`.
@@ -2369,20 +2389,20 @@ For security, the following Lua standard library functions are **NOT available**
 
 1. **Always use transactions for multi-step database operations.** If two writes need to succeed or fail together, wrap them in `sn.db.transaction()`.
 
-2. **Validate webhook signatures.** When receiving webhooks from external services, always verify the HMAC signature before processing the payload.
+2. **Validate webhook signatures.** Before you process an external webhook payload, make sure that its HMAC signature is valid.
 
 3. **Log important operations.** Use `ctx.log()` at appropriate levels. This is your primary debugging tool in production.
 
 4. **Set reasonable HTTP timeouts.** Always specify `timeout_ms` for HTTP requests. The default of 30 seconds is often too long. A timeout of 5-10 seconds is reasonable for most API calls.
 
-5. **Handle errors gracefully with pcall.** Any operation that might fail (JSON parsing, HTTP requests, database queries, secret retrieval) should be wrapped in `pcall` if the flow needs to continue or return a meaningful error.
+5. **Handle errors gracefully with pcall.** If the flow must continue after an error, wrap the operation in `pcall`. Use the same protection to return a meaningful error. Operations include JSON parsing, HTTP requests, database queries, and secret retrieval.
 
-6. **Never hardcode secrets.** Store all tokens, passwords, and API keys in the vault via `POST /sc` and access them with `ctx.secret("name")`.
+6. **Never hardcode secrets.** Store all tokens, passwords, and API keys in the vault through `POST /sc` and access them with `ctx.secret("name")`.
 
-7. **Type-check form data.** Even though form field type coercion is applied automatically, verify that the data matches your expectations before processing.
+7. **Type-check form data.** Even though form field type coercion is applied automatically, make sure that the data matches your expectations before processing.
 
 8. **Batch database writes.** Use `sn.db.transaction()` for inserting multiple rows. This is faster (one disk sync instead of many) and atomic.
 
-9. **Name WebSocket connections descriptively.** Use names that describe the remote service (e.g., `"discord"`, `"slack-bot"`, `"status-monitor"`). Always close connections in `cleanup()`.
+9. **Name WebSocket connections descriptively.** Use names that describe the remote service (for example `"discord"`, `"slack-bot"`, `"status-monitor"`). Always close connections in `cleanup()`.
 
 10. **Create tables in setup().** Put `CREATE TABLE IF NOT EXISTS` statements in `setup()` so your database schema is always ready before `main()` runs. The `IF NOT EXISTS` makes it idempotent.

@@ -1,14 +1,16 @@
 ---
 title: "AI provider extension guide"
-description: "How to add a Go runtime adapter for a new meta.runtime.provider value in API Library. Operators register vendors in the dashboard; the harness wires adapters at bootstrap via BuildClientFromLibrary."
+description: "How to add a Go runtime adapter and connect it to API Library vendors, credential validation, and the dashboard."
 type: Guide
 tags: [ai]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # AI provider extension guide
 
-How to add a Go **runtime adapter** for a new `meta.runtime.provider` value in API Library. Operators register vendors in the dashboard; the harness wires adapters at bootstrap via `BuildClientFromLibrary`.
+This guide explains how to add a Go **runtime adapter** for a new `meta.runtime.provider` value in API Library. Operators register vendors in the dashboard. At startup, `BuildClientFromLibrary` connects the adapters.
 
 Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Operator smoke path: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator).
 
@@ -32,15 +34,15 @@ There is **no** parallel provider registry. Dashboard Agents → Providers surfa
 
 | `runtime.provider` | Status | Notes |
 |--------------------|--------|-------|
-| `openai` | **shipped** | OpenAI-compatible base URL; use for DeepSeek, Together, and other `/v1` APIs via `meta.runtime.base_url` |
-| `openrouter` | **shipped** | OpenAI-compatible alias; default `https://openrouter.ai/api/v1`; sets `HTTP-Referer: https://ndx.au` and `X-Title: NDX Sentinel`. Keep slashy model slugs (`openai/gpt-4o-mini`) with `runtime.provider` already set to `openrouter` so the harness does not split the slug on `/`. |
+| `openai` | **shipped** | OpenAI-compatible base URL. Use for DeepSeek, Together, and other `/v1` APIs through `meta.runtime.base_url` |
+| `openrouter` | **shipped** | OpenAI-compatible alias. Default `https://openrouter.ai/api/v1`. Sets `HTTP-Referer: https://ndx.au` and `X-Title: NDX Sentinel`. Set `runtime.provider` to `openrouter`. Keep the full model slug, such as `openai/gpt-4o-mini`. The harness then preserves `/` in the slug. |
 | `anthropic` | **shipped** | Native Anthropic Messages API |
 | `gemini` | **shipped** | Google Generative Language API |
 | `azure-openai` | **deferred** | Often OpenAI-compatible — workaround: `runtime.provider: "openai"` + Azure `base_url` if your deployment matches the OpenAI client shape |
-| `ollama` | **deferred** | Local runtime; different API surface than OpenAI chat completions |
+| `ollama` | **deferred** | Local runtime. Different API surface than OpenAI chat completions |
 | `groq` | **deferred** | OpenAI-compatible candidate for a future thin alias |
 | `mistral` | **deferred** | OpenAI-compatible candidate for a future thin alias |
-| `cohere` | **deferred** | Distinct API; needs dedicated adapter |
+| `cohere` | **deferred** | Distinct API. Needs dedicated adapter |
 | `deepseek` | **workaround** | Register vendor with `runtime.provider: "openai"` and `base_url: "https://api.deepseek.com"` (see `TestBuildClientFromLibraryUsesRuntimeBaseURLForOpenAICompatibleVendors`) |
 
 ---
@@ -78,7 +80,7 @@ Copy the pattern from an existing adapter:
 | Anthropic | `internal/ai/anthropic.go` | Messages API, tool-use blocks |
 | Gemini | `internal/ai/gemini.go` | Embed + generateContent |
 
-Constructor signature: `NewFooProvider(apiKey, baseURL string) *FooProvider`. `Name()` must return the **`runtime.provider` string** operators will set in API Library (e.g. `"groq"`).
+Constructor signature: `NewFooProvider(apiKey, baseURL string) *FooProvider`. `Name()` must return the **`runtime.provider` string** operators will set in API Library (for example `"groq"`).
 
 ### 2. Register in the central adapter registry
 
@@ -88,7 +90,9 @@ Edit `internal/ai/adapters.go`:
 - Add a `case` in `IsRuntimeAdapterImplemented`.
 - Add a `case` in `RegisterRuntimeAdapter` that calls `client.RegisterProvider(NewFooProvider(...))`.
 
-`runtime.go` calls `RegisterRuntimeAdapter` — do not duplicate switch arms elsewhere.
+`runtime.go` calls `RegisterRuntimeAdapter`.
+
+Do not duplicate switch arms elsewhere.
 
 ### 3. Add credential validation probe
 
@@ -96,7 +100,7 @@ Edit `internal/ai/provider_validation.go` → `ValidateProviderCredentials`:
 
 - Add a `case` with a read-only HTTP probe (typically `GET …/models` or vendor-specific health endpoint).
 - Return `Status: "valid"` / `"invalid"` with a short message.
-- Unsupported providers already return `unsupported_adapter` via `IsRuntimeAdapterImplemented`.
+- Unsupported providers already return `unsupported_adapter` through `IsRuntimeAdapterImplemented`.
 
 Validation is triggered from the dashboard/API: `POST /lib/{vendor_id}/validate`.
 
@@ -139,9 +143,9 @@ go test ./internal/ai -count=1 -run "BuildClientFromLibrary|ValidateProvider|Ada
 
 Add:
 
-- `TestBuildClientFromLibraryRegisters…` — vendor in library + vault secret → `client.GetProvider("yourname")` ok
-- `TestValidateProvider…` — mock HTTP transport in `provider_validation_test.go`
-- Dashboard: `go test ./internal/dashboard -count=1 -run Agent` — `adapter_status: "active"` for wired vendors
+- `TestBuildClientFromLibraryRegisters…` — vendor in library + vault secret → `client.GetProvider("yourname")` ok.
+- `TestValidateProvider…` — mock HTTP transport in `provider_validation_test.go`.
+- Dashboard: `go test ./internal/dashboard -count=1 -run Agent` — `adapter_status: "active"` for wired vendors.
 
 Regression harness path (no live key): `go test ./internal/api -run TestAgenticAIOperatorPath`.
 
@@ -151,9 +155,9 @@ Regression harness path (no live key): `go test ./internal/api -run TestAgenticA
 
 When `runtime.provider` has no adapter:
 
-- Bootstrap logs: `ai: provider registered in library but runtime adapter is not implemented`
-- Agents → Providers: `adapter_status: "unsupported"` with `adapter_message` pointing here
-- Validate: `status: "unsupported_adapter"` (distinct from `unchecked` or `invalid`)
+- Bootstrap logs: `ai: provider registered in library but runtime adapter is not implemented`.
+- Agents → Providers: `adapter_status: "unsupported"` with `adapter_message` pointing here.
+- Validate: `status: "unsupported_adapter"` (distinct from `unchecked` or `invalid`).
 
 Restart the harness after library changes so `BuildClientFromLibrary` re-runs.
 
@@ -161,7 +165,7 @@ Restart the harness after library changes so `BuildClientFromLibrary` re-runs.
 
 ## Related docs
 
-- [Agentic AI operator guide](/agentic-ai-operator) — Vault, validate, release, smoke
-- [Lua API — `sn.ai`](/lua-api)
-- [Harness HTTP routes — `/lib/*`, `/ai/*`](/harness-http-routes)
-- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md)
+- [Agentic AI operator guide](/agentic-ai-operator) — Vault, validate, release, smoke.
+- [Lua API — `sn.ai`](/lua-api).
+- [Harness HTTP routes — `/lib/*`, `/ai/*`](/harness-http-routes).
+- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).

@@ -1,16 +1,18 @@
 ---
 title: "The `.sentinel/` Directory"
-description: "Machine-local harness state for one SRE. Gitignored (see repo .gitignore)."
+description: "Reference for local harness files, their storage engines, dependencies, backups, and proposed changes."
 type: Reference
 tags: [configuration]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # The `.sentinel/` Directory
 
 Machine-local harness state for one SRE. **Gitignored** (see repo `.gitignore`). Do not commit secrets, databases, or uploads.
 
-Paths below assume default `data_dir: ".sentinel"` in config (see `system-specs/config.yaml`). Override with `SENTINEL_DATA_DIR` or `data_dir` in `.sentinel/config.json` — all `{data_dir}/…` paths move with it.
+Paths below assume default `data_dir: ".sentinel"` in configuration (see `system-specs/config.yaml`). Override with `SENTINEL_DATA_DIR` or `data_dir` in `.sentinel/config.json` — all `{data_dir}/…` paths move with it.
 
 **Separate from SRE `.sentinel/`:** the dashboard CLI also uses `~/.sentinel/dashboard.db` (and related keys) for operator-console metadata when not scoped to a project attach path.
 
@@ -42,7 +44,7 @@ Paths below assume default `data_dir: ".sentinel"` in config (see `system-specs/
     responses/             # Form static response cache
 ```
 
-Repo root may also contain **`storage-points.local.json`** (gitignored) — S3 endpoint definitions for backups/CMS, not inside `.sentinel/`.
+The repository root can also contain **`storage-points.local.json`** (gitignored). This file stores S3 endpoint definitions for backups and CMS. It is outside `.sentinel/`.
 
 ---
 
@@ -50,34 +52,34 @@ Repo root may also contain **`storage-points.local.json`** (gitignored) — S3 e
 
 | Path | Engine / format | Created by | Purpose | Depends on | Restore / notes |
 |------|-----------------|------------|---------|------------|-----------------|
-| **config.json** | JSON | `sentinel sre init`, first harness start | `api.port`, tokens, TLS, logging, marketplace, `data_dir`, websocket, rate limits | Harness, dashboard (read/write some keys) | Back up manually; no auto-rebuild. Wrong edit can block startup. |
-| **state.db** | SQLite + WAL; optional **SQLCipher** | `init`, harness start | Executions, logs index, triggers metadata, backup plans/runs, RAG tables (`sentinel_rag_*`), storage point registry rows, etc. | Core harness, backup manager, RAG | `/bk` file backup; `encrypt_db` needs passphrase. **Do not Litestream** (sn2 policy). |
-| **vault.db** | SQLite + WAL; **AES-256-GCM values** | `init` (if passphrase), first secret write | Encrypted secrets for flows, Postgres URLs, etc. | Vault API `/sc`, `ctx.secret`, pgmanager | File backup; wrong passphrase = empty DB appearance. Not SQLCipher file encryption. |
-| **cms.db** | **bbolt** | `init`, harness start (`OpenContentCache`) | Parsed markdown cache for kits’ `md/` / CMS API — **not** a full CMS product | `internal/cms` builder, watcher, `/cm` handlers, forms/pages using CMS vars | Safe to delete → cold rebuild from `md/` on next start. Misnamed; **proposed: `md-cache.db`**. |
-| **harness-{port}.pid** | text | `sentinel harness start --daemon` | CLI/service discovery (`sentinel ps`, stop) | Process management only | Regenerated; safe to remove if process dead. |
+| **config.json** | JSON | `sentinel sre init`, first harness start | `api.port`, tokens, TLS, logging, marketplace, `data_dir`, websocket, rate limits | Harness, dashboard (read/write some keys) | Back up manually. No auto-rebuild. Wrong edit can block startup. |
+| **state.db** | SQLite + WAL. Optional **SQLCipher** | `init`, harness start | Executions, logs index, triggers metadata, backup plans/runs, RAG tables (`sentinel_rag_*`), storage point registry rows, and other state | Core harness, backup manager, RAG | `/bk` file backup. `encrypt_db` needs passphrase. **Do not Litestream** (sn2 policy). |
+| **vault.db** | SQLite + WAL. **AES-256-GCM values** | `init` (if passphrase), first secret write | Encrypted secrets, including flow secrets and Postgres URLs | Vault API `/sc`, `ctx.secret`, pgmanager | File backup. Wrong passphrase = empty DB appearance. Not SQLCipher file encryption. |
+| **cms.db** | **bbolt** | `init`, harness start (`OpenContentCache`) | Parsed markdown cache for kits’ `md/` / CMS API — **not** a full CMS product | `internal/cms` builder, watcher, `/cm` handlers, forms/pages using CMS vars | Safe to delete → cold rebuild from `md/` on next start. Misnamed. **proposed: `md-cache.db`**. |
+| **harness-{port}.pid** | text | `sentinel harness start --daemon` | CLI/service discovery (`sentinel ps`, stop) | Process management only | Regenerated. Safe to remove if process dead. |
 | **marketplace-instance.json** | JSON | First marketplace / phone-home use | Stable Ed25519 instance identity for SKM | `internal/marketplace` | Do not delete casually if licensed instance bound to ID. |
 | **crash/** | files | Safety subsystem on panic | Last-known crash context for debugging | `internal/safety` | Optional retention cleanup. |
-| **certs/** | PEM | TLS enable / `sentinel` PKI helpers | CA + server certs for HTTPS harness | TLS listeners | Regenerable; protect private keys. |
+| **certs/** | PEM | TLS enable / `sentinel` PKI helpers | CA + server certs for HTTPS harness | TLS listeners | Regenerable. Protect private keys. |
 | **pub-keys/** | PEM/text | Dashboard key registration | Verify dashboard `X-Sn-Sig` to harness | Dashboard attach | Re-register from dashboard if lost. |
-| **git-deploy-key** | SSH private key | Git sync setup | Deploy key for `sentinel.yaml` git settings | `internal/git` | Regenerate via git tooling; permissions 0600. |
+| **git-deploy-key** | SSH private key | Git sync setup | Deploy key for `sentinel.yaml` git configuration | `internal/git` | Regenerate through git tooling. Permissions 0600. |
 | **git-keys/** | SSH keys | Optional multi-key git | Extra git remotes | Git subsystem | Same as deploy key. |
 | **docker-templates/** | YAML/files | Dashboard seed on attach | Local copies of embedded Docker stacks | Docker handlers | Safe to re-seed from harness. |
-| **archive/** | `.db` snapshots | Log retention / rotation config | Archived DB copies per `logging.retention` | Config `archive_path` | Optional git sync if `include_backups` in sentinel.yaml git settings. |
-| **backups/** | tar.gz, dumps, etc. | Backup manager runs | Local retention before optional upload to storage points | `/bk` API, cron plans | Can re-download from object storage if uploaded. |
-| **data/{ns}.{name}.db** | SQLite + WAL | Kit first DB use / schema apply | Kit-isolated `sn.db.*` data | Kit flows, `KitDatabaseManager` | Kit backup via `/bk` or care plans; **Litestream candidate (sn2, edge only)**. |
-| **data/pg_connections.json** | JSON | Dashboard / API add connection | Names + vault secret refs for Postgres pools | `ctx.pg`, pgmanager | Recreate from dashboard; secrets in vault. |
+| **archive/** | `.db` snapshots | Log retention / rotation configuration | Archived DB copies per `logging.retention` | Configuration `archive_path` | Optional git sync if `include_backups` in sentinel.yaml git configuration. |
+| **backups/** | Archives and dumps, including tar.gz | Backup manager runs | Local retention before optional upload to storage points | `/bk` API, cron plans | Can re-download from object storage if uploaded. |
+| **data/{ns}.{name}.db** | SQLite + WAL | Kit first DB use / schema apply | Kit-isolated `sn.db.*` data | Kit flows, `KitDatabaseManager` | Kit backup through `/bk` or care plans. **Litestream candidate (sn2, edge only)**. |
+| **data/pg_connections.json** | JSON | Dashboard / API add connection | Names + vault secret refs for Postgres pools | `ctx.pg`, pgmanager | Recreate from dashboard. Secrets in vault. |
 | **data/uploads/** | binary | Form submissions | Uploaded files (`fm.{uuid}…`) | Forms system | Orphan risk if DB rows deleted without cleanup. |
-| **cache/responses/** | files | Form static cache | Cached form responses (TTL) | Forms `static-cache-ttl` | Safe to purge; regenerates. |
+| **cache/responses/** | files | Form static cache | Cached form responses (TTL) | Forms `static-cache-ttl` | Safe to purge. Regenerates. |
 
 ---
 
 ## `cms.db` vs future flat-file CMS
 
-Today **`cms.db` is only a markdown parse cache** (bbolt buckets: kit → slug → JSON `CacheEntry`). Source of truth remains git-tracked `md/` (and `ct/` for content trees). The harness rebuilds cache via `BuildCache` on startup and invalidates on file watch.
+Today **`cms.db` is only a markdown parse cache** (bbolt buckets: kit → slug → JSON `CacheEntry`). Source of truth remains git-tracked `md/` (and `ct/` for content trees). The harness rebuilds cache through `BuildCache` on startup and invalidates on file watch.
 
-A future **flat-file CMS** (fast, git-native pages) would be a separate concern:
+A future **flat-file CMS** (fast, git-native pages) is a separate proposal:
 
-- Could reduce reliance on this cache or replace it with a different index filename.
+- The proposal can reduce reliance on this cache or replace its index filename.
 - Renaming to **`md-cache.db`** clarifies ops/backups and avoids implying “CMS database” stores authoritative content.
 
 ---
@@ -88,7 +90,7 @@ A future **flat-file CMS** (fast, git-native pages) would be a separate concern:
 
 | Area | Change |
 |------|--------|
-| `internal/app/app.go` | Open `md-cache.db`; on start, `rename` `cms.db` → `md-cache.db` if old exists |
+| `internal/app/app.go` | Open `md-cache.db`. On start, `rename` `cms.db` → `md-cache.db` if old exists |
 | `cmd/sentinel/commands/init.go` | Create `md-cache.db` |
 | Dashboard backups UI / `backups.js` | Preset path |
 | Docs, `sn2/`, `system-specs/file-structure.yaml` | Text |
@@ -102,8 +104,8 @@ No on-disk format change (still bbolt). Existing installs need **one-time migrat
 
 | Source | Coverage |
 |--------|----------|
-| `docs/00-GETTING-STARTED.md` | Partial tree; labels `cms.db` as “CMS cache/index” |
-| `system-specs/file-structure.yaml` | Incomplete `.sentinel/` (missing cms.db, pid pattern, marketplace, crash, etc.) |
+| `docs/00-GETTING-STARTED.md` | Partial tree. Labels `cms.db` as “CMS cache/index” |
+| `system-specs/file-structure.yaml` | Incomplete `.sentinel/` (missing entries including cms.db, the pid pattern, marketplace, and crash) |
 | `sn2/persistence-tiers.md` | Tier summary only |
 | **This doc** | Intended inventory — update when adding new artifacts |
 
@@ -113,7 +115,7 @@ When adding a new file under `.sentinel/`, update this document and `system-spec
 
 ## Related
 
-- [04-CONFIGURATION-GUIDE.md](/configuration-guide) — `config.json` schema
-- [11-STORAGE.md](/storage) — storage points and backups
-- [sn2/persistence-tiers.md](https://github.com/ndx-au/sentinel/blob/main/sn2/persistence-tiers.md) — SQLCipher / Litestream policy
-- `.claude/skills/sn-go-security/SKILL.md` — vault vs state encryption
+- [04-CONFIGURATION-GUIDE.md](/configuration-guide) — `config.json` schema.
+- [11-STORAGE.md](/storage) — storage points and backups.
+- [sn2/persistence-tiers.md](https://github.com/ndx-au/sentinel/blob/main/sn2/persistence-tiers.md) — SQLCipher / Litestream policy.
+- `.claude/skills/sn-go-security/SKILL.md` — vault vs state encryption.

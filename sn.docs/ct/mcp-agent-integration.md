@@ -1,14 +1,16 @@
 ---
 title: "MCP Agent Integration"
-description: "Connect AI coding agents (Cursor, Claude Desktop, Hermes, custom MCP clients) to a running Sentinel harness so they can inspect SREs, validate kits, run executions, reload kits, read source, and scaffold components — without round-tripping through the HTTP API."
+description: "How to connect MCP clients to Sentinel and configure authentication, permissions, tools, resources, and prompts."
 type: Guide
 tags: [mcp]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # MCP Agent Integration
 
-Connect AI coding agents (Cursor, Claude Desktop, Hermes, custom MCP clients) to a running Sentinel harness so they can inspect SREs, validate kits, run executions, reload kits, read source, and scaffold components — without round-tripping through the HTTP API.
+MCP connects AI coding agents to a running Sentinel harness. Clients include Cursor, Claude Desktop, Hermes, and custom MCP clients. Agents can inspect SREs, validate kits, run executions, reload kits, read source, and scaffold components. They do not need separate calls to the HTTP API.
 
 MCP runs **in-process** with the harness (streamable HTTP). Clients that only speak **stdio** use `sentinel mcp stdio` as a thin bridge to the same server.
 
@@ -18,18 +20,18 @@ MCP runs **in-process** with the harness (streamable HTTP). Clients that only sp
 
 1. A Sentinel SRE project initialized (`sentinel sre init` or an existing repo).
 2. The harness running with MCP enabled.
-3. An MCP client that supports **streamable HTTP** (Cursor 2025+, Claude Code, etc.) or **stdio** via the bridge.
+3. An MCP client that supports **streamable HTTP** (such as Cursor 2025+ or Claude Code) or **stdio** through the bridge.
 
 ---
 
 ## Dashboard
 
-The dashboard **MCP** page (`GET /mcp`, Background section after Agents) is a read-only operator console: sidecar on/off, bind/URL/auth, risk ceiling, connection snippets, named clients (no tokens), and the tool/resource/prompt catalog.
+The dashboard **MCP** page (`GET /mcp`) is in the Background section after Agents. It shows sidecar status, binding, URL, authentication, risk limits, and connection examples. It lists named clients without tokens and the tool, resource, and prompt catalog. The page is read-only.
 
-- Dashboard BFF: `GET /api/dashboard/mcp` → harness `GET /mcp`
-- Catalog is shown even when the sidecar is off (ceiling from `mcp.risk_classes` / default `read,validate`)
-- Starting MCP still requires `sentinel harness restart -p <sre> --mcp` (no in-UI start)
-- The page does not invoke tools or edit `mcp.clients`
+- Dashboard BFF: `GET /api/dashboard/mcp` → harness `GET /mcp`.
+- Catalog is shown even when the sidecar is off (ceiling from `mcp.risk_classes` / default `read,validate`).
+- Starting MCP still requires `sentinel harness restart -p <sre> --mcp` (no in-UI start).
+- The page does not invoke tools or edit `mcp.clients`.
 
 ---
 
@@ -84,7 +86,7 @@ Secret **values** are never exposed. There is no `secret_set` tool.
 
 **Full coding-agent profile:** `--mcp-risk all`.
 
-Optional config in `.sentinel/config.json`:
+Optional configuration in `.sentinel/config.json`:
 
 ```json
 {
@@ -109,20 +111,20 @@ Optional config in `.sentinel/config.json`:
 }
 ```
 
-CLI `--mcp-risk` overrides `mcp.risk_classes` when set and remains the **ceiling**. `mcp.clients` entries are intersected with that ceiling (a client cannot gain a class the harness omitted). Unmatched authenticated callers get the ceiling. `tools/list` for a session only includes the intersection; denied calls still fail closed if a stale client caches a tool.
+CLI `--mcp-risk` overrides `mcp.risk_classes` when set and remains the **ceiling**. `mcp.clients` entries are intersected with that ceiling (a client cannot gain a class the harness omitted). Unmatched authenticated callers get the ceiling. `tools/list` for a session only includes the intersection. Denied calls still fail closed if a stale client caches a tool.
 
 ### Granular permissions
 
-Beyond risk classes, each `mcp.clients[]` entry may scope individual tools, resources, and prompts. Evaluation is **fail closed**:
+Beyond risk classes, each `mcp.clients[]` entry can scope individual tools, resources, and prompts. Evaluation is **fail closed**:
 
-1. Global `mcp.disabled`
-2. Risk ceiling + client `risk_classes` intersection
-3. Client `deny_tools` (wins over allow)
-4. Client `allow_tools` — when non-empty, only listed **canonical** tool names are registered (aliases follow when `mcp.aliases` / `--mcp-aliases` is on)
-5. Resources: `deny_resources` then optional `allow_resources` (prefix match on URI)
-6. Prompts: `deny_prompts` then optional `allow_prompts` (exact name)
+1. Global `mcp.disabled`.
+2. Risk ceiling + client `risk_classes` intersection.
+3. Client `deny_tools` (wins over allow).
+4. Client `allow_tools` — when non-empty, only listed **canonical** tool names are registered (aliases follow when `mcp.aliases` / `--mcp-aliases` is on).
+5. Resources: `deny_resources` then optional `allow_resources` (prefix match on URI).
+6. Prompts: `deny_prompts` then optional `allow_prompts` (exact name).
 
-`allow_tools` never bypasses the risk ceiling — e.g. listing `harness_reload_sre` while the ceiling is `read,validate` still omits that admin tool.
+`allow_tools` never bypasses the risk ceiling — for example listing `harness_reload_sre` while the ceiling is `read,validate` still omits that admin tool.
 
 Completions return empty when the parent prompt or resource is out of scope.
 
@@ -198,7 +200,7 @@ Point Cursor at the proxy URL printed by the command (no auth headers needed).
 
 ## Connect Cursor
 
-Add to the project `.cursor/mcp.json` (or global Cursor MCP settings). **Production harnesses require auth** — use bearer headers or the signing proxy.
+Add to the project `.cursor/mcp.json` (or global Cursor MCP configuration). **Production harnesses require auth** — use bearer headers or the signing proxy.
 
 ```json
 {
@@ -223,7 +225,7 @@ Replace `8180` with your `--mcp-listen` value. If the harness API uses a non-def
 sentinel harness start -p ./my-project --mcp --mcp-bind 0.0.0.0 --mcp-listen 8180 --mcp-risk all
 ```
 
-Then point Cursor at `http://<host-ip>:8180` with bearer headers or via `sentinel mcp proxy` on your dev machine. Restrict with firewall rules — authenticated MCP access is harness-equivalent control within the enabled risk classes.
+Then point Cursor at `http://<host-ip>:8180` with bearer headers or through `sentinel mcp proxy` on your dev machine. Restrict with firewall rules — authenticated MCP access is harness-equivalent control within the enabled risk classes.
 
 ---
 
@@ -237,7 +239,7 @@ sentinel mcp stdio --upstream http://127.0.0.1:8180 --token YOUR_API_TOKEN
 sentinel mcp stdio --upstream http://127.0.0.1:8180 --sign --keypair-name cursor-agent
 ```
 
-Example Hermes config:
+Example Hermes configuration:
 
 ```yaml
 mcp_servers:
@@ -260,7 +262,7 @@ Canonical names only (see **Tool names** above). Each tool carries MCP annotatio
 | `license_status` | read | Occupy/registration: edition, slot held, lease until, deny reason (**never the license key**) |
 | `harness_reload_sre` | admin | Full SRE reload |
 | `flows_list` / `flow_get` | read | Discover flows and parameter schemas |
-| `flow_run` | execute | Run a flow; **waits** for a terminal status by default |
+| `flow_run` | execute | Run a flow. **waits** for a terminal status by default |
 | `execution_get` / `executions_list` | read | Poll execution status and history |
 | `execution_logs` | read | Bounded, redacted execution logs |
 | `kits_list` / `kit_get` | read | Kit inventory and manifest |
@@ -287,7 +289,7 @@ Prefer resources before `source_read`. Initialize includes short SRE instruction
 | URI | Content |
 |-----|---------|
 | `sentinel://project/summary` | Project info JSON |
-| `sentinel://project/sentinel.yaml` | Project config file |
+| `sentinel://project/sentinel.yaml` | Project configuration file |
 | `sentinel://project/events.yaml` | Event routing file |
 | `sentinel://harness/status` | Health snapshot |
 | `sentinel://harness/license` | Occupy/registration snapshot (no license key) |
@@ -342,14 +344,14 @@ Enable debug logging in `.sentinel/config.json`:
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `connection refused` | Harness not running or wrong port | `sentinel harness status -p <sre>`; verify `--mcp-listen` |
-| Tool missing from client | Risk class not enabled or per-client intersection | Pass `--mcp-risk all` / include the class; check `mcp.clients` |
+| `connection refused` | Harness not running or wrong port | `sentinel harness status -p <sre>`. Verify `--mcp-listen` |
+| Tool missing from client | Risk class not enabled or per-client intersection | Pass `--mcp-risk all` / include the class. Check `mcp.clients` |
 | `sentinel_*` tool missing | Aliases off by default | Use canonical names (`flow_run`) or `--mcp-aliases` / `mcp.aliases` |
 | Flows fail to start | Occupy slot not held | Call `license_status` or read `sentinel://harness/license` |
 | `port already in use` | Another process on MCP port | `--mcp-listen <free-port>` |
-| Cursor shows no tools | Wrong URL, transport, or missing auth | URL must be `http://host:port`; add Bearer header or use `sentinel mcp proxy` |
+| Cursor shows no tools | Wrong URL, transport, or missing auth | URL must be `http://host:port`. Add Bearer header or use `sentinel mcp proxy` |
 | `AUTH.REQUIRED` in response | Production mode without credentials | Add Bearer header or signing proxy |
-| Tool errors in agent | Missing subsystem (e.g. no flows loaded) | Check `harness_health`; run `harness_reload_sre` if admin enabled |
+| Tool errors in agent | Missing subsystem (for example no flows loaded) | Check `harness_health`. Run `harness_reload_sre` if admin enabled |
 | Agent cannot reach remote MCP | Bound to 127.0.0.1 only | Restart with `--mcp-bind 0.0.0.0` and open firewall |
 
 ### Verify manually
@@ -368,11 +370,11 @@ Expect a JSON-RPC response with `serverInfo.name` = `sentinel-harness`.
 
 ## Security notes
 
-- **Default bind `127.0.0.1`** — only local processes can connect; production mode still requires bearer or keypair auth.
+- **Default bind `127.0.0.1`** — only local processes can connect. Production mode still requires bearer or keypair auth.
 - **Default risk `read,validate`** — mutation tools are off until explicitly enabled.
-- **`--mcp-bind 0.0.0.0`** — exposes MCP to the network; use bearer tokens, keypair + TLS/VPN, and firewall rules.
+- **`--mcp-bind 0.0.0.0`** — exposes MCP to the network. Use bearer tokens, keypair + TLS/VPN, and firewall rules.
 - Authenticated MCP with `execute`/`write`/`admin` can **run flows**, **disable kits**, and **write scaffold files** — treat like root access to the SRE within those classes.
-- Secret **values** are never exposed; logs and tool args are redacted for common token patterns.
+- Secret **values** are never exposed. Logs and tool args are redacted for common token patterns.
 - **`license_status` / `sentinel://harness/license`** never return the license key.
 - **`source_read`** resolves symlinks and rejects paths outside the SRE root.
 - Mutation tools (`scaffold_create`, kit lifecycle, SRE reload) share a per-SRE write lock.
@@ -382,7 +384,7 @@ Expect a JSON-RPC response with `serverInfo.name` = `sentinel-harness`.
 
 ## Related docs
 
-- [CLI Reference — harness start](/cli-reference#start) — all flags
-- [Harness HTTP routes](/harness-http-routes) — REST API parity, including `GET /mcp`
-- Dashboard operator page: `/mcp` (BFF `/api/dashboard/mcp`)
-- `system-specs/mcp.yaml` — machine-readable MCP spec
+- [CLI Reference — harness start](/cli-reference#start) — all flags.
+- [Harness HTTP routes](/harness-http-routes) — REST API parity, including `GET /mcp`.
+- Dashboard operator page: `/mcp` (BFF `/api/dashboard/mcp`).
+- `system-specs/mcp.yaml` — machine-readable MCP spec.

@@ -1,24 +1,28 @@
 ---
 title: "Troubleshooting & FAQ"
-description: "This guide is your comprehensive reference for diagnosing and resolving problems with Sentinel."
+description: "Causes and corrective procedures for Sentinel startup, flows, databases, APIs, security, and Lua errors."
 type: Playbook
 tags: [troubleshooting]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Troubleshooting & FAQ
 
-This guide is your comprehensive reference for diagnosing and resolving problems with Sentinel. It covers startup failures, flow execution issues, database problems, API errors, security configuration, performance tuning, and common Lua programming mistakes. Each section explains the underlying cause of the problem, not just the fix, so you can develop an intuition for how Sentinel works and anticipate issues before they occur.
+This guide explains Sentinel startup, flows, databases, APIs, security, performance, and common Lua errors. Each section gives the cause and corrective steps.
 
 ## How to Approach Debugging in Sentinel
 
-Before diving into specific issues, it helps to understand Sentinel's debugging philosophy and the tools available to you. Sentinel provides multiple layers of observability that you should use in combination.
+Sentinel provides several sources of diagnostic information. Use these sources together:
 
 ### The Debugging Toolkit
 
-**1. Health endpoint (`/hl`)** -- Your first check for any problem. If the harness is running, `curl http://localhost:8080/hl` returns a JSON object with status, version, mode, and uptime. If this fails, the harness itself is the problem.
+**1. Health endpoint (`/hl`)** -- Your first search for any problem. If the harness is running, `curl http://localhost:8080/hl` returns a JSON object with status, version, mode, and uptime. If this fails, the harness itself is the problem.
 
-**2. Execution logs (`/ex/{id}/lg`)** -- Every flow execution records its logs. When a flow fails, find its execution ID (from the response or the dashboard) and query its logs for the full story.
+**2. Execution logs (`/ex/{id}/lg`)** -- Each flow execution records logs.
+
+When a flow fails, find its execution ID in the response or dashboard. Query its logs for details.
 
 **3. System logs (`/lg`)** -- The harness writes structured logs to stdout and to the `/lg` endpoint. These capture harness-level events like kit loading, trigger registration, and component lifecycle.
 
@@ -32,12 +36,12 @@ Before diving into specific issues, it helps to understand Sentinel's debugging 
 
 When something goes wrong, follow this sequence:
 
-1. **Check the health endpoint** -- Is the harness running? What mode is it in?
-2. **Find the execution** -- If a flow failed, find its execution ID via `/ex?s=failed` or the dashboard.
+1. **Examine the health endpoint** -- Is the harness running? What mode is it in?
+2. **Find the execution** -- If a flow failed, find its execution ID through `/ex?s=failed` or the dashboard.
 3. **Read the execution logs** -- Query `/ex/{id}/lg` for the specific execution's log entries.
-4. **Check the execution detail** -- Query `/ex/{id}` for the error message, parameters, and timing.
+4. **Examine the execution detail** -- Query `/ex/{id}` for the error message, parameters, and timing.
 5. **Enable debug logging** -- If the logs do not reveal the problem, restart with `SENTINEL_LOG_LEVEL=debug`.
-6. **Check the system logs** -- Look for harness-level errors that might explain the problem.
+6. **Examine the system logs** -- Look for harness errors that can explain the problem.
 
 ### Log Analysis Techniques
 
@@ -67,10 +71,10 @@ curl -N http://localhost:8080/lg/live
 
 **Dashboard approach:**
 The dashboard at `http://localhost:9090` provides a graphical log viewer with:
-- Real-time log streaming via WebSocket
-- Filtering by flow, level, and text search
-- Execution detail views with timing and parameter data
-- Color-coded log levels for quick scanning
+- Real-time log streaming through WebSocket.
+- Filtering by flow, level, and text search.
+- Execution detail views with timing and parameter data.
+- Color-coded log levels for quick scanning.
 
 ---
 
@@ -82,7 +86,7 @@ These are issues that new users frequently encounter when setting up Sentinel fo
 
 **Mistake:** Running `./sentinel harness start` at the repository root without specifying a project path.
 
-**What happens:** Sentinel creates SRE artifacts (sentinel.yaml, kit directories, etc.) in the current directory, which pollutes your source tree.
+**What happens:** Sentinel creates SRE artifacts (including sentinel.yaml and kit directories) in the current directory, which pollutes your source tree.
 
 **Fix:** Always use the `-p` flag to point at your SRE directory:
 ```bash
@@ -91,13 +95,13 @@ These are issues that new users frequently encounter when setting up Sentinel fo
 
 ### Confusing the Two Config Files
 
-**Mistake:** Putting infrastructure settings (port, logging, TLS) in `sentinel.yaml`, or behavior settings (name, version, git) in `.sentinel/config.json`.
+**Mistake:** Putting infrastructure configuration (port, logging, TLS) in `sentinel.yaml`, or behavior configuration (name, version, git) in `.sentinel/config.json`.
 
-**What happens:** Settings in the wrong file are either ignored or cause validation errors.
+**What happens:** Configuration in the wrong file are either ignored or cause validation errors.
 
 **Fix:** Remember the rule:
-- `sentinel.yaml` -- Checked into git. Contains behavior: name, description, version, hot reload, git settings.
-- `.sentinel/config.json` -- Gitignored. Contains infrastructure: port, logging, TLS, tokens, marketplace settings.
+- `sentinel.yaml` -- Checked into git. Contains behavior: name, description, version, hot reload, git configuration.
+- `.sentinel/config.json` -- Gitignored. Contains infrastructure: port, logging, TLS, tokens, marketplace configuration.
 
 ### Not Creating the .sentinel Directory
 
@@ -134,7 +138,7 @@ error: listen tcp :8080: bind: address already in use
 
 1. Another Sentinel instance is still running (perhaps from a previous session or a background daemon).
 2. Another application (a web server, another development tool) is using the port.
-3. The operating system has not yet released the port after a previous process exited. This typically resolves within 30-60 seconds but can take longer depending on TCP TIME_WAIT settings.
+3. After a process exits, the operating system can retain its port. This usually clears within 30-60 seconds. TCP TIME_WAIT configuration can extend that time.
 
 **Solutions:**
 
@@ -164,7 +168,7 @@ error: listen tcp :8080: bind: address already in use
    kill -9 <PID>
    ```
 
-4. **Wait for the port to be released.** If the previous process just exited, the operating system may still be in TCP TIME_WAIT state. Waiting 30-60 seconds usually resolves this.
+4. **Wait for the port to be released.** After a process exits, TCP TIME_WAIT can retain the port. This usually clears after 30-60 seconds.
 
 ### "vault locked"
 
@@ -173,7 +177,7 @@ error: listen tcp :8080: bind: address already in use
 error: vault locked - set SENTINEL_VAULT_PASSPHRASE
 ```
 
-**Understanding the cause:** The Sentinel vault stores secrets (API keys, tokens, passwords) encrypted with AES-256-GCM. The vault is unlocked using a passphrase that you provide via an environment variable. Without this passphrase, the harness cannot decrypt the vault and therefore cannot provide secrets to flows.
+**Understanding the cause:** The Sentinel vault stores secrets (API keys, tokens, passwords) encrypted with AES-256-GCM. The vault is unlocked using a passphrase that you provide through an environment variable. Without this passphrase, the harness cannot decrypt the vault and therefore cannot provide secrets to flows.
 
 **Solution:**
 ```bash
@@ -184,7 +188,7 @@ export SENTINEL_VAULT_PASSPHRASE="your_passphrase_here"
 **Important notes:**
 - The passphrase is set when the vault is first created. You must use the same passphrase every time you start the harness.
 - If you lose the passphrase, the vault contents cannot be recovered. You will need to create a new vault and re-enter all secrets.
-- In production, store the passphrase in your deployment system's secret management (e.g., systemd EnvironmentFile, Docker secrets, Kubernetes secrets). Never hard-code it in scripts or commit it to version control.
+- In production, store the passphrase in your deployment system's secret management (for example systemd EnvironmentFile, Docker secrets, Kubernetes secrets). Never hard-code it in scripts or commit it to version control.
 
 ### "project not found"
 
@@ -193,11 +197,11 @@ export SENTINEL_VAULT_PASSPHRASE="your_passphrase_here"
 error: project directory not found: /path/to/project
 ```
 
-**Understanding the cause:** The path passed to `-p` does not point to an existing directory, or it points to a directory that is not a valid SRE project (missing `sentinel.yaml`).
+**Understanding the cause:** The `-p` path is missing or is not a valid SRE directory. A valid SRE needs `sentinel.yaml`.
 
 **Solutions:**
 
-1. **Verify the path exists and is correct:**
+1. **Make sure that the path exists and is correct:**
    ```bash
    ls -la /path/to/project
    ls -la /path/to/project/sentinel.yaml
@@ -242,7 +246,7 @@ error: execution timeout after 30000ms
        sn-core-agent:my-flow:
          timeout_ms: 60000  # 1 minute
    ```
-   Only increase timeouts for flows that you know are doing legitimate long-running work. A timeout increase should be a deliberate decision, not a blanket fix.
+   Increase a timeout only for a flow with known work that needs more time. Review the cause before you increase it.
 
 2. **Set explicit timeouts on HTTP calls so a single slow API does not consume the entire flow timeout:**
    ```lua
@@ -294,11 +298,11 @@ error: SYSTEM.ERROR - flow execution failed
 secret 'api_key' not found
 ```
 
-**Understanding the cause:** The flow called `ctx.secret("api_key")` but no secret with that name exists in the vault. This is commonly caused by a typo in the secret name, or the secret simply has not been created yet.
+**Understanding the cause:** The flow called `ctx.secret("api_key")`, but the vault has no secret with that name. A wrong name or a missing secret causes this error.
 
 **Solutions:**
 
-1. **List all existing secrets to check for typos:**
+1. **List existing secrets and examine their names for typos:**
    ```bash
    ./sentinel secret list
    ```
@@ -309,30 +313,32 @@ secret 'api_key' not found
    ./sentinel secret set api_key "your_secret_value_here"
    ```
 
-3. **Verify the vault is accessible and unlocked:**
+3. **Make sure that the vault is accessible and unlocked:**
    ```bash
    ls -la .sentinel/vault.db
    echo $SENTINEL_VAULT_PASSPHRASE
    ```
-   If the vault file does not exist, secrets have not been initialized. If the passphrase is not set, the vault is locked.
+   If the vault file does not exist, secret storage is not initialized. If the passphrase is not set, the vault is locked.
 
 ### Webhook not triggering
 
-**Understanding the cause:** When a webhook does not trigger, the request is either not reaching Sentinel, being rejected before it reaches your flow, or matching a different trigger than expected. The debugging process involves checking each layer in sequence.
+**Understanding the cause:** A failed webhook can stop at several stages. The request can fail to reach Sentinel or face rejection before the flow. It can also match a different trigger.
+
+Examine each stage in sequence.
 
 **Debugging:**
 
-1. **Verify the harness is running and reachable:**
+1. **Make sure that the harness responds:**
    ```bash
    curl http://localhost:8080/hl
    ```
 
-2. **Check that the trigger is registered. List all triggers and look for yours:**
+2. **Make sure that the trigger is registered. List all triggers and look for yours:**
    ```bash
    curl -s http://localhost:8080/tr | python3 -m json.tool
    ```
 
-3. **Verify the webhook URL is correct.** Webhook URLs are prefixed with `/wh/`. If your trigger path is `/api/webhook`, the full URL to POST to is:
+3. **Make sure that the webhook URL is correct.** Webhook URLs are prefixed with `/wh/`. If your trigger path is `/api/webhook`, the full URL to POST to is:
    ```
    http://localhost:8080/wh/api/webhook
    ```
@@ -344,33 +350,33 @@ secret 'api_key' not found
      -H "Content-Type: application/json" \
      -d '{"test": true}'
    ```
-   Check the response. If it returns an error, the error message tells you what went wrong.
+   Examine the response. If it returns an error, the error message tells you what went wrong.
 
 5. **Check signature verification if HMAC is configured:**
-   Note: HMAC verification is done automatically by the harness for webhook triggers with HMAC configured. If the signature is invalid, the request is rejected before your flow runs. To debug, check the received signature header:
+   Note: HMAC verification is done automatically by the harness for webhook triggers with HMAC configured. If the signature is invalid, the request is rejected before your flow runs. To debug, examine the received signature header:
    ```lua
    -- Webhook data arrives in main(params); HTTP headers are in ctx.req.headers
    local sig_header = ctx.req.headers["x-hub-signature-256"]
    ctx.log("info", "Received signature header: " .. (sig_header or "missing"))
    ```
 
-6. **Check IP whitelist (CIDR) configuration.** If you have configured IP whitelisting, requests from non-whitelisted IPs are silently rejected. Verify your source IP is in the allowed CIDR ranges.
+6. **Examine IP whitelist (CIDR) configuration.** If a whitelist is configured, make sure that it includes your source IP range. Requests from other IPs face silent rejection.
 
-7. **Check rate limits.** If the webhook is rate-limited and you are exceeding the configured RPS, additional requests are rejected.
+7. **Check rate limits.** If the webhook is rate-limited and you are exceeding the configured RPS, more requests are rejected.
 
 ### Cron not running
 
-**Understanding the cause:** Cron triggers execute on a schedule within the harness process. If a cron job is not running, it is either not registered, the cron expression is wrong, or the harness was not running at the scheduled time.
+**Understanding the cause:** Cron triggers run within the harness process. A missing run can indicate an unregistered trigger, a wrong cron expression, or a stopped harness.
 
 **Debugging:**
 
-1. **Verify the trigger is registered:**
+1. **Make sure that the trigger is registered:**
    ```bash
    curl -s http://localhost:8080/tr | python3 -m json.tool
    ```
    Look for your trigger in the list. If it is not there, the flow either failed to load or the trigger setup has a syntax error.
 
-2. **Verify the cron expression is correct:**
+2. **Make sure that the cron expression is correct:**
    ```
    Field    Allowed values    Meaning
    -----    --------------    -------
@@ -390,9 +396,9 @@ secret 'api_key' not found
    30 8 * * 1-5   = 8:30 AM on weekdays
    ```
 
-3. **Check the timezone.** If you specified a timezone in the trigger and the cron expression refers to a specific hour, make sure you are accounting for the correct timezone. A job scheduled for "9 AM America/New_York" will not run at 9 AM UTC.
+3. **Examine the timezone.** If the trigger specifies a timezone, compare the scheduled hour in that timezone. A job for "9 AM America/New_York" does not run at 9 AM UTC.
 
-4. **Verify the harness was running at the scheduled time.** If the harness was stopped when a cron trigger was supposed to fire, the execution is missed (not retroactively run).
+4. **Examine the harness uptime.** Make sure that the harness ran at the scheduled time. The harness does not repeat missed cron executions.
 
 ---
 
@@ -421,14 +427,14 @@ error: database is locked
      }
    }
    ```
-   The default is usually sufficient for normal operation. If you need to increase it, your flows may be holding write locks for too long and should be optimized.
+   The default usually supports normal operation. If you need a higher value, examine whether flows hold write locks too long. Optimize those flows.
 
 2. **Check database health:**
    ```bash
    ./sentinel db shell
    sqlite> PRAGMA integrity_check;
    ```
-   The result should be `ok`. If it reports errors, the database may be corrupted (see next section).
+   The expected result is `ok`. If the command reports errors, corruption is possible. The next section explains recovery.
 
 3. **Close external tools.** If you have a `sqlite3` shell open on the same database, close it. External writers can hold locks that block the harness.
 
@@ -443,7 +449,7 @@ error: database is locked
 database disk image is malformed
 ```
 
-**Understanding the cause:** SQLite databases can become corrupted due to hardware failures (disk errors, power loss during a write), bugs in the operating system's filesystem, or forcefully killing the harness process during a transaction. This is rare but serious.
+**Understanding the cause:** SQLite corruption is rare but serious. Causes include disk errors, power loss during writes, filesystem bugs, and forced shutdown during a transaction.
 
 **Recovery:**
 
@@ -452,18 +458,18 @@ database disk image is malformed
    cp .sentinel/state.db .sentinel/state.db.corrupt
    ```
 
-2. **Attempt to dump what data can be recovered:**
+2. **Try to dump what data can be recovered:**
    ```bash
    sqlite3 .sentinel/state.db.corrupt ".dump" > dump.sql
    ```
-   This may recover most or all of the data even from a corrupted database.
+   This operation can recover some or all data from a corrupted database. The recovered amount is unknown until the operation completes.
 
 3. **Create a fresh database and restore the dump:**
    ```bash
    sqlite3 .sentinel/state.db < dump.sql
    ```
 
-4. **Verify the restored database:**
+4. **Test the restored database:**
    ```bash
    sqlite3 .sentinel/state.db "PRAGMA integrity_check;"
    ```
@@ -473,7 +479,7 @@ database disk image is malformed
    ./sentinel harness start -p ./project
    ```
 
-**Prevention:** To minimize corruption risk, never use `kill -9` on the harness process (use `kill` or `./sentinel harness stop` for graceful shutdown), ensure your server has reliable storage, and consider enabling database encryption (`"encrypt_db": true` in config.json) which also adds integrity verification.
+**Prevention:** Avoid `kill -9` on the harness process. Use `kill` or `./sentinel harness stop` for a graceful shutdown. Use reliable storage. Database encryption (`"encrypt_db": true` in config.json) also adds integrity verification.
 
 ---
 
@@ -495,7 +501,7 @@ database disk image is malformed
    curl -H "Authorization: Bearer your_token_here" http://localhost:8080/hl
    ```
 
-2. **Verify your token matches what is configured:**
+2. **Make sure that your token matches the configured token:**
    ```bash
    cat .sentinel/config.json | python3 -c "
    import sys, json
@@ -528,7 +534,7 @@ database disk image is malformed
 ./sentinel dashboard start --port 9090
 ```
 
-The dashboard proxies API requests to the harness through its BFF (Backend-for-Frontend) layer, avoiding CORS issues. Make sure the harness URL configured in the dashboard settings matches the actual harness address.
+The dashboard proxies API requests to the harness through its BFF (Backend-for-Frontend) layer, avoiding CORS issues. Make sure the harness URL configured in the dashboard configuration matches the actual harness address.
 
 ### Rate limit exceeded
 
@@ -537,7 +543,7 @@ The dashboard proxies API requests to the harness through its BFF (Backend-for-F
 {"ok": false, "err": "AUTH.RATE_LIMIT", "msg": "Rate limit exceeded"}
 ```
 
-**Understanding the cause:** The harness enforces a rate limit on API requests to prevent abuse and protect system resources. The default limit is typically sufficient for normal operation but may be exceeded by automated scripts making rapid-fire requests.
+**Understanding the cause:** The harness limits API requests to protect resources. Automated scripts can exceed this limit with rapid requests.
 
 **Solution:** Increase the rate limit in `.sentinel/config.json`:
 ```json
@@ -548,7 +554,7 @@ The dashboard proxies API requests to the harness through its BFF (Backend-for-F
 }
 ```
 
-If you are hitting rate limits in normal operation, consider whether your client is making unnecessary requests (e.g., polling too frequently when WebSocket streaming is available).
+If normal operation reaches rate limits, examine unnecessary requests. WebSocket streams can replace frequent polling.
 
 ---
 
@@ -558,11 +564,11 @@ If you are hitting rate limits in normal operation, consider whether your client
 
 **Symptom:** `curl http://<server-ip>:8080/hl` fails from another machine, but works with `curl http://localhost:8080/hl` on the server itself.
 
-**Understanding the cause:** By default, Sentinel listens on all interfaces (`0.0.0.0`), but firewalls on the server may block incoming connections to port 8080.
+**Understanding the cause:** Sentinel listens on all interfaces (`0.0.0.0`) by default. Host firewalls can block incoming connections to port 8080.
 
 **Solutions:**
 
-1. **Check the firewall rules:**
+1. **Examine the firewall rules:**
    ```bash
    # Ubuntu/Debian with ufw
    sudo ufw status
@@ -577,11 +583,11 @@ If you are hitting rate limits in normal operation, consider whether your client
    sudo iptables -L -n | grep 8080
    ```
 
-2. **Verify the harness is listening on the correct interface:**
+2. **Make sure that the harness listens on the correct interface:**
    ```bash
    ss -tlnp | grep 8080
    ```
-   The output should show `0.0.0.0:8080` (all interfaces) or the specific IP you expect.
+   Make sure that the output shows `0.0.0.0:8080` or the expected IP address.
 
 3. **Test connectivity:**
    ```bash
@@ -593,15 +599,15 @@ If you are hitting rate limits in normal operation, consider whether your client
 
 ### Dashboard cannot reach harness behind a proxy
 
-**Symptom:** The dashboard is accessible but shows "Cannot reach harness" in the settings.
+**Symptom:** The dashboard is accessible but shows "Cannot reach harness" in the configuration.
 
 **Understanding the cause:** When running behind a reverse proxy (nginx, Caddy), the proxy must be configured to forward requests to the correct harness port. The dashboard's BFF layer needs to know the harness address.
 
-**Solution:** In the dashboard settings, configure the harness address using the internal (non-proxied) address:
-- If dashboard and harness are on the same server: `http://localhost:8080`
-- If on different servers: `http://<harness-server-ip>:8080`
+**Solution:** In the dashboard configuration, configure the harness address using the internal (non-proxied) address:
+- If dashboard and harness are on the same server: `http://localhost:8080`.
+- If on different servers: `http://<harness-server-ip>:8080`.
 
-The dashboard should never need to go through the public reverse proxy to reach the harness -- use the direct internal address.
+Use the direct internal harness address for the dashboard connection.
 
 ---
 
@@ -611,11 +617,11 @@ The dashboard should never need to go through the public reverse proxy to reach 
 
 **Symptom:** You modify a Lua flow file but the harness continues running the old version.
 
-**Understanding the cause:** Hot reload monitors the SRE directory for file changes. If the filesystem notification system is not working (common in Docker volumes, NFS mounts, or some VM configurations), changes may not be detected.
+**Understanding the cause:** Hot reload monitors the SRE directory. Docker volumes, NFS mounts, and some VMs can interrupt filesystem notifications. This can prevent change detection.
 
 **Solutions:**
 
-1. **Verify hot reload is enabled:**
+1. **Make sure that hot reload is enabled:**
    ```yaml
    # sentinel.yaml
    hotreload: true
@@ -626,7 +632,7 @@ The dashboard should never need to go through the public reverse proxy to reach 
    curl -X POST http://localhost:8080/hl/reload
    ```
 
-3. **Check file watcher limitations.** On Docker volumes and NFS mounts, inotify events may not propagate. In these environments, Sentinel falls back to periodic polling. If changes are still not detected, restart the harness.
+3. **Examine file watcher limitations.** Docker volumes and NFS mounts can prevent inotify events. Sentinel uses periodic polling in these environments. If changes remain undetected, restart the harness.
 
 ### Flow files not being discovered
 
@@ -636,11 +642,11 @@ The dashboard should never need to go through the public reverse proxy to reach 
 
 **Solutions:**
 
-1. **Verify file location.** The file must be at `{kit-dir}/fl/{flow-name}.lua`. For example: `acme.mykit/fl/my-flow.lua`.
+1. **Examine the file location.** The file must be at `{kit-dir}/fl/{flow-name}.lua`. For example: `acme.mykit/fl/my-flow.lua`.
 
 2. **Check file permissions.** The harness process must be able to read the file.
 
-3. **Check for syntax errors.** If a Lua file has syntax errors, it fails to load and is skipped. Check the system logs for parsing errors:
+3. **Search for syntax errors.** If a Lua file has syntax errors, it fails to load and is skipped. Examine the system logs for parsing errors:
    ```bash
    curl -s http://localhost:8080/lg?lv=error | grep -i lua
    ```
@@ -668,7 +674,7 @@ The dashboard should never need to go through the public reverse proxy to reach 
    ```
    If this fails, you have a network connectivity issue.
 
-3. **Check the marketplace URL in config:**
+3. **Examine the marketplace URL in configuration:**
    ```bash
    cat .sentinel/config.json | python3 -c "
    import sys, json
@@ -694,7 +700,7 @@ The dashboard should never need to go through the public reverse proxy to reach 
    "
    ```
 
-2. **Verify network connectivity to the marketplace server.**
+2. **Test network connectivity to the marketplace server.**
 
 3. **Check if you are within the grace period.** Marketplace features continue to work for 48 hours after the first phone-home failure. If you resolve the network issue within this window, everything returns to normal automatically.
 
@@ -734,15 +740,15 @@ For production, use a proper certificate from Let's Encrypt, Cloudflare Origin C
 error: could not decrypt vault
 ```
 
-**Understanding the cause:** The vault was encrypted with one passphrase, but you are trying to open it with a different passphrase. This can happen when the environment variable is set incorrectly, or when you copy a vault database from one environment to another without copying the passphrase.
+**Understanding the cause:** The supplied passphrase does not match the vault encryption passphrase. An incorrect environment variable can cause this error. A copied vault also needs its original passphrase.
 
 **Solutions:**
 
-1. **Verify the passphrase is set correctly:**
+1. **Make sure that the passphrase is set correctly:**
    ```bash
    echo $SENTINEL_VAULT_PASSPHRASE
    ```
-   Check for accidental whitespace, quote characters, or shell escaping issues.
+   Search for accidental whitespace, quote characters, or shell escaping issues.
 
 2. **Backup the encrypted vault before any recovery attempts:**
    ```bash
@@ -904,7 +910,7 @@ end
 error: attempt to concatenate a nil value
 ```
 
-**Understanding the cause:** Lua's `..` operator concatenates strings. If either operand is `nil`, this error occurs. This commonly happens when a variable has not been assigned or a function returned `nil` instead of a string.
+**Understanding the cause:** Lua's `..` operator joins strings. A `nil` operand causes this error. Causes include an unassigned variable or a function that returns `nil` instead of a string.
 
 **Example and fix:**
 ```lua
@@ -951,23 +957,23 @@ table.insert(items, "value")
 No form found with stub: my-form
 ```
 
-**Understanding the cause:** The form system looks up forms by their stub (a short identifier defined in the form's YAML file). This error means either the form file does not exist, the stub in the file does not match what you are requesting, or the kit containing the form was not loaded.
+**Understanding the cause:** The form system uses a stub from the form's YAML file. A missing form, wrong stub, or unloaded kit causes this error.
 
 **Solutions:**
 
-1. **Verify the form file exists in the kit's `fm/` directory:**
+1. **Make sure that the form file exists in the kit's `fm/` directory:**
    ```bash
    ls -la my.kit/fm/my-form.yaml
    ```
 
-2. **Verify the stub in the form file matches your request:**
+2. **Make sure that the form stub matches your request:**
    ```yaml
    # fm/my-form.yaml
    name: My Form
    stub: my-form  # This must match exactly
    ```
 
-3. **Check that the kit is loaded:**
+3. **Make sure that the kit is loaded:**
    ```bash
    curl -s http://localhost:8080/kt | python3 -m json.tool
    ```
@@ -996,26 +1002,28 @@ end
 
 ## Dashboard Issues
 
-### Dashboard can't connect to harness
+<a id="dashboard-cant-connect-to-harness"></a>
+
+### Dashboard cannot connect to harness
 
 **Symptom:** "Connection refused" or "Cannot reach harness" in the dashboard.
 
 **Solutions:**
 
-1. **Verify the harness is running:**
+1. **Make sure that the harness responds:**
    ```bash
    curl http://localhost:8080/hl
    ```
 
-2. **Check the harness address in dashboard settings.** Navigate to Dashboard > Settings > Harness and verify the URL is `http://localhost:8080` (or the correct address for your setup).
+2. **Examine the harness address in dashboard configuration.** Open Dashboard > Settings > Harness. Make sure that the URL is `http://localhost:8080` or the correct address for your deployment.
 
-3. **If behind a firewall:** Ensure port 8080 is accessible from where the dashboard is running. If the dashboard and harness are on the same machine, `localhost` should always work.
+3. **If behind a firewall:** Make sure that the dashboard can reach port 8080. For processes on the same machine, use `localhost`.
 
-4. **Check that the harness started successfully** by reviewing its stdout/stderr output or system logs.
+4. **Make sure that the harness started successfully** by reviewing its stdout/stderr output or system logs.
 
 ### Dashboard shows stale data
 
-**Understanding the cause:** The dashboard caches some data in the browser's localStorage. If the harness was restarted or data was modified outside the dashboard, the cached data may be out of date.
+**Understanding the cause:** The dashboard caches some data in localStorage. A harness restart or an external data change can make that cache stale.
 
 **Solution:**
 ```bash
@@ -1039,11 +1047,11 @@ export SENTINEL_LOG_LEVEL=debug
 ```
 
 Debug logging produces verbose output from every harness component, including:
-- Lua VM lifecycle events (creation, destruction, script loading)
-- Trigger matching (which triggers were evaluated and why they did or did not match)
-- HTTP request details (method, path, response status for every API call)
-- Database operations (query timing, transaction begin/commit/rollback)
-- Component health checks
+- Lua VM lifecycle events (creation, destruction, script loading).
+- Trigger matching (which triggers were evaluated and why they did or did not match).
+- HTTP request details (method, path, response status for every API call).
+- Database operations (query timing, transaction begin/commit/rollback).
+- Component health checks.
 
 ### Check System Status
 
@@ -1095,4 +1103,4 @@ sqlite> PRAGMA integrity_check;                    -- Verify database health
 
 ---
 
-**Still stuck?** Review the relevant guides in this documentation set: the API Reference for endpoint details, the Configuration Guide for all available settings, the Workflows and Patterns guide for working code examples, or the system-specs directory for the authoritative technical specifications.
+**Still stuck?** The API Reference describes endpoints. The Configuration Guide lists configuration fields. Workflows and Patterns gives code examples. The system-specs directory contains technical specifications.

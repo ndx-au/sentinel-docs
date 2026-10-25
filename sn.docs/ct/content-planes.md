@@ -1,20 +1,24 @@
 ---
 title: "Content planes — fcms, ccms, wpcms"
-description: "Sentinel is pluralistic: orchestration always works without a content plane. When you publish content, pick one primary public plane per site origin (dual-primary on the same origin is unsupported)."
+description: "Sentinel content planes: fcms for files, ccms for collections, and wpcms for WordPress."
 type: Guide
 tags: [cms]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Content planes — fcms, ccms, wpcms
 
-Sentinel is **pluralistic**: orchestration always works without a content plane. When you publish content, pick **one primary public plane** per site origin (dual-primary on the same origin is unsupported).
+Sentinel orchestration works without a content plane.
+
+When you publish content, select **one primary public plane** for each site origin. Do not use two primary planes on the same origin.
 
 | Plane | Code | Truth store | Default surface |
 |-------|------|-------------|-----------------|
 | File CMS | **fcms** | Git Markdown in kit `ct/` | Harness `/fcms`, `/fcms/render` |
-| Collection CMS | **ccms** | Postgres + Graphile | Graphile **:1880**; editor on harness `/ccms/...`; dashboard **Collections** |
-| WordPress | **wpcms** | WP + MariaDB | Dedicated WP ingress (**8800** legacy default; target convention **1800**) |
+| Collection CMS | **ccms** | Postgres + Graphile | Graphile **:1880**. Editor on harness `/ccms/...`. Dashboard **Collections** |
+| WordPress | **wpcms** | WP + MariaDB | Dedicated WP ingress (**8800** legacy default. Target convention **1800**) |
 | Automation | (core) | Kits, vault, state | Harness **8080** |
 
 Never call the whole product “CMS” without the plane name.
@@ -27,7 +31,7 @@ Never call the whole product “CMS” without the plane name.
 |---------|-------------------|
 | Harness API / automation | **8080** |
 | Graphile (ccms reflective API) | **1880** (bind `127.0.0.1` by default) |
-| wpcms ingress | **8800** (kept as runtime default this release; target **1800** for new installs) |
+| wpcms ingress | **8800** (kept as runtime default this release. Target **1800** for new installs) |
 
 Postgres for the Graphile data plane binds **localhost-only** by default (`127.0.0.1:15432` in the template). Do not put Graphile and WordPress on the same public port.
 
@@ -38,9 +42,9 @@ Postgres for the Graphile data plane binds **localhost-only** by default (`127.0
 - Source: kit `ct/**/*.md` (git is truth).
 - Canonical routes: **`/fcms`**, **`/fcms/render`**.
 - Legacy aliases (deprecation window): `/cm`, `/ct`.
-- Cache: `.sentinel/cms.db` (name historical; product language is **fcms**).
+- Cache: `.sentinel/cms.db` (name historical. Product language is **fcms**).
 - Full guide: [17-SENTINEL-CMS.md](/sentinel-cms).
-- Reference kit naming: prefer **fcms** in docs; existing `sn.cms` remains valid with deprecation toward fcms vocabulary.
+- Reference kit naming: prefer **fcms** in docs. Existing `sn.cms` remains valid with deprecation toward fcms vocabulary.
 
 ---
 
@@ -88,9 +92,13 @@ fields:
 
 Embedded template: `graphile-dataplane` (`internal/static/docker-templates/graphile-dataplane.yaml`).
 
-Image pin: **`graphile/postgraphile:4`** (PostGraphile v4) with `--simple-collections both` and **localhost-only** host binds for Postgres (`127.0.0.1:15432` by default) and Graphile (`127.0.0.1:1880`).
+The template uses **`graphile/postgraphile:4`** (PostGraphile v4) with `--simple-collections both`. Postgres binds to `127.0.0.1:15432` by default. Graphile binds to `127.0.0.1:1880`. Both bindings allow local access only.
 
-**Port conflicts:** template default Postgres host port is **15432**. If that port is already taken by another local Postgres, set `SENTINEL_CCMS_PG_HOST_PORT` (compose) and point `data_plane.database_url` at the same host port. Graphile stays on **1880** unless you override `SENTINEL_GRAPHILE_PORT`.
+The template uses Postgres host port **15432** by default.
+
+If that port is in use, set `SENTINEL_CCMS_PG_HOST_PORT` in Compose. Point `data_plane.database_url` at the same host port.
+
+Graphile stays on **1880** unless you override `SENTINEL_GRAPHILE_PORT`.
 
 ```yaml
 # sentinel.yaml
@@ -124,7 +132,7 @@ sentinel ccms install-refkit -p ./sre   # sn.ccms-pages-posts
 
 ### Dashboard
 
-**Collections** (sidebar → `/collections`) is the Headgres-studio successor: plane copy, live data-plane status, migration lists, and a pub forms catalog with deep links to harness editors. Not a second studio binary.
+**Collections** (sidebar → `/collections`) replaces Headgres-studio. It provides plane descriptions, data plane status, migration lists, and a catalog of public forms. Catalog links open harness editors. It does not need a second studio binary.
 
 ### Lua
 
@@ -132,7 +140,9 @@ Default submit is **zero Lua**. Collection form submit does not invoke kit flows
 
 ### After migrate: restart Graphile
 
-The data-plane compose pins PostGraphile **without** `--watch`. `sentinel ccms migrate` **auto-restarts** the `graphile` compose service when new migrations were applied. If auto-restart fails, use:
+The data plane uses PostGraphile **without** `--watch`. After new migrations, `sentinel ccms migrate` **auto-restarts** the `graphile` service.
+
+If the restart fails, use:
 
 ```bash
 docker compose -f docker-compose.dataplane.yaml restart graphile
@@ -150,7 +160,7 @@ Unchanged product plane. Dedicated ingress only. See [14-WORDPRESS.md](/wordpres
 
 - Terminate TLS for harness, Graphile (`:1880`), and WP ingress as **separate** upstreams when exposing publicly.
 - Prefer IP allowlists per port rather than path-multiplexing Graphile under the harness host for MVP.
-- fcms HTML (`/fcms/render` or legacy `/ct`) often sits behind CDN; Graphile is an API peer, not a static site.
+- fcms HTML (`/fcms/render` or legacy `/ct`) often sits behind CDN. Graphile is an API peer, not a static site.
 
 ---
 

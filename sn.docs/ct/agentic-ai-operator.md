@@ -1,14 +1,16 @@
 ---
 title: "Agentic AI — operator guide"
-description: "End-to-end path for enabling LLM flows in an SRE: API Library + Vault → Agents validate → release controls → flow (sn.ai.chat) → trace in dashboard."
+description: "How to configure the API Library, vault, release controls, flows, and dashboard traces for LLM workflows."
 type: Playbook
 tags: [ai]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Agentic AI — operator guide
 
-End-to-end path for enabling LLM flows in an SRE: **API Library + Vault → Agents validate → release controls → flow (`sn.ai.chat`) → trace in dashboard**.
+This guide explains how to enable LLM flows in an SRE. The operator path is **API Library + Vault → Agents validate → release controls → flow (`sn.ai.chat`) → trace in dashboard**.
 
 Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Lua API details: [`02-LUA-API.md`](/lua-api) (AI / Memory / RAG sections).
 
@@ -18,12 +20,12 @@ Harness regression: `go test ./internal/api -run TestAgenticAIOperatorPath` exer
 
 ## Prerequisites
 
-- Harness built and pointed at an SRE: `sentinel -p /path/to/sre`
-- Dashboard reachable (default proxy: `http://localhost:9090` when using `sentinel dashboard start`)
-- An API key for a supported provider (`openai`, `anthropic`, or `gemini` adapters ship in the harness)
-- Starter kits installed: `sentinel sre init --with-bundle core` (from [ndx-video/sre-init](https://github.com/ndx-au/sre-init) or `--with-local ../sre-init`)
+- Harness built and pointed at an SRE: `sentinel -p /path/to/sre`.
+- Dashboard reachable (default proxy: `http://localhost:9090` when using `sentinel dashboard start`).
+- An API key for a supported provider (`openai`, `anthropic`, or `gemini` adapters ship in the harness).
+- Starter kits installed: `sentinel sre init --with-bundle core` (from [ndx-video/sre-init](https://github.com/ndx-au/sre-init) or `--with-local ../sre-init`).
 
-The **core** bundle includes `sn.core-agent` with `sn.md.agent.run` (persona + memory + optional RAG + `sn.ai.chat`) and the `sn-core-agent:assistant` flow. The **examples** bundle adds `sn.eg-support` / `sn.eg-rag-chat` flows that call `sn.ai.chat` directly. Install **examples** for additional chat smoke patterns:
+The **core** bundle includes `sn.core-agent` with `sn.md.agent.run` (persona + memory + optional RAG + `sn.ai.chat`) and the `sn-core-agent:assistant` flow. The **examples** bundle adds `sn.eg-support` / `sn.eg-rag-chat` flows that call `sn.ai.chat` directly. Install **examples** for more chat smoke patterns:
 
 ```bash
 sentinel sre init my-project --with-bundle core
@@ -36,7 +38,7 @@ sentinel sre bundle install examples
 
 Never put API keys in API Library records or `sentinel.yaml`. Use the vault:
 
-**Dashboard:** Secrets page → create secret (e.g. `openai_api_key`).
+**Dashboard:** Secrets page → create secret (for example `openai_api_key`).
 
 **CLI:**
 
@@ -69,7 +71,9 @@ Create or edit a vendor with `meta.capabilities.ai = true`, a `meta.auth.secret_
 }
 ```
 
-**OpenRouter example** (slashy model slugs; keep `provider` set so the slug is not split on `/`):
+**OpenRouter example:** Model slugs can contain slashes.
+
+Keep `provider` set so the harness does not split the slug on `/`:
 
 ```json
 {
@@ -95,9 +99,9 @@ On harness start, `BuildClientFromLibrary` registers providers from these record
 
 **HTTP:** `POST /lib/{vendor_id}/validate`
 
-A successful probe stores `meta.auth.validation.status = "valid"` on the vendor and writes an audit event. Validation uses a read-only provider probe (e.g. `GET /v1/models` for OpenAI-compatible vendors).
+A successful probe stores `meta.auth.validation.status = "valid"` on the vendor and writes an audit event. Validation uses a read-only provider probe (for example `GET /v1/models` for OpenAI-compatible vendors).
 
-If validation fails, check vault secret name, provider adapter (`runtime.provider`), and network egress before running flows. Unsupported adapters return `unsupported_adapter` (not `unchecked` or `invalid`). Agents → Providers shows `adapter_status` for each vendor.
+If validation fails, examine the vault secret name, provider adapter (`runtime.provider`), and network egress before you run flows. Unsupported adapters return `unsupported_adapter`, distinct from `unchecked` and `invalid`. Agents → Providers shows `adapter_status` for each vendor.
 
 ---
 
@@ -108,7 +112,7 @@ If validation fails, check vault secret name, provider adapter (`runtime.provide
 | Field | Operator intent |
 |-------|-----------------|
 | `ai_enabled` | Master switch for `sn.ai` |
-| `memory_enabled` | Master switch for `sn.memory` (also requires Memory settings enabled) |
+| `memory_enabled` | Master switch for `sn.memory` (also needs Memory enabled in its configuration) |
 | `rag_enabled` | Master switch for `sn.rag` (also requires RAG subsystem initialized) |
 | `canary_percent` | Partial rollout — see below |
 | `rollback_active` | Emergency off — disables all three subsystems immediately |
@@ -119,7 +123,7 @@ For a full smoke, set `ai_enabled` on, `canary_percent` to `100`, `rollback_acti
 
 ### Canary semantics (AI-S02)
 
-- **Per execution, not per agent/project.** Cohort is chosen from `ctx.execution_id` (fallback: `ctx.flow_name`) via stable FNV hashing.
+- **Per execution, not per agent/project.** Cohort is chosen from `ctx.execution_id` (fallback: `ctx.flow_name`) through stable FNV hashing.
 - **Uniform across subsystems.** One `canary_percent` on the Release panel gates `sn.ai`, `sn.memory`, and `sn.rag` together — matching the single dashboard control surface.
 - **Rollback wins.** When `rollback_active` is true, all three behave as disabled regardless of canary.
 - Flows outside the cohort receive `"sn.ai is disabled"` (and analogous memory/RAG errors). Guard with `if sn.ai and sn.ai.enabled then` or handle errors in `pcall`.
@@ -128,7 +132,7 @@ For a full smoke, set `ai_enabled` on, `canary_percent` to `100`, `rollback_acti
 
 ## 5. Run a flow that calls `sn.ai.chat`
 
-Example: `sn.eg-support/fl/handle_ticket.lua` (examples bundle) classifies a ticket and optionally replies via `sn.ai.chat`.
+Example: `sn.eg-support/fl/handle_ticket.lua` (examples bundle) classifies a ticket and optionally replies through `sn.ai.chat`.
 
 **Manual run (HTTP):**
 
@@ -139,14 +143,14 @@ curl -s -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8080/fl/sn-eg-support:handle_ticket/run"
 ```
 
-**CLI:** use the dashboard flow runner or trigger via webhook/cron as configured in the kit.
+**CLI:** use the dashboard flow runner or trigger through webhook/cron as configured in the kit.
 
 Expected behavior when AI is enabled and in canary cohort:
 
 - Flow returns JSON with a `reply` field from the model (or a fallback string if AI is off).
 - Harness records an AI trace for the chat request.
 
-If you see `"sn.ai is disabled"`, check Release tab (enabled + canary + rollback), execution logs, and that the flow run has a normal `ctx.execution_id`.
+If you see `"sn.ai is disabled"`, examine the Release tab and execution logs. Make sure that the flow has a normal `ctx.execution_id`.
 
 ---
 
@@ -163,8 +167,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8080/ai/traces/{id}"
 
 Related observability:
 
-- **Metrics** tab / `GET /ai/metrics?window_hours=24`
-- **Audit** tab / `GET /ai/audit?limit=12` (includes provider validation events)
+- **Metrics** tab / `GET /ai/metrics?window_hours=24`.
+- **Audit** tab / `GET /ai/audit?limit=12` (includes provider validation events).
 
 ---
 
@@ -189,7 +193,7 @@ Related observability:
 | Provider not found | Vendor missing `runtime.provider` or harness not restarted after library change |
 | Validation `invalid` | Wrong key or blocked egress |
 | Validation `unsupported_adapter` | `runtime.provider` has no harness adapter — see [AI provider extension](/ai-provider-extension) defer table |
-| No traces | Chat never succeeded; check flow logs (`GET /ex/{id}/lg`) |
+| No traces | Chat never succeeded. Check flow logs (`GET /ex/{id}/lg`) |
 | Adapter `unsupported` on Providers tab | Vendor registered in API Library but `runtime.provider` is deferred — flows cannot call `sn.ai` until an adapter ships or you use an OpenAI-compatible workaround |
 
 ---
@@ -209,9 +213,9 @@ Dashboard RAG overview (`/rag`) surfaces the same embedded retrieval summary as 
 
 ## Related docs
 
-- [Lua API — AI / Memory / RAG](/lua-api)
-- [AI provider extension](/ai-provider-extension) — add adapters, defer table, validation probes
-- [RAG retrieval evaluation](/rag-evaluation)
-- [Harness HTTP routes — `/ai/*`, `/lib/*`](/harness-http-routes)
-- [Kit development — starter kits](/kit-development)
-- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md)
+- [Lua API — AI / Memory / RAG](/lua-api).
+- [AI provider extension](/ai-provider-extension) — add adapters, defer table, validation probes.
+- [RAG retrieval evaluation](/rag-evaluation).
+- [Harness HTTP routes — `/ai/*`, `/lib/*`](/harness-http-routes).
+- [Kit development — starter kits](/kit-development).
+- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).

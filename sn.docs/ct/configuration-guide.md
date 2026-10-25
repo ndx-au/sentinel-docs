@@ -1,10 +1,12 @@
 ---
 title: "Configuration Guide"
-description: "Comprehensive guide to Sentinel configuration, security, deployment, and performance tuning."
+description: "Reference for shared project configuration, local infrastructure configuration, security, backups, and deployment."
 type: Guide
 tags: [configuration]
 status: stable
 ---
+
+<!-- ndx-ste-mode: description -->
 
 # Configuration Guide
 
@@ -14,32 +16,32 @@ Comprehensive guide to Sentinel configuration, security, deployment, and perform
 
 ## Introduction
 
-Sentinel uses a **two-layer configuration** system that separates team-shared behavior settings from machine-specific infrastructure settings. This design is intentional and reflects a core principle: a team of developers should be able to clone a project repository and have all the behavioral configuration ready to go, while each developer's local infrastructure details (ports, encryption keys, database paths) remain private to their machine.
+Sentinel uses a **two-layer configuration** system. One layer stores behavior that the team shares. The other layer stores infrastructure details for each machine. Developers can clone the shared configuration from Git. Ports, encryption keys, and database paths remain private to each machine.
 
 **Why two layers?**
 
-Consider a team of five developers working on the same automation project. They all need the same git sync settings, the same hot-reload behavior, and the same project metadata. But developer Alice runs the harness on port 8080, while developer Bob uses port 9000 because he has another service on 8080. Alice has TLS enabled with a specific certificate, while Bob runs plain HTTP in development. Alice's vault passphrase is different from Bob's. None of these infrastructure details should be committed to git where they would conflict between machines.
+A team of five developers shares Git synchronization, hot reload behavior, and project metadata. Alice uses port 8080. Bob uses port 9000 because another service uses port 8080. Alice uses TLS, and Bob uses HTTP for development. They use different vault passphrases. Machine details stay outside Git so they do not conflict.
 
-The two layers solve this by putting shared settings in `sentinel.yaml` (committed to git) and machine-specific settings in `.sentinel/config.json` (gitignored).
+The two layers solve this by putting shared configuration in `sentinel.yaml` (committed to git) and machine-specific configuration in `.sentinel/config.json` (gitignored).
 
 **Configuration loading order:**
 
-1. Built-in defaults (hardcoded in the binary)
-2. `.sentinel/config.json` file (overrides defaults)
-3. Environment variables with `SENTINEL_` prefix (override file values)
-4. Command-line flags (override everything)
+1. Built-in defaults (hardcoded in the binary).
+2. `.sentinel/config.json` file (overrides defaults).
+3. Environment variables with `SENTINEL_` prefix (override file values).
+4. Command-line flags (override everything).
 
-This means you can always override any setting temporarily via environment variables or flags without modifying files.
+This means you can always override any setting temporarily through environment variables or flags without modifying files.
 
 ---
 
 ## sentinel.yaml (Git-Tracked)
 
-**Location:** Project root (e.g., `my-project/sentinel.yaml`)
+**Location:** Project root (for example `my-project/sentinel.yaml`)
 
-**Purpose:** Team-shared behavior configuration. Everything in this file describes how the project behaves, not how the infrastructure is set up. Every team member gets the same settings when they clone the repository.
+**Purpose:** Team-shared behavior configuration. Everything in this file describes how the project behaves, not how the infrastructure is set up. Every team member gets the same configuration when they clone the repository.
 
-**Tracked in git:** Yes. This file should always be committed.
+**Tracked in git:** Yes. Commit this file to version control.
 
 **Created by:** `sentinel sre init` command.
 
@@ -118,16 +120,16 @@ hotreload:
 
 ### What Does NOT Belong in sentinel.yaml
 
-The following settings must never be placed in `sentinel.yaml`. They belong in `.sentinel/config.json` or environment variables:
+The following configuration must never be placed in `sentinel.yaml`. They belong in `.sentinel/config.json` or environment variables:
 
-- `api.port` -- Machine-specific (different developers use different ports)
-- `api.tokens` -- Security credentials (never commit to git)
-- `log.level`, `log.format` -- Developer preference
-- `tls.*` -- Machine-specific certificates and hostnames
-- `vault_passphrase` -- Secret (never commit to git)
-- `state.*` -- Machine-specific database settings
-- `lua.*` -- Machine-specific performance tuning
-- `marketplace.*` -- Per-user authentication and licensing
+- `api.port` -- Machine-specific (different developers use different ports).
+- `api.tokens` -- Security credentials (never commit to git).
+- `log.level`, `log.format` -- Developer preference.
+- `tls.*` -- Machine-specific certificates and hostnames.
+- `vault_passphrase` -- Secret (never commit to git).
+- `state.*` -- Machine-specific database configuration.
+- `lua.*` -- Machine-specific performance tuning.
+- `marketplace.*` -- Per-user authentication and licensing.
 
 ### Examples
 
@@ -163,11 +165,11 @@ hotreload:
 
 ## .sentinel/config.json (Gitignored)
 
-**Location:** `.sentinel/config.json` inside the project directory (e.g., `my-project/.sentinel/config.json`)
+**Location:** `.sentinel/config.json` inside the project directory (for example `my-project/.sentinel/config.json`)
 
-**Purpose:** Machine-specific infrastructure configuration. Everything in this file describes how the harness runs on this particular machine -- ports, security, performance tuning, database settings, and marketplace credentials.
+**Purpose:** Machine-specific infrastructure configuration. Everything in this file describes how the harness runs on this particular machine -- ports, security, performance tuning, database configuration, and marketplace credentials.
 
-**Tracked in git:** No. The `.sentinel/` directory is gitignored by default. This file must never be committed because it contains security-sensitive settings (tokens, passphrases) and machine-specific values (ports, paths, hostnames).
+**Tracked in git:** No. The `.sentinel/` directory is gitignored by default. This file must never be committed because it contains security-sensitive configuration (tokens, passphrases) and machine-specific values (ports, paths, hostnames).
 
 **Auto-created:** Yes. When the harness starts for the first time and this file does not exist, it is created automatically with default values. You can also create it during `sentinel sre init` if you choose to configure vault encryption.
 
@@ -252,7 +254,7 @@ The following is the complete configuration schema with every field documented, 
 |-------|------|---------|-------------|
 | `data_dir` | string | `".sentinel"` | Directory where Sentinel stores all runtime data: databases, caches, PID files, certificates, and logs. Relative to the project root. You rarely need to change this. |
 | `keyhole` | string | `"blocked"` | Default-kit escape hatch. Only matters when `sentinel.yaml` sets `default_kit`. `blocked` disables the normal `/kt/...` kit scheme on the root router (the default kit owns `GET /*` for pages). **`GET /hl/kt`** still lists kits. `header` leaves normal kit routes in place but requires `X-Sentinel-Keyhole` plus a valid Bearer token. Any other non-empty slash-free value is treated as a URL prefix, so `"_"` exposes the normal kit routes under `/_/kt/...`. See [Harness HTTP route reference](/harness-http-routes). |
-| `vault_passphrase` | string | `""` | Passphrase for encrypting the vault database. Can also be set via `SENTINEL_VAULT_PASSPHRASE` environment variable (recommended -- the env var is more secure than storing the passphrase in a file). When both are set, the environment variable takes precedence. |
+| `vault_passphrase` | string | `""` | Passphrase for encrypting the vault database. Can also be set through `SENTINEL_VAULT_PASSPHRASE` environment variable (recommended -- the env var is more secure than storing the passphrase in a file). When both are set, the environment variable takes precedence. |
 
 #### log -- Harness Log Output
 
@@ -271,12 +273,12 @@ Controls the main HTTP API server that the harness exposes.
 |-------|------|---------|-------------|
 | `api.port` | int | `8080` | TCP port for the HTTP API server. Ports 8080-8090 are within the dashboard's auto-discovery range. Valid range: 1-65535. |
 | `api.debug_mode` | bool | `true` | When `true`, the API server does not require bearer token authentication. Requests are still subject to IP whitelist if configured. In production builds (compiled without `-tags dev`), setting this to `true` causes a validation error and the harness refuses to start. |
-| `api.tokens` | string[] | `[]` | List of valid bearer tokens for API authentication. When `debug_mode` is `false`, at least one token is required. Tokens should be at least 64 characters of cryptographically random data. Multiple tokens allow different clients to use different credentials (and you can rotate one without disrupting others). |
+| `api.tokens` | string[] | `[]` | List of valid bearer tokens for API authentication. When `debug_mode` is `false`, at least one token is required. Use tokens with at least 64 cryptographically random characters. Multiple tokens allow different clients to use different credentials (and you can rotate one without disrupting others). |
 | `api.ip_whitelist` | string[] | `[]` | List of allowed IP addresses or CIDR ranges. When non-empty, only requests from listed IPs are accepted, even if they provide a valid token. Supports both individual IPs (`192.168.1.1`) and CIDR notation (`10.0.0.0/8`). When empty, all IPs are allowed (subject to token auth). |
 
 #### ip_filters -- Harness and wp-proxy CIDR rules
 
-Top-level `ip_filters` in `.sentinel/config.json` (not under `api`). These rules are evaluated by the harness gateway for the **harness** listener and **wp-proxy** only. First matching rule wins; if no rule matches, traffic is **allowed**. `service: dashboard` may still appear in saved YAML for round-trip, but the dashboard process does **not** evaluate these rules — it uses its own listen whitelist (`WhitelistMiddleware`). Lua `ctx.fs` is a third plane: default-deny until an FS Control policy grants access.
+Top-level `ip_filters` in `.sentinel/config.json` apply to the **harness** listener and **wp-proxy**. They do not belong under `api`. The first matching rule wins. If no rule matches, the harness allows traffic. Saved YAML can retain `service: dashboard` for round trips. The dashboard uses its own listen whitelist (`WhitelistMiddleware`). Lua `ctx.fs` uses a separate plane. It denies access until an FS Control policy grants access.
 
 Do not confuse `ip_filters` with `api.ip_whitelist` (debug-mode catch-all on the harness API).
 
@@ -286,10 +288,10 @@ Controls HTTPS/TLS encryption for the API server.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `tls.enabled` | bool | `false` | Enable TLS. When `true`, the harness starts an additional HTTPS listener on `tls.port`. The HTTP listener on `api.port` continues to operate. |
+| `tls.enabled` | bool | `false` | Enable TLS. When `true`, the harness starts an more HTTPS listener on `tls.port`. The HTTP listener on `api.port` continues to operate. |
 | `tls.port` | int | `8443` | TCP port for the HTTPS listener. Must not conflict with `api.port`. Valid range: 1-65535. |
 | `tls.cert_dir` | string | `""` | Directory where CA and server certificates are stored. If empty, defaults to `{data_dir}/certs/` (typically `.sentinel/certs/`). The harness auto-generates a self-signed CA and server certificate on first start if they do not exist. |
-| `tls.hosts` | string[] | `["localhost"]` | DNS hostnames to include in the server certificate's Subject Alternative Name (SAN) field. Add all hostnames that clients will use to connect (e.g., `harness-01.internal`, `myhost.example.com`). |
+| `tls.hosts` | string[] | `["localhost"]` | DNS hostnames to include in the server certificate's Subject Alternative Name (SAN) field. Add all hostnames that clients will use to connect (for example `harness-01.internal`, `myhost.example.com`). |
 | `tls.ips` | string[] | `["127.0.0.1"]` | IP addresses to include in the server certificate's SAN field. Add all IPs that clients will use to connect. Each value must be a valid IP address. |
 
 #### state -- State Database
@@ -300,7 +302,7 @@ Controls the SQLite state database where execution history, trigger state, and o
 |-------|------|---------|-------------|
 | `state.busy_timeout` | int | `5000` | SQLite busy timeout in milliseconds. When a database lock is held by another operation, new operations wait up to this many milliseconds before returning a "database is locked" error. Increase this value if you see lock errors under heavy concurrency. |
 | `state.encrypt_db` | bool | `false` | Enable SQLCipher encryption for the state database. When `true`, the state database is encrypted at rest using the passphrase from `SENTINEL_STATE_PASSPHRASE` (or `SENTINEL_VAULT_PASSPHRASE` as fallback). |
-| `state.state_passphrase` | string | `""` | Passphrase for state database encryption. **Important:** This should only be set via the `SENTINEL_STATE_PASSPHRASE` environment variable, never in the config file. The config file field exists for internal loading purposes. |
+| `state.state_passphrase` | string | `""` | Passphrase for state database encryption. **Important:** Set this only through the `SENTINEL_STATE_PASSPHRASE` environment variable. Do not store it in the configuration file. The configuration file field exists for internal loading purposes. |
 
 #### lua -- Lua VM Configuration
 
@@ -309,7 +311,7 @@ Controls the Lua virtual machine pool that executes flows.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `lua.pool_size` | int | `10` | Maximum number of Lua VM instances (LStates) in the pool. Each concurrent flow execution requires one VM instance. If all instances are in use, new execution requests queue until one becomes available. Increase this for projects with many concurrent flows. Minimum: 1. |
-| `lua.registry_size` | int | `256` | Initial registry size for new Lua VM instances. The registry is where Lua stores references to tables, functions, and userdata. Larger values use more memory per VM but may improve performance for complex flows that create many Lua objects. Minimum: 1. |
+| `lua.registry_size` | int | `256` | Initial registry size for new Lua VM instances. The registry is where Lua stores references to tables, functions, and userdata. Larger values use more memory per VM. They can improve performance for flows with many Lua objects. Minimum: 1. |
 | `lua.execution_timeout` | int | `30` | Default execution timeout in seconds. If a flow's `main()` function does not return within this time, the execution is terminated and the `failed(err)` callback is invoked. Individual flows can override this. Minimum: 1. |
 
 #### ws -- WebSocket Bus
@@ -353,7 +355,7 @@ Controls integration with the Sentinel Kit Marketplace (SKM) for installing, upd
 |-------|------|---------|-------------|
 | `marketplace.url` | string | `"https://kits.ndx.au"` | Kit catalog / device login (SKM). |
 | `marketplace.license_url` | string | `"https://license.ndx.au"` | Occupy/register HQ ([ndxHQ](https://github.com/ndx-au/ndxHQ)). |
-| `marketplace.license_key` | string | `""` | Activated license key (e.g., `sk_free_...` or `sk_ent_...`). Set automatically by `sentinel license activate`. Can also be set via `SENTINEL_LICENSE_KEY` environment variable. |
+| `marketplace.license_key` | string | `""` | Activated license key (for example `sk_free_...` or `sk_ent_...`). Set automatically by `sentinel license activate`. Can also be set through `SENTINEL_LICENSE_KEY` environment variable. |
 | `marketplace.telemetry_enabled` | bool | `true` | Allow sending anonymized system information (OS, architecture, Sentinel version) with phone-home requests. No project data or secrets are ever included. |
 | `marketplace.next_check` | string | `""` | ISO 8601 timestamp for an optional check-in schedule. Occupy uses an in-memory heartbeat and does not write this field. |
 
@@ -379,7 +381,7 @@ Environment variables use the `SENTINEL_` prefix. **Only allowlisted variables**
 
 Allowlisted mappings:
 
-| Environment Variable | Config Key | Example Value |
+| Environment Variable | Configuration Key | Example Value |
 |---------------------|------------|---------------|
 | `SENTINEL_VAULT_PASSPHRASE` | `vault_passphrase` | `my_secret_passphrase_32_chars_min` |
 | `SENTINEL_STATE_PASSPHRASE` | `state.state_passphrase` | `another_passphrase_32_chars_min` |
@@ -395,18 +397,18 @@ Allowlisted mappings:
 | `SENTINEL_API_KEY` | (CLI `--token` default) | `token_abc123...` |
 | `SENTINEL_API_TOKEN` | (CLI `--token` alias) | same as API key |
 
-**Not loaded into harness config:** `SENTINEL_API`, `HARNESS_URL`, `SENTINEL_API_KEY`, `SENTINEL_API_TOKEN`, and any other non-allowlisted `SENTINEL_*` vars.
+**Not loaded into harness configuration:** `SENTINEL_API`, `HARNESS_URL`, `SENTINEL_API_KEY`, `SENTINEL_API_TOKEN`, and any other non-allowlisted `SENTINEL_*` vars.
 
 **Blocked (startup error):** `SENTINEL_API`
 
-**systemd pattern:** put `SENTINEL_VAULT_PASSPHRASE` in `.sentinel/harness.env` (see `harness.env.example` from `sentinel sre init`); keep operator `.env` for tokens and `HARNESS_URL` only.
+**systemd pattern:** put `SENTINEL_VAULT_PASSPHRASE` in `.sentinel/harness.env` (see `harness.env.example` from `sentinel sre init`). Keep operator `.env` for tokens and `HARNESS_URL` only.
 
 ### Token Authority And Migration
 
 Sentinel uses a deliberate split to avoid ambiguous token ownership:
 
-- **Harness auth authority:** `.sentinel/config.json` -> `api.tokens`
-- **Operator/client defaults:** `.env` -> `SENTINEL_API_KEY` / `SENTINEL_API_TOKEN`
+- **Harness auth authority:** `.sentinel/config.json` -> `api.tokens`.
+- **Operator/client defaults:** `.env` -> `SENTINEL_API_KEY` / `SENTINEL_API_TOKEN`.
 
 Startup validation does not auto-copy tokens from `.env` into `config.json`.
 If production startup fails with `api.tokens cannot be empty`, do this explicitly:
@@ -415,7 +417,7 @@ If production startup fails with `api.tokens cannot be empty`, do this explicitl
 2. Add it to `.sentinel/config.json` under `api.tokens`.
 3. Copy one token into `.env` as `SENTINEL_API_KEY` for CLI/curl/agent clients.
 
-This keeps server-side auth configuration and client-side convenience config separate and auditable.
+This keeps server-side auth configuration and client-side convenience configuration separate and auditable.
 
 ---
 
@@ -475,13 +477,13 @@ Certain routes bypass bearer token authentication by design:
 
 | Route | Method | Reason |
 |-------|--------|--------|
-| `/api/config` | GET | Non-sensitive config status used by the dashboard for discovery. |
+| `/api/config` | GET | Non-sensitive configuration status used by the dashboard for discovery. |
 | `/wh/*` | ANY | Global webhooks use their own authentication (HMAC signatures, CIDR restrictions, rate limits). |
 | `/kt/{ns}/{name}/wh/*` | ANY | Kit-scoped webhooks use their own authentication. |
 | `/cert/ca.crt` | GET | CA certificate distribution for TLS pinning. Must be publicly accessible. |
 | `/cert/server.crt` | GET | Server certificate for diagnostics. |
 
-External webhook callers (Stripe, GitHub, Slack, etc.) do not need a Sentinel bearer token. Webhooks authenticate using their own mechanisms defined in the flow's trigger configuration.
+External webhook callers (such as Stripe, GitHub, and Slack) do not need a Sentinel bearer token. Webhooks authenticate using their own mechanisms defined in the flow's trigger configuration.
 
 **Dashboard token management:**
 
@@ -489,7 +491,7 @@ The dashboard stores a bearer token per harness instance for proxied requests:
 
 1. An administrator configures `api.tokens` in the harness's `.sentinel/config.json`.
 2. The administrator copies one token from that array.
-3. In the dashboard, navigate to the harness settings page and paste the token.
+3. In the dashboard, navigate to the harness configuration page and paste the token.
 4. The token is stored in the dashboard's local database (`~/.sentinel/dashboard.db`), which is encrypted.
 5. The dashboard attaches the stored token to all proxied API requests to that harness.
 
@@ -498,7 +500,7 @@ The dashboard stores a bearer token per harness instance for proxied requests:
 - Use cryptographically random tokens of at least 64 characters.
 - Create separate tokens for different clients (dashboard, CI/CD, external integrations) so you can rotate one without disrupting others.
 - Combine tokens with IP whitelisting for defense in depth.
-- Rotate tokens quarterly or whenever a token may have been compromised.
+- Rotate tokens quarterly. If you suspect a compromised token, rotate it immediately.
 
 ### Layer 2: Encryption at Rest (AES-256-GCM / SQLCipher)
 
@@ -542,7 +544,7 @@ export SENTINEL_STATE_PASSPHRASE="your_state_passphrase_minimum_32_chars"
 ./sentinel harness start -p /path/to/project
 ```
 
-5. Verify encryption:
+5. Make sure that encryption is active:
 
 ```bash
 # The vault database should not be readable as plain text
@@ -556,7 +558,7 @@ sqlite3 .sentinel/vault.db "SELECT * FROM secrets;"
 
 **Best practices:**
 
-- Store passphrases in a secure secret manager (HashiCorp Vault, AWS Secrets Manager, Azure Key Vault) and inject them as environment variables at runtime.
+- Store passphrases in a secure secret manager, such as HashiCorp Vault, AWS Secrets Manager, or Azure Key Vault. Inject them through environment variables at runtime.
 - Never commit passphrases to git or store them in plain text files.
 - Use different passphrases for vault and state databases for compartmentalized security.
 - Test that you can restart the harness with the passphrases before deploying to production.
@@ -582,9 +584,9 @@ Protects data in transit between clients and the harness. When enabled, the harn
 ```
 
 2. Start the harness. On first start with TLS enabled, it automatically generates:
-   - A self-signed Certificate Authority (CA) key and certificate
-   - A server key and certificate signed by the CA
-   - Both are stored in the `cert_dir` directory
+   - A self-signed Certificate Authority (CA) key and certificate.
+   - A server key and certificate signed by the CA.
+   - Both are stored in the `cert_dir` directory.
 
 3. Download the CA certificate for clients to trust:
 
@@ -602,7 +604,7 @@ curl --cacert ca.crt https://localhost:8443/hl
 
 **Updating hostnames or IPs:**
 
-If you change `tls.hosts` or `tls.ips` after certificates have been generated, you must regenerate the server certificate:
+If you change `tls.hosts` or `tls.ips` after certificate generation, regenerate the server certificate:
 
 ```bash
 # Delete existing certificates
@@ -626,11 +628,11 @@ The CA certificate does not need to be regenerated unless you want to rotate the
 
 Security-relevant events are logged automatically by the harness. These include:
 
-- Authentication attempts (success and failure) with source IP addresses
-- Certificate generation and expiration warnings
-- Vault access events (secret read, write, delete)
-- API access patterns
-- Configuration changes
+- Authentication attempts (success and failure) with source IP addresses.
+- Certificate generation and expiration warnings.
+- Vault access events (secret read, write, delete).
+- API access patterns.
+- Configuration changes.
 
 To enable structured audit logging suitable for a SIEM or log aggregation system, configure JSON log format:
 
@@ -656,11 +658,11 @@ To enable structured audit logging suitable for a SIEM or log aggregation system
 
 ## Lua VM Configuration
 
-The Lua VM pool is one of the most important performance-related settings. Understanding how it works helps you tune it correctly.
+The Lua VM pool is one of the most important performance-related configuration. Understanding how it works helps you tune it correctly.
 
 **How the pool works:**
 
-Sentinel maintains a pool of pre-initialized Lua VM instances (LStates). When a flow execution is requested, a VM is checked out from the pool, the flow's Lua code is loaded and executed, and the VM is returned to the pool afterward. This avoids the overhead of creating and destroying VMs for every execution.
+Sentinel maintains a pool of initialized Lua VMs (LStates). For each execution, the harness takes a VM from the pool and loads the flow. After execution, it returns the VM to the pool. This avoids creating and destroying a VM for each run.
 
 **Tuning guidelines:**
 
@@ -670,11 +672,11 @@ Sentinel maintains a pool of pre-initialized Lua VM instances (LStates). When a 
 | `registry_size` | 128 | 256 (default) | 512 |
 | `execution_timeout` | 30 (default) | 30 (default) | 60 |
 
-- **pool_size**: Set this to at least the expected number of concurrent flow executions. If you have 3 cron triggers that fire at the same time plus occasional manual runs, a pool size of 5-10 is sufficient. If you have webhook-triggered flows that may receive bursts of traffic, increase accordingly.
+- **pool_size**: Set the pool size for the expected number of concurrent flow executions. For 3 simultaneous cron triggers and occasional manual runs, a pool of 5-10 is sufficient. For bursts of webhook traffic, increase the pool size.
 
 - **registry_size**: Increase this if your flows create many Lua tables, closures, or userdata objects. The default of 256 is sufficient for most flows. Memory impact: approximately 2 KB per registry slot per VM instance.
 
-- **execution_timeout**: The maximum time a flow can run before being forcibly terminated. Flows that call slow external APIs may need longer timeouts. Consider setting a generous default here and using flow-specific timeouts for quick operations.
+- **execution_timeout**: This value limits how long a flow can run. Slow external APIs can need longer timeouts. Set a default that supports those calls. Use shorter timeouts for quick operations.
 
 **Example -- high-concurrency configuration:**
 
@@ -696,7 +698,7 @@ Sentinel has two separate logging systems: the harness process log (controlled b
 
 ### Harness Process Log (log.*)
 
-This is the harness's own log output -- what you see in the terminal when running in the foreground, or in the systemd journal when running as a service.
+These are harness logs. The terminal shows them for foreground operation. The systemd journal shows them when the harness runs as a service.
 
 | Level | What it includes |
 |-------|-----------------|
@@ -715,7 +717,7 @@ Logs every external API call made by Lua flows through the `sn.cn.*` connector i
 
 ### Trigger Logging (logging.triggers.*)
 
-Logs trigger-related events: cron trigger fires, webhook receipts, and event emissions. Enabled by default. Disable if you have very frequent triggers (e.g., every-second cron jobs) and the log volume is too high.
+Logs trigger-related events: cron trigger fires, webhook receipts, and event emissions. Enabled by default. Disable if you have very frequent triggers (for example every-second cron jobs) and the log volume is too high.
 
 ### Log Rotation (logging.rotation.*)
 
@@ -733,9 +735,9 @@ The Sentinel Kit Marketplace (SKM) is the distribution platform for published ki
 
 **Initial setup:**
 
-1. Authenticate: `sentinel login`
-2. Activate a license: `sentinel license activate sk_free_<key>`
-3. Install kits: `sentinel sre kit install <kit-id>`
+1. Authenticate: `sentinel login`.
+2. Activate a license: `sentinel license activate sk_free_<key>`.
+3. Install kits: `sentinel sre kit install <kit-id>`.
 
 **Telemetry:**
 
@@ -761,11 +763,11 @@ For enterprise deployments with a private marketplace instance, change `marketpl
 
 ## WebSocket Configuration
 
-The WebSocket subsystem is disabled by default and should be enabled only when you need harness-managed sockets or browser subscriptions. Administrators can turn it on from `.sentinel/config.json` or from the dashboard Sockets page.
+The WebSocket subsystem is disabled by default. Administrators can enable it in `.sentinel/config.json` or on the dashboard Sockets page. Enable it only for harness-managed sockets or browser subscriptions.
 
-**When to adjust WebSocket settings:**
+**When to adjust WebSocket configuration:**
 
-- **Many dashboard users**: Increase `max_connections` if more than 100 users may have the dashboard open simultaneously.
+- **Many dashboard users**: If more than 100 users can open the dashboard simultaneously, increase `max_connections`.
 - **Large log volumes**: Increase `max_message_size_kb` if individual log entries or execution results are very large (above 64 KB).
 - **Unstable network connections**: Decrease `ping_interval_ms` and `pong_timeout_ms` to detect disconnections faster, or increase them to be more tolerant of network latency.
 - **Activation policy**: Leave `ws.enabled` as `false` until you need websocket features.
@@ -807,7 +809,7 @@ Each Lua VM instance uses approximately 1-5 MB of memory depending on `registry_
 
 ## Configuration Validation
 
-After modifying `.sentinel/config.json`, you can verify the configuration is valid before starting the harness.
+After you modify `.sentinel/config.json`, make sure that the configuration is valid before you start the harness.
 
 **Method 1: Start with debug logging**
 
@@ -843,7 +845,7 @@ The audit command checks the project structure and configuration for common issu
 
 | File/Directory | Contains | Priority |
 |----------------|----------|----------|
-| `sentinel.yaml` | Project metadata and behavior config | High (but recoverable from git) |
+| `sentinel.yaml` | Project metadata and behavior configuration | High (but recoverable from git) |
 | `.sentinel/config.json` | Infrastructure configuration | Medium (can be recreated) |
 | `.sentinel/vault.db` | Encrypted secrets | **Critical** (secrets cannot be recovered without backup) |
 | `.sentinel/state.db` | Execution history, trigger state | Medium (operational data) |
@@ -906,7 +908,7 @@ cp /secure-backups/vault-20260306.db .sentinel/vault.db
 
 - Always stop the harness before restoring databases to prevent corruption.
 - Vault backups are only useful if you also have the vault passphrase. Store the passphrase separately from the backup.
-- Test your recovery procedure periodically to ensure backups are valid.
+- Test your recovery procedure periodically to make sure that backups are valid.
 
 ---
 
@@ -914,8 +916,8 @@ cp /secure-backups/vault-20260306.db .sentinel/vault.db
 
 ### Pre-Deployment (1-2 hours)
 
-- [ ] **Review threat model**: What are you protecting? Who might attack? What is the impact of a breach?
-- [ ] **Build release binary**: `go build -ldflags="-s -w" -o sentinel ./cmd/sentinel` (no debug mode)
+- [ ] **Review threat model**: What are you protecting? Who can attack? What is the impact of a breach?
+- [ ] **Build release binary**: `go build -ldflags="-s -w" -o sentinel ./cmd/sentinel` (no debug mode).
 - [ ] **Configure authentication tokens**: Generate at least one 64+ character random token. Set `api.debug_mode` to `false`.
 - [ ] **Configure encryption passphrases**: Generate 32+ character random passphrases for vault and optionally state database.
 - [ ] **Enable TLS**: Set `tls.enabled` to `true`. Configure `tls.hosts` and `tls.ips` with all valid names and addresses.
@@ -923,9 +925,9 @@ cp /secure-backups/vault-20260306.db .sentinel/vault.db
 - [ ] **Disable debug logging**: Set `log.level` to `info` or `warn`. Set `log.format` to `json` for log aggregation.
 - [ ] **Tune Lua VM**: Set `lua.pool_size` based on expected concurrency. Review `lua.execution_timeout`.
 - [ ] **Configure log rotation**: Set appropriate `max_db_size_mb` and `max_log_age_days` for your retention policy.
-- [ ] **Test secrets**: Verify all required secrets are in the vault and accessible from flows.
-- [ ] **Test all flows**: Run each flow manually to verify correct behavior.
-- [ ] **Verify webhooks**: Test webhook endpoints with sample payloads to confirm routing and signature verification.
+- [ ] **Test secrets**: Make sure that flows can access all required vault secrets.
+- [ ] **Test all flows**: Run each flow manually. Make sure that it produces the expected result.
+- [ ] **Verify webhooks**: Send example payloads. Make sure that routing and signature verification produce the expected results.
 
 ### Deployment Steps
 
@@ -957,9 +959,9 @@ curl -H "Authorization: Bearer invalid_token" \
 ### Post-Deployment
 
 - [ ] **Monitor logs**: Watch for errors and warnings during the first hours of operation.
-- [ ] **Test all endpoints**: Verify API access with valid tokens from production clients.
-- [ ] **Verify webhook delivery**: Confirm external services can reach webhook endpoints.
-- [ ] **Set up log rotation monitoring**: Ensure archived logs are being created on schedule.
+- [ ] **Test all endpoints**: Test API access from production clients with valid tokens.
+- [ ] **Verify webhook delivery**: Make sure that external services can reach the webhook endpoints.
+- [ ] **Set up log rotation monitoring**: Make sure that log archives appear on schedule.
 - [ ] **Document certificate expiration date**: Record when TLS certificates expire (10-year validity by default).
 - [ ] **Set up monitoring alerts**: Configure alerts for harness health endpoint failures.
 - [ ] **Schedule regular backups**: Set up automated backup of vault.db and kit databases.
@@ -1027,22 +1029,22 @@ If the harness takes a long time to start, investigate with debug logging:
 ```
 
 Common causes:
-- Many kits with large CMS content directories (many .md files to parse)
-- Database migrations running on first start after an upgrade
-- Network connectivity issues when phone-home is enabled
-- Large flow files that take time to parse and register
+- Many kits with large CMS content directories (many .md files to parse).
+- Database migrations running on first start after an upgrade.
+- Network connectivity issues when phone-home is enabled.
+- Large flow files that take time to parse and register.
 
 ---
 
 ## Best Practices Summary
 
 1. **Separate configuration layers**: Put behavior in `sentinel.yaml`, infrastructure in `.sentinel/config.json`, and secrets in environment variables.
-2. **Never commit secrets**: Keep passphrases in environment variables and keep API tokens in gitignored files (`.sentinel/config.json`, operator `.env`), never in tracked files.
+2. **Never commit secrets**: Keep passphrases in environment variables. Keep API tokens in gitignored files (`.sentinel/config.json`, operator `.env`).
 3. **Enable all three security layers in production**: Authentication (tokens), encryption at rest (vault + state passphrase), and encryption in transit (TLS).
 4. **Use strong credentials**: Minimum 64-character random tokens, minimum 32-character random passphrases.
 5. **Enable structured logging in production**: Set `log.format` to `json` for compatibility with log aggregation systems.
 6. **Tune the Lua pool for your workload**: Set `lua.pool_size` based on expected concurrent flow executions.
 7. **Use `smart` connector logging**: It captures errors and slow calls without the volume of `verbose` mode.
 8. **Back up the vault regularly**: The vault contains secrets that cannot be recovered without a backup.
-9. **Rotate credentials quarterly**: Tokens, passphrases, and certificates should all have a rotation schedule.
-10. **Test your recovery procedure**: Periodically verify that you can restore from backups and that all passphrases are still available.
+9. **Rotate credentials quarterly**: Schedule rotation for tokens, passphrases, and certificates.
+10. **Test your recovery procedure**: Periodically make sure that you can restore from backups and that all passphrases are still available.

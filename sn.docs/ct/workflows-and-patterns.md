@@ -1,16 +1,18 @@
 ---
 title: "Workflows and Patterns Guide"
-description: "This guide is a comprehensive collection of battle-tested patterns for building automation workflows with Sentinel."
+description: "Workflow patterns for webhooks, schedules, events, forms, content, containers, errors, logs, and tests."
 type: Guide
 tags: [workflows]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Workflows and Patterns Guide
 
-This guide is a comprehensive collection of battle-tested patterns for building automation workflows with Sentinel. Each pattern addresses a specific real-world challenge that arises when orchestrating flows, integrating with external services, managing data, and coordinating across kits. Whether you are building your first webhook handler or designing a multi-kit event-driven architecture, these patterns provide a proven starting point.
+This guide gives patterns for Sentinel automation. The examples cover external services, data, flow coordination, and communication between kits.
 
-The patterns are organized by category. Each one includes an explanation of when and why you would use it, followed by working code examples. You can mix and match patterns freely -- a single flow might combine webhook handling with exponential backoff retries and structured logging, for example.
+The guide groups patterns by category. Each pattern explains its purpose and includes code examples. A flow can combine webhooks, retries with exponential backoff, and structured logs.
 
 All code examples use the current Sentinel Lua flow style with `function setup()`, `function main(params)`, `function cleanup()`, and `function failed(err)` as top-level functions. All trigger types pass data to `main(params)` as a Lua table argument. The `ctx` global is available for logging, secrets, and form data, but `ctx.get()` and `ctx.set()` are stubs (always return nil / do nothing). Use `params.*` or local variables instead.
 
@@ -18,9 +20,9 @@ All code examples use the current Sentinel Lua flow style with `function setup()
 
 ## Webhook Patterns
 
-Webhooks are the primary way external services communicate with Sentinel in real time. When a third-party service (Stripe, GitHub, Shopify, etc.) needs to notify your system of an event, it sends an HTTP POST to a webhook endpoint. Sentinel receives these at the `/wh/` prefix and routes them to the appropriate flow based on the registered trigger path.
+External services use webhooks to send events to Sentinel. Services such as Stripe, GitHub, and Shopify send an HTTP POST to a webhook endpoint. Sentinel receives requests under `/wh/`. The registered trigger path selects the flow.
 
-Understanding webhook patterns is critical because webhooks are inherently unreliable -- services retry on failure, signatures must be verified to prevent spoofing, and high-traffic endpoints can overwhelm your system without rate limiting.
+Webhook services retry failed deliveries. Signature verification protects against spoofing. Rate limits protect the harness from excessive traffic.
 
 ### Pattern: HMAC-Signed Webhook
 
@@ -28,7 +30,7 @@ Understanding webhook patterns is critical because webhooks are inherently unrel
 
 **Why this matters:** Without signature verification, anyone who discovers your webhook URL can send fake events to your system. This is a serious security vulnerability, especially for payment processing or account management flows. HMAC verification is your first line of defense.
 
-**How it works:** The external service computes a hash (typically SHA-256) of the request body using a shared secret, then includes that hash in a request header. Sentinel's webhook trigger can automatically verify this signature before your flow code even runs, rejecting any request with an invalid or missing signature.
+**How it works:** The external service hashes the request body with a shared secret, typically with SHA-256. It sends the hash in a request header. Sentinel can test the signature before the flow runs. Requests with missing or invalid signatures are rejected.
 
 ```lua
 function setup()
@@ -73,7 +75,7 @@ end
 
 ### Pattern: Header shared-secret webhook
 
-**When to use:** Telegram Bot API `setWebhook` (`X-Telegram-Bot-Api-Secret-Token`) or any provider that sends a static secret in a named header rather than an HMAC of the body.
+**When to use:** Use this pattern for Telegram Bot API `setWebhook` (`X-Telegram-Bot-Api-Secret-Token`). It also supports providers with static secrets in named headers instead of body HMACs.
 
 ```lua
 function setup()
@@ -89,9 +91,9 @@ end
 
 ### Pattern: Rate-Limited Webhook
 
-**When to use:** When your webhook endpoint might receive bursts of traffic that could overwhelm your system. This is common with services that send many events in rapid succession (e.g., bulk operations in Stripe, CI/CD pipelines in GitHub, or IoT device telemetry).
+**When to use:** Use this pattern for bursts of webhook traffic that can overload your system. Examples include Stripe bulk operations, GitHub CI/CD pipelines, and IoT device telemetry.
 
-**Why this matters:** Without rate limiting, a flood of webhook requests can exhaust your database connections, fill up your execution queue, and cause legitimate requests to time out. Rate limiting with IP whitelisting gives you two layers of protection: you limit how fast requests can arrive, and you ensure they only come from known IP ranges.
+**Why this matters:** Webhook floods can exhaust database connections and fill the execution queue. Legitimate requests can then time out. Rate limits restrict request volume. IP whitelists restrict requests to known sources.
 
 **How it works:** You configure rate limits and allowed IP ranges in `sentinel.yaml`. Sentinel enforces these limits at the router level before your flow code runs.
 
@@ -109,15 +111,15 @@ webhooks:
       - 35.185.0.0/16    # IPs receive an immediate rejection.
 ```
 
-The `rps` (requests per second) value should be set based on your expected peak traffic with some headroom. If the external service documents their maximum event rate, use that as a starting point and add a 50% buffer. The `cidrs` list should come from the external service's documentation -- most providers publish their webhook source IP ranges.
+Set `rps` (requests per second) above the expected peak traffic. If the service documents a maximum rate, start with that rate and add a 50% buffer. Use the service's documented webhook source IP ranges for `cidrs`.
 
 ### Pattern: Webhook Replay with Retry
 
 **When to use:** When you need to handle webhook retries from external services that automatically resend failed deliveries. Stripe, for example, retries webhook deliveries for up to 72 hours if they do not receive a 2xx response. Your flow must handle receiving the same event multiple times without processing it twice.
 
-**Why this matters:** Without idempotency, a retried webhook could charge a customer twice, send duplicate emails, or create duplicate records. Idempotent processing ensures that no matter how many times the same event is delivered, the outcome is the same as processing it once.
+**Why this matters:** A retried webhook can repeat a charge, send duplicate emails, or create duplicate records. Idempotent processing gives the same result for repeated deliveries as for one delivery.
 
-**How it works:** You store a record of processed event IDs in your database. Before processing any event, you check whether it has already been handled. If so, you return success immediately without re-processing. This pattern is sometimes called "at-least-once delivery with deduplication."
+**How it works:** The database stores processed event IDs. Before it processes an event, the flow searches for its ID. If the ID exists, the flow returns success without repeating the work. This pattern is called "at-least-once delivery with deduplication."
 
 ```lua
 function setup()
@@ -160,19 +162,19 @@ function failed(err)
 end
 ```
 
-**Important implementation note:** Create the `processed_events` table with a UNIQUE constraint on `event_id`. This provides a second layer of protection against duplicate processing even under concurrent delivery. You should also periodically clean up old records from this table to prevent unbounded growth (see the Periodic Cleanup pattern later in this guide).
+Create the `processed_events` table with a UNIQUE constraint on `event_id`. This constraint helps prevent duplicate processing during concurrent delivery. Periodically delete old records to limit growth. The Periodic Cleanup pattern gives an example.
 
 ---
 
 ## Cron Patterns
 
-Cron triggers execute flows on a schedule. They are essential for any task that needs to happen at regular intervals: generating reports, cleaning up old data, checking service health, synchronizing external systems, or sending notifications. Sentinel uses standard cron expressions with optional timezone support.
+Cron triggers run flows on a schedule. Tasks include reports, data cleanup, service health tests, synchronization, and notifications. Sentinel uses standard cron expressions with optional timezones.
 
 Cron jobs run within the harness process. If the harness is stopped, scheduled jobs do not run and are not retroactively executed when the harness restarts. For critical scheduled tasks, consider adding monitoring to detect missed executions.
 
 ### Pattern: Daily Digest
 
-**When to use:** When you need to aggregate data over a time period and send a summary report. Common examples include daily sales reports, weekly error summaries, monitoring dashboards sent via email, or end-of-day reconciliation tasks.
+**When to use:** When you need to aggregate data over a time period and send a summary report. Common examples include daily sales reports, weekly error summaries, monitoring dashboards sent through email, or end-of-day reconciliation tasks.
 
 **Why this matters:** Digest emails reduce alert fatigue by consolidating many individual events into a single actionable summary. They are also useful for stakeholders who need regular updates but do not monitor dashboards in real time.
 
@@ -238,9 +240,9 @@ end
 
 ### Pattern: Health Check Ping
 
-**When to use:** When you need to verify that an external service (or your own API) is alive and responsive. Health checks are a fundamental monitoring pattern that helps you detect outages before your users do.
+**When to use:** When you need to make sure that an external service (or your own API) is alive and responsive. Health checks are a fundamental monitoring pattern that helps you detect outages before your users do.
 
-**Why this matters:** Proactive health checking means you can alert your team the moment a dependency becomes unavailable, rather than discovering the problem when users report errors. Combined with an alerting system, this pattern provides early warning for infrastructure issues.
+**Why this matters:** Regular health tests detect unavailable dependencies before users report errors. An alerting system can notify your team about those failures.
 
 ```lua
 function setup()
@@ -318,15 +320,15 @@ end
 
 ## Event Patterns
 
-Events are Sentinel's internal message bus for decoupling flows from each other. When one flow emits an event, any other flow that has registered a trigger for that event name will execute in response. Events are the backbone of event-driven architectures within Sentinel and are the recommended way to coordinate work across multiple flows and kits.
+Events provide an internal message bus between flows. When a flow emits an event, subscribed flows execute. Events coordinate work across flows and kits.
 
-Events differ from webhooks in an important way: webhooks are triggered by external HTTP requests, while events are triggered internally by other flows (or by form submissions). This makes events ideal for breaking complex workflows into smaller, focused steps that are easier to test, debug, and maintain independently.
+Webhooks come from external HTTP requests. Events come from flows or form submissions. Events let you split complex workflows into smaller steps that you can test and maintain independently.
 
 ### Pattern: Event Cascade
 
 **When to use:** When a single incoming action (like an order being placed) needs to trigger multiple independent follow-up tasks. Rather than putting all the logic in one monolithic flow, you break it into separate flows connected by events. Each flow handles one responsibility.
 
-**Why this matters:** Event cascades provide loose coupling between workflow steps. The order processing flow does not need to know about email sending, inventory checking, or statistics updates. Each downstream flow can be developed, tested, and deployed independently. If the email service is down, the inventory check still runs. If you add a new follow-up task (like fraud detection), you just add a new flow that listens for the same event -- no changes needed to existing flows.
+**Why this matters:** Event cascades separate workflow steps. An order flow does not need email, inventory, or statistics logic. Each subscribing flow can change independently. An email outage does not stop the inventory flow. A new subscriber can handle fraud detection without changes to existing flows.
 
 ```lua
 -- Flow 1: process-order.lua
@@ -417,9 +419,9 @@ function failed(err) end
 
 ### Pattern: Multi-Kit Coordination via Events
 
-**When to use:** When you have multiple kits that need to communicate with each other without being tightly coupled. For example, a billing kit might need to notify a notifications kit when a payment fails, or a user management kit might need to tell an analytics kit when a new user signs up.
+**When to use:** Use this pattern when separate kits need to communicate. A billing kit can notify another kit about a failed payment. A user management kit can notify an analytics kit about a new user.
 
-**Why this matters:** Kits are designed to be independent, reusable units of functionality. Direct function calls between kits would create tight coupling that defeats the purpose of the kit architecture. Events provide a clean boundary: a kit emits events about things it cares about, and other kits subscribe to the events they are interested in. You can add, remove, or replace kits without modifying others.
+**Why this matters:** Kits provide independent, reusable functions. Direct calls between kits couple their logic. Events provide a shared boundary. One kit emits an event, and other kits subscribe to it. You can add, remove, or replace kits independently.
 
 ```lua
 -- Kit: acme.billing / fl/payment-failed.lua
@@ -508,13 +510,13 @@ function failed(err) end
 
 ## Form Patterns
 
-Forms provide a way for human users to submit structured data into Sentinel workflows. When a form is submitted, Sentinel emits a kit-scoped event (`kf.{namespace}.{kit}.{form-stub}`) that can trigger one or more flows. Forms are defined as YAML files in the `fm/` directory of a kit and are rendered by the dashboard or served via the API.
+Forms provide a way for human users to submit structured data into Sentinel workflows. When a form is submitted, Sentinel emits a kit-scoped event (`kf.{namespace}.{kit}.{form-stub}`) that can trigger one or more flows. Forms are defined as YAML files in the `fm/` directory of a kit and are rendered by the dashboard or served through the API.
 
 Forms are particularly useful for building approval workflows, data entry interfaces, configuration panels, and any interaction that requires structured input from a human operator.
 
 ### Pattern: Multi-Step Form Workflow
 
-**When to use:** When a business process requires multiple stages of user input, such as an e-commerce checkout (cart review, then payment), an employee onboarding form (personal info, then department assignment, then equipment request), or any workflow where later steps depend on earlier input.
+**When to use:** Use this pattern when later forms depend on earlier user input. Examples include checkout steps, employee onboarding, and requests with multiple stages.
 
 **Why this matters:** Multi-step workflows break complex processes into manageable chunks. Each step can validate its own input, store intermediate state, and trigger the next step only when ready. This approach also allows different team members to handle different steps, and provides natural checkpoints for auditing.
 
@@ -615,7 +617,7 @@ WebSockets are ideal for scenarios where you need to push data to clients in rea
 
 ### Pattern: Real-Time Monitoring Dashboard
 
-**When to use:** When you need a live dashboard that updates as events happen in your system. Rather than having the dashboard poll the API every few seconds (which wastes resources and introduces latency), WebSocket connections allow the harness to push updates to connected dashboards the instant something changes.
+**When to use:** Use this pattern for dashboards that need live updates. WebSocket connections let the harness send changes directly to connected dashboards. This avoids frequent API polling and its delay.
 
 **Why this matters:** Real-time dashboards give operators immediate visibility into system behavior. They can watch flow executions as they happen, see errors the moment they occur, and monitor metrics without any delay. This is especially valuable during incident response, deployment rollouts, or when debugging production issues.
 
@@ -694,7 +696,7 @@ function failed(err) end
 
 **When to use:** When you need a structured content publishing process with draft, review, and publish stages. This is useful for team blogs, documentation sites, or any content that requires editorial review before going live.
 
-**Why this matters:** A publishing pipeline prevents accidental publication of unfinished content, provides an audit trail of who approved what, and allows multiple team members to work on content without stepping on each other's changes.
+**Why this matters:** A publishing pipeline helps prevent publication of unfinished content. It records approvals and lets team members edit without overwriting each other's changes.
 
 ```lua
 -- fl/publish-content.lua
@@ -748,9 +750,9 @@ Sentinel can manage Docker containers through the `/docker` API endpoints, enabl
 
 ### Pattern: Container Lifecycle Management
 
-**When to use:** When a flow needs to spin up a container for a task (like running a data pipeline, executing a build, or provisioning a temporary service), wait for it to complete, and clean up afterward.
+**When to use:** Use this pattern to start a task container, wait for completion, and remove it. Examples include data pipelines, builds, and temporary services.
 
-**Why this matters:** Containers provide isolated, reproducible environments for tasks that require specific dependencies or that should not affect the host system. By managing container lifecycles from flows, you can automate complex operational tasks that would otherwise require manual intervention or separate orchestration tools.
+**Why this matters:** Containers give tasks isolated environments with specific dependencies. Flows can manage these containers for operational tasks. This reduces manual work and the need for separate orchestration tools.
 
 ```lua
 -- fl/run-data-pipeline.lua
@@ -794,7 +796,7 @@ function failed(err) end
 
 ## Database Patterns
 
-Sentinel includes a built-in SQLite database for each SRE, accessible from flows via the `sn.db.*` API. These patterns address common data management challenges including transactional integrity, efficient pagination, and data migration.
+Sentinel includes a built-in SQLite database for each SRE, accessible from flows through the `sn.db.*` API. These patterns address common data management challenges including transactional integrity, efficient pagination, and data migration.
 
 ### Pattern: Multi-Step Atomic Transaction
 
@@ -898,9 +900,9 @@ Error handling is one of the most important aspects of building reliable automat
 
 ### Pattern: Graceful Degradation
 
-**When to use:** When your flow depends on an external service that might be unavailable, and you can provide a useful (if reduced) result using cached or default data. This pattern is appropriate when partial results are better than a complete failure.
+**When to use:** If cached or default data gives an acceptable result during an external service failure, use this pattern.
 
-**Why this matters:** Hard failures in one dependency should not cascade into failures across your entire system. By falling back to cached data or default values, your flow can continue providing value even during outages. This is especially important for user-facing flows where an error message is a much worse experience than slightly stale data.
+**Why this matters:** Cached data and default values can limit the effect of a dependency failure. They let a flow return useful results during an outage. For some user workflows, slightly stale data is preferable to an error.
 
 ```lua
 function setup() end
@@ -939,9 +941,9 @@ function failed(err) end
 
 ### Pattern: Exponential Backoff Retry
 
-**When to use:** When your flow needs to make an HTTP request or external call that might fail transiently. Transient failures include network timeouts, HTTP 502/503/504 errors, rate limiting, and brief service outages. Retrying with exponential backoff gives the external service time to recover without overwhelming it with rapid retries.
+**When to use:** Use this pattern for external calls that can fail temporarily. Examples include network timeouts, HTTP 502/503/504 errors, rate limits, and brief outages. Retries with exponential backoff give the service time to recover.
 
-**Why this matters:** Simple immediate retries can make problems worse by flooding a struggling service with additional requests. Exponential backoff (doubling the delay between each attempt) is a widely adopted best practice that balances recovery speed with system health. Many API providers explicitly recommend or require this pattern.
+**Why this matters:** Simple immediate retries can make problems worse by flooding a struggling service with more requests. Exponential backoff (doubling the delay between each attempt) is a widely adopted best practice that balances recovery speed with system health. Many API providers explicitly recommend or require this pattern.
 
 ```lua
 function setup() end
@@ -998,7 +1000,7 @@ Effective logging is essential for understanding what your flows do, diagnosing 
 
 ### Pattern: Structured Logging
 
-**When to use:** Always. Every flow should include structured log messages at key decision points. Structured logging means including relevant identifiers and values in every log message so that you can trace a specific execution through the system without ambiguity.
+**When to use:** Add structured logs at key decisions in every flow. Include identifiers and values that let you trace an execution through the system.
 
 **Why this matters:** Log messages like "Processing order" are nearly useless when you have hundreds of concurrent executions. Structured messages like "Processing order ord_12345 for customer cust_678" let you quickly filter and trace a specific workflow instance. Including the execution ID in logs allows you to correlate messages across flows that are part of the same logical operation.
 
@@ -1030,9 +1032,9 @@ function failed(err) end
 
 ### Pattern: Error Logging with Context
 
-**When to use:** Whenever your flow calls external services, processes user input, or performs operations that might fail. Wrapping risky operations in pcall() and logging the full context on failure gives you the information you need to diagnose problems without having to reproduce them.
+**When to use:** Use this pattern for external calls, user input, and other operations that can fail. Wrap risky operations in pcall(). Log the context when an operation fails.
 
-**Why this matters:** When a flow fails in production, the error message alone is often not enough to understand what went wrong. By logging the full context (which parameters were being processed, which step failed, what the execution ID was), you create a breadcrumb trail that makes debugging much faster.
+**Why this matters:** An error message can lack enough context to explain a failure. Parameters, the failed step, and the execution ID help operators diagnose the cause.
 
 ```lua
 function setup() end
@@ -1075,7 +1077,7 @@ Sentinel provides persistent state in the SQLite database that survives across e
 
 ### Pattern: Execution State
 
-**When to use:** When you want to track the progress of a flow execution through its stages. Use local variables to track the current step within an execution and log the step on failure. For state visible via the API, store progress in the database.
+**When to use:** When you want to track the progress of a flow execution through its stages. Use local variables to track the current step within an execution and log the step on failure. For state visible through the API, store progress in the database.
 
 **Why this matters:** When a flow fails, knowing which step it was on is the first question you need answered. By tracking the step in a local variable and logging it in the `failed()` handler, you get this information automatically.
 
@@ -1115,7 +1117,7 @@ end
 
 **When to use:** When you have a multi-flow workflow where separate flow executions need to share state. For example, a user login flow creates a session, and subsequent action flows need to reference that session. Since each flow execution gets its own `ctx`, you need a persistent mechanism (the database) to share state across executions.
 
-**Why this matters:** Real-world workflows often span multiple flow executions. A user might log in (flow 1), browse products (flow 2), add items to cart (flow 3), and check out (flow 4). The session concept ties these separate executions together into a coherent user journey.
+**Why this matters:** A user journey can span multiple flow executions. A user can log in, browse products, add items to a cart, and complete a purchase in separate flows. A session connects those executions.
 
 ```lua
 -- Flow 1: Start session
@@ -1176,7 +1178,7 @@ Testing your flows before deploying them to production is essential for reliabil
 
 ### Pattern: Mock External Services
 
-**When to use:** When you want to test your flow logic without making real API calls. This is important during development (to avoid consuming API quotas), in CI/CD pipelines (where external services may not be accessible), and when testing error handling paths (where you need to simulate failures).
+**When to use:** Use this pattern to test flow logic without live API calls. It limits API use during development. It also supports CI/CD without external services and tests with simulated failures.
 
 **Why this matters:** Tests that depend on external services are slow, unreliable, and often expensive. By pointing your flows at a mock server during testing, you get fast, deterministic tests that you can run anywhere. You can also simulate error conditions (timeouts, 500 errors, rate limits) that are difficult to trigger with real services.
 
@@ -1208,7 +1210,7 @@ MOCK_API="http://localhost:8081" ./sentinel harness start -p ./test-sre
 
 **When to use:** When your flow depends on specific data being present in the database. Fixtures create a known starting state so that your tests are deterministic and reproducible.
 
-**Why this matters:** Tests that depend on previous test runs or on manually-created data are fragile and hard to debug. Fixtures ensure that each test starts from a known state and cleans up after itself, preventing test pollution where one test's data affects another test's outcome.
+**Why this matters:** Tests with data from earlier runs can be fragile. Fixtures establish a known starting state and clean up afterward. This keeps one test's data from affecting another test.
 
 ```lua
 function test_process_order()
@@ -1242,7 +1244,7 @@ When your flows process large datasets or make many external calls, performance 
 
 ### Pattern: Batch Processing
 
-**When to use:** When your flow needs to process a large number of items (hundreds or thousands). Rather than inserting or processing items one at a time, batch processing groups them into chunks and processes each chunk in a transaction. This is dramatically faster for database operations because it reduces the number of transaction commits.
+**When to use:** When your flow needs to process many items (hundreds or thousands). Rather than inserting or processing items one at a time, batch processing groups them into chunks and processes each chunk in a transaction. This is dramatically faster for database operations because it reduces the number of transaction commits.
 
 **Why this matters:** SQLite (and most databases) have significant per-transaction overhead. Inserting 10,000 rows one at a time means 10,000 separate transactions, each with its own disk sync. Inserting them in batches of 100 means only 100 transactions, which can be 10-50x faster. Batching also reduces memory pressure because you only hold one batch in memory at a time.
 
@@ -1289,7 +1291,7 @@ function failed(err) end
 
 **When to use:** When your flow makes multiple HTTP requests to the same service in a loop. By reusing the same headers object and relying on HTTP keep-alive, you avoid the overhead of establishing a new TCP connection for each request.
 
-**Why this matters:** TCP connection setup (especially with TLS) adds significant latency to each request. Reusing connections via keep-alive can reduce per-request latency by 50-200ms. For a flow that makes 100 requests, that adds up to 5-20 seconds of saved time.
+**Why this matters:** TCP connection setup (especially with TLS) adds significant latency to each request. Reusing connections through keep-alive can reduce per-request latency by 50-200ms. For a flow that makes 100 requests, that adds up to 5-20 seconds of saved time.
 
 ```lua
 function setup() end
@@ -1335,6 +1337,6 @@ These patterns cover the most common scenarios you will encounter when building 
 4. **Log with context.** Include business identifiers, execution IDs, and step indicators in every log message.
 5. **Test in isolation.** Use mock services and database fixtures to make your tests fast, deterministic, and independent.
 6. **Batch for performance.** When processing large datasets, batch operations reduce transaction overhead dramatically.
-7. **Leverage WebSockets for real-time needs.** Push data to connected clients instead of having them poll.
+7. **Use WebSockets for real-time needs.** Push data to connected clients instead of having them poll.
 
-As your SRE grows, you will likely combine multiple patterns within a single flow. A webhook handler might use HMAC verification, exponential backoff retries for downstream calls, structured logging throughout, and batch processing for bulk operations. The patterns compose naturally because they each address a different concern.
+A flow can combine several patterns. A webhook handler can use HMAC verification, retries with exponential backoff, structured logs, and batch processing. Each pattern addresses a separate need.

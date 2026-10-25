@@ -1,10 +1,12 @@
 ---
 title: "fcms (file CMS) — Operator Guide"
-description: "Git-native file content in Sentinel: Markdown files in a kit’s ct/ directory are the source of truth."
+description: "How to manage Markdown content, use fcms APIs, render HTML, and configure content access."
 type: Guide
 tags: [cms, fcms]
 status: stable
 ---
+
+<!-- ndx-ste-mode: description -->
 
 # fcms (file CMS) — Operator Guide
 
@@ -12,7 +14,7 @@ status: stable
 > See [Content planes](/content-planes) for the full model.  
 > **Canonical routes:** `/fcms`, `/fcms/render`. **Legacy aliases:** `/cm`, `/ct` (deprecation window).
 
-Git-native file content in Sentinel: Markdown files in a kit’s `ct/` directory are the source of truth. The harness parses them into a local cache, exposes structured JSON over **`/fcms`** (alias `/cm`), renders public HTML over **`/fcms/render`** (alias `/ct`), and makes the same data available to kit pages and Lua flows.
+Markdown files in a kit’s `ct/` directory are the source of truth. The harness parses them into a local cache. **`/fcms`** (alias `/cm`) serves structured JSON. **`/fcms/render`** (alias `/ct`) renders public HTML. Kit pages and Lua flows can access the same content.
 
 **Audience:** operators, SRE maintainers, and integrators who run or proxy **fcms**-backed sites — not harness contributors.
 
@@ -80,8 +82,8 @@ sn.cms/                          # kit directory on disk: {namespace}.{kit_name}
 ### Slugs
 
 - Slug = path under `ct/` without `.md`, using `/` separators.
-- `ct/hello-world.md` → slug `hello-world`
-- `ct/guides/getting-started.md` → slug `guides/getting-started`
+- `ct/hello-world.md` → slug `hello-world`.
+- `ct/guides/getting-started.md` → slug `guides/getting-started`.
 
 Internal cache keys use the on-disk kit directory name (`sn.cms`). HTTP APIs expose the **slash form** `sn/cms/...` for operators.
 
@@ -89,7 +91,7 @@ Internal cache keys use the on-disk kit directory name (`sn.cms`). HTTP APIs exp
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `cms_full_html` | bool | `false` | Populate `full_html` on parsed entries (needed for `{{ safeHTML .post.full_html }}` in templates). Rebuilt on cold start; see [Hot reload](#hot-reload). |
+| `cms_full_html` | bool | `false` | Populate `full_html` on parsed entries (needed for `{{ safeHTML .post.full_html }}` in templates). Rebuilt on cold start. See [Hot reload](#hot-reload). |
 | `cms_render_cache_ttl_sec` | int | `0` (= harness default **300s**) | TTL for `/ct` HTML render cache entries. |
 | `cms_metadata` | map | — | Maps content folder → form name for metadata editors (`GET /cm/{ns}/{name}/_meta`). |
 
@@ -105,7 +107,7 @@ cms_metadata:
   guides: cms-guide
 ```
 
-There is **no** layout wrapper field in `kit.yaml` for CMS; layout is entirely in your `tp/*.gohtml` templates.
+There is **no** layout wrapper field in `kit.yaml` for CMS. Layout is entirely in your `tp/*.gohtml` templates.
 
 ---
 
@@ -142,7 +144,7 @@ Location: `{data_dir}/cms.db` (default `.sentinel/cms.db`). See [16-SENTINEL-DIR
 
 ### Startup and rebuild
 
-On harness start, the CMS builder walks all kits’ `ct/` trees and populates the `cms` bucket. If a kit is added or `ct/` changes while running, the project watcher updates parse entries and **invalidates** matching `render` keys for that slug (or the whole kit on ambiguous deletes).
+At startup, the CMS builder scans all kit `ct/` trees and fills the `cms` bucket. When a kit or its content changes, the watcher updates parse entries. It invalidates matching `render` keys for the slug. If a deletion is ambiguous, it invalidates the whole kit.
 
 ---
 
@@ -150,9 +152,9 @@ On harness start, the CMS builder walks all kits’ `ct/` trees and populates th
 
 ### Frontmatter
 
-Each `ct/**/*.md` file may start with YAML frontmatter (`---` delimiters). Known fields map to structured types; any other keys are preserved under `meta`.
+Each `ct/**/*.md` file can start with YAML frontmatter (`---` delimiters). Known fields map to structured types. Any other keys are preserved under `meta`.
 
-| Field | Required | Exposed via `/cm` | In Lua `sn.cms.get` |
+| Field | Required | Exposed through `/cm` | In Lua `sn.cms.get` |
 |-------|----------|-------------------|---------------------|
 | `title` | Recommended | Yes | Yes |
 | `slug` | No (filename is canonical) | Yes | Yes |
@@ -190,7 +192,7 @@ Editors and automation can mutate files on disk through the harness (still subje
 | Method | Path | Body / notes |
 |--------|------|----------------|
 | `POST` | `/cm/{ns}/{name}` | `{ "slug", "frontmatter", "markdown" }` — creates `ct/{slug}.md` |
-| `PUT` | `/cm/{ns}/{name}/{slug…}` | `{ "frontmatter", "markdown", "hash?" }` — optimistic concurrency via `hash` |
+| `PUT` | `/cm/{ns}/{name}/{slug…}` | `{ "frontmatter", "markdown", "hash?" }` — optimistic concurrency through `hash` |
 | `DELETE` | `/cm/{ns}/{name}/{slug…}` | Removes `ct/{slug}.md` (path-confined) |
 
 All CMS JSON endpoints return HTTP **200** with `{ "ok": true, ... }` or `{ "ok": false, "err": "CODE", "msg": "..." }`.
@@ -258,15 +260,15 @@ Returns a hierarchical tree of slugs for one kit (for file-tree UIs).
 GET /cm/sn/cms/_meta?folder=guides
 ```
 
-Uses `cms_metadata` in `kit.yaml`; falls back to `_default`. Response: `{ "ok": true, "form": "cms-guide" }` (empty string if unmapped).
+Uses `cms_metadata` in `kit.yaml`. Falls back to `_default`. Response: `{ "ok": true, "form": "cms-guide" }` (empty string if unmapped).
 
-Form field definitions for editors: `GET /fm/{kitDirName}/_def/{formName}` (still uses dot kit dir in the `fm` path, e.g. `sn.cms`).
+Form field definitions for editors: `GET /fm/{kitDirName}/_def/{formName}` (still uses dot kit dir in the `fm` path, for example `sn.cms`).
 
 ---
 
 ## `/ct` — fast HTML rendering
 
-Renders cached Markdown through a named kit template **without starting the Lua VM**. Frontmatter is converted to Go template data; the primary variable is `.post` (same shape as `sn.cms.get` in Lua).
+Renders cached Markdown through a named kit template **without starting the Lua VM**. Frontmatter is converted to Go template data. The primary variable is `.post` (same shape as `sn.cms.get` in Lua).
 
 ### Route pattern
 
@@ -278,7 +280,7 @@ GET /ct/{namespace}/{kit_name}/{template}/{slug…}
 |---------|----------|-------|
 | `namespace`, `kit_name` | Yes | Slash form (`sn/cms`) |
 | `template` | Yes | Basename of `tp/{template}.gohtml` — **no default** |
-| `slug…` | Yes | Content path under `ct/` (may contain slashes) |
+| `slug…` | Yes | Content path under `ct/` (can contain slashes) |
 
 Missing template or unknown slug → **HTML error page** (embedded error templates), not JSON.
 
@@ -343,21 +345,21 @@ Kit UI pages are defined under `pg/` and served at `/kt/{ns}/{name}/{page}`.
 
 Every page must provide non-empty strings:
 
-- `name` — page id and default template basename (`tp/{name}.gohtml`)
-- `path` — HTTP path (may include kit prefix, e.g. `/kt/sn/cms/render`)
-- `title` — human title
+- `name` — page id and default template basename (`tp/{name}.gohtml`).
+- `path` — HTTP path (can include kit prefix, for example `/kt/sn/cms/render`).
+- `title` — human title.
 
 | Source | When validated |
 |--------|----------------|
 | YAML only | At kit load (discovery) |
 | Lua only | At first render (after merge) |
-| YAML + Lua | YAML must be valid if present; full contract after merge at render |
+| YAML + Lua | YAML must be valid if present. Full contract after merge at render |
 
 Contract failures on `/kt/...` return an **HTML error page** (same family as static file errors), not JSON.
 
 ### `pg/*.lua` merge
 
-The merge script runs in the **page variable sandbox** (not a full flow): `page`, `ctx`, `sn.cms`, `sn.json`, and `ctx.db` when the kit has a database — but **no flow invocation**.
+The merge script runs in the **page variable sandbox**. It has `page`, `ctx`, `sn.cms`, and `sn.json`. A kit with a database also has `ctx.db`. The script cannot invoke flows.
 
 Patterns:
 
@@ -393,7 +395,7 @@ variables:
     return sn.cms.get(slug)
 ```
 
-Prefer **`/ct/...`** for public post pages when you do not need Lua; keep `/kt/...` for authenticated or highly dynamic views.
+Prefer **`/ct/...`** for public post pages when you do not need Lua. Keep `/kt/...` for authenticated or highly dynamic views.
 
 ---
 
@@ -401,7 +403,7 @@ Prefer **`/ct/...`** for public post pages when you do not need Lua; keep `/kt/.
 
 - CMS JSON routes follow the same harness auth model as the rest of the API (Bearer token in production). See [Configuration Guide](/configuration-guide).
 - `/ct` HTML responses are typically **public** when mounted behind a site reverse proxy — restrict at the edge if content is non-public.
-- `agent_context` is for AI/editor tooling in Lua and raw mode only; do not rely on its absence in Lua if untrusted code can run in flows.
+- `agent_context` is for AI/editor tooling in Lua and raw mode only. Do not rely on its absence in Lua if untrusted code can run in flows.
 
 ---
 
@@ -444,7 +446,7 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 
 ### Hot reload
 
-- Saving `ct/**/*.md` updates the parse cache via the project watcher.
+- Saving `ct/**/*.md` updates the parse cache through the project watcher.
 - `full_html` is **not** regenerated on hot reload when `cms_full_html` is true — only on cold start. Restart harness after bulk content imports if you depend on `full_html`.
 - `/ct` render cache entries for the changed slug are invalidated automatically.
 
@@ -454,13 +456,13 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 
 | Symptom | Likely cause | Fix |
 |---------|----------------|-----|
-| `CMS.UNAVAILABLE` | No SRE root or cache failed to open | Check harness logs; verify `.sentinel/cms.db` not locked by another process (`sentinel ps`) |
-| `CMS.NOT_FOUND` | Slug typo or file not under `ct/` | `GET /cm` to list slugs; confirm path |
-| `/ct` 404 HTML “template missing” | No `tp/{template}.gohtml` | Add template; template name in URL is required |
+| `CMS.UNAVAILABLE` | No SRE root or cache failed to open | Check harness logs. Make sure that another process does not lock `.sentinel/cms.db` (`sentinel ps`) |
+| `CMS.NOT_FOUND` | Slug typo or file not under `ct/` | `GET /cm` to list slugs. Examine the path |
+| `/ct` 404 HTML “template missing” | No `tp/{template}.gohtml` | Add template. Template name in URL is required |
 | `/ct` empty `post` | `cms_full_html: false` and template expects `full_html` | Enable flag and restart, or use `sections` / `preamble` |
 | `/kt` HTML “page contract invalid” | Missing `name`/`path`/`title` after merge | Fix YAML or `pg/*.lua` return table |
 | Stale public HTML | Render cache within TTL | Lower TTL, touch file, or wait |
-| `cms.db` huge | Many kits/slugs | Normal; delete file to compact after cleanup |
+| `cms.db` huge | Many kits/slugs | Normal. Delete file to compact after cleanup |
 
 ---
 
@@ -475,10 +477,10 @@ When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remo
 | Constraint | Rationale |
 |------------|-----------|
 | No Lua in Markdown frontmatter | Predictable parse cost at scale |
-| No default `/ct` template | Explicit routing; proxies stay unambiguous |
+| No default `/ct` template | Explicit routing. Proxies stay unambiguous |
 | No global layout in `kit.yaml` | Layout lives in `tp/*.gohtml` per site design |
 | Slash kit paths in `/cm` and `/ct` | Matches `/kt/{ns}/{name}` mental model |
-| Parse vs render cache split | JSON/API can update without storing HTML; `/ct` stays fast |
+| Parse vs render cache split | JSON/API can update without storing HTML. `/ct` stays fast |
 
 ---
 

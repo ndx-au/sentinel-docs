@@ -31,3 +31,7 @@ Old numeric filename (~/code/sentinel/docs/) → new slug (sn.docs/ct/). Maintai
 - README.md: index
 - agentic-ai-uat.md: agentic-ai-uat
 <!-- MAP-END -->
+
+## Additional guides
+
+- [Security readiness and shared responsibility](security-readiness.md)

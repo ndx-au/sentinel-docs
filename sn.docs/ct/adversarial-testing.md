@@ -1,28 +1,30 @@
 ---
 title: "Adversarial Testing & Probe Runner"
-description: "Adversarial testing is the practice of deliberately trying to break your system to find bugs before your users do."
+description: "How to probe Sentinel APIs, test their contracts, find security vulnerabilities, and test the harness under load."
 type: Guide
 tags: [testing]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Adversarial Testing & Probe Runner
 
 ## Introduction
 
-Adversarial testing is the practice of deliberately trying to break your system to find bugs before your users do. Sentinel includes a built-in adversarial testing framework designed to systematically probe every API endpoint, validate the API contract, discover security vulnerabilities, and stress-test the harness under load.
+Adversarial testing deliberately tries to break a system before users find its bugs. Sentinel includes tools that probe API endpoints and test the API contract. The tools also find security vulnerabilities and test the harness under load.
 
 ### Testing Philosophy
 
 Traditional testing (unit tests, integration tests) verifies that your system works correctly when used as intended. Adversarial testing goes further: it verifies that your system behaves correctly (or at least safely) when used incorrectly, maliciously, or under extreme conditions. This includes:
 
-- **Malformed input** -- What happens when a client sends invalid JSON, wrong content types, or missing required fields? The harness should return a structured error, not crash or leak stack traces.
-- **Boundary conditions** -- What happens with empty strings, zero-length arrays, extremely long inputs, negative numbers, or Unicode characters? The harness should handle these gracefully.
-- **Path traversal attacks** -- Can a client read files outside the SRE directory by manipulating URL paths (e.g., `/cm/../../etc/passwd`)? This must never succeed.
+- **Malformed input** -- A client sends invalid JSON, wrong content types, or requests with missing fields. The expected response is a structured error. The harness must not crash or expose stack traces.
+- **Boundary conditions** -- Tests use empty strings, empty arrays, long inputs, negative numbers, and Unicode characters. The harness must handle these inputs safely.
+- **Path traversal attacks** -- Can a client read files outside the SRE directory by manipulating URL paths (for example `/cm/../../etc/passwd`)? This must never succeed.
 - **Concurrent access** -- What happens when 20 clients simultaneously submit flow executions? Does the harness maintain consistency?
 - **Authentication bypass** -- Do protected endpoints actually reject unauthenticated requests? Do auth-exempt routes work without tokens?
 
-The adversarial testing framework automates these checks across all API endpoints, producing structured results that can be integrated into CI/CD pipelines.
+The adversarial framework automates API probes. It produces structured results for CI/CD pipelines.
 
 ### Two Approaches
 
@@ -88,7 +90,7 @@ TOTAL              5     5     0     0
 All 8 probes passed.
 ```
 
-A "PASS" means the harness responded correctly according to the API contract. A "FAIL" means the harness violated the contract (returned a non-200 status code, returned invalid JSON, returned file system contents for a traversal attempt, etc.).
+A "PASS" means that the response meets the API contract. A "FAIL" means that it violates the contract. Violations include non-200 status codes, invalid JSON, and restricted file contents from traversal requests.
 
 ---
 
@@ -114,23 +116,23 @@ Flags:
 - `-feature` -- Which set of probes to run. Each feature corresponds to a group of API endpoints. Use `all` to run everything.
 - `-concurrent` -- How many probes to run simultaneously. Higher values stress-test the harness's concurrency handling. Start with 1 for debugging, increase to 5-20 for stress testing.
 - `-timeout` -- Maximum time to wait for each probe's HTTP response. Increase this if probing a slow or remote harness.
-- `-token` -- Bearer token for probing a harness in production mode. Without this, authenticated endpoints will return AUTH.REQUIRED errors (which may be the expected behavior you are testing).
+- `-token` -- Bearer token for probing a harness in production mode. Without this, authenticated endpoints will return AUTH.REQUIRED errors (this can be the expected result for your test).
 - `-jsonl` -- Output one JSON object per line instead of the formatted table. Use this for piping results to scripts, log aggregators, or CI/CD systems.
 
 ### Available Features
 
-Each feature corresponds to a group of API endpoints and generates probes across multiple categories (happy path, boundary, malformed, traversal, etc.):
+Each feature corresponds to a group of API endpoints and generates probes across categories such as happy path, boundary, malformed, and traversal:
 
 | Feature | What It Tests | Probe Count | Description |
 |---------|--------------|-------------|-------------|
-| `health` | `/hl`, `/hl/kt`, `/hl/reload`, `/hl/kt/{ns}/{name}/rl\|off\|on`, `/api/config` | 8 | Harness health, kit inventory (`on` field), full SRE reload, per-kit lifecycle (uses `sn.probe` on test SRE), and config status. |
+| `health` | `/hl`, `/hl/kt`, `/hl/reload`, `/hl/kt/{ns}/{name}/rl\|off\|on`, `/api/config` | 8 | Harness health, kit inventory (`on` field), full SRE reload, per-kit lifecycle (uses `sn.probe` on test SRE), and configuration status. |
 | `flows` | `/fl`, `/fl/{id}/run`, `/ex`, `/ex/{id}` | 10 | Flow listing, execution, execution history, and execution detail. Tests both successful execution and error cases (nonexistent flows, malformed parameters). |
 | `secrets` | `/sc` CRUD, upsert, malformed input | 8 | Vault operations: creating, reading, updating, and deleting secrets. Tests for SQL injection in secret names, oversized values, and idempotent upsert behavior. |
 | `triggers` | `/tr` CRUD, invalid types, empty fields | 7 | Trigger management: creating cron and event triggers, listing, deletion. Tests invalid cron expressions, empty trigger names, and nonexistent trigger IDs. |
 | `forms` | `/fm` list, render, submissions, stats | 5 | Form system: listing forms, rendering form HTML, submitting form data, and querying submission statistics. |
 | `cms` | `/cm` list, get, traversal attempts | 4 | CMS content: listing entries, fetching by slug, and path traversal attacks attempting to read files outside the CMS directory. |
 | `source` | `/src/*` read, write, traversal | 4 | Source file management: reading and writing SRE source files, with traversal probes attempting to escape the SRE directory. |
-| `config` | `/cfg/project` read/write | 2 | Project configuration: reading and writing sentinel.yaml settings. |
+| `config` | `/cfg/project` read/write | 2 | Project configuration: reading and writing sentinel.yaml configuration. |
 | `kits` | `/kt/{ns}/{name}` pages, assets, traversal | 3 | Kit serving: fetching kit pages, static assets, and traversal probes attempting to leak kit.yaml or escape the kit directory. |
 | `webhooks` | `/wh/*` unknown hooks, traversal, large payload | 4 | Webhook handling: posting to nonexistent webhook paths, path traversal through webhook URLs, and oversized payload handling. |
 | `all` | Everything above | ~55 | Runs all probe sets. This is the recommended option for full regression testing. |
@@ -141,7 +143,7 @@ Each feature corresponds to a group of API endpoints and generates probes across
 
 ### Test a Single Feature
 
-When you are working on a specific area of the codebase, run only the relevant probes to get fast feedback:
+For changes in one area, run only the relevant probes:
 
 ```bash
 # After modifying flow execution handlers
@@ -156,7 +158,7 @@ When you are working on a specific area of the codebase, run only the relevant p
 
 ### Test Against a Remote Harness
 
-Probe a staging or production harness to verify it is configured correctly:
+To make sure that a staging or production harness has the correct configuration, run these probes:
 
 ```bash
 # Probe a staging server (no authentication)
@@ -181,7 +183,7 @@ Use the `-concurrent` flag to test how the harness handles simultaneous requests
 
 ### Machine-Readable Output (JSONL)
 
-JSONL (JSON Lines) output produces one JSON object per line, making it easy to process with standard Unix tools:
+JSONL (JSON Lines) writes one JSON object per line. Standard Unix tools can process this output:
 
 ```bash
 # Save results to a file
@@ -226,7 +228,7 @@ The final line is always a summary:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Probe identifier (e.g., `HL-001`, `FL-003`). The prefix indicates the feature area. |
+| `id` | string | Probe identifier (for example `HL-001`, `FL-003`). The prefix indicates the feature area. |
 | `cat` | string | Probe category: happy, boundary, malformed, auth, traversal, concurrency, state, format |
 | `method` | string | HTTP method used (GET, POST, PUT, DELETE) |
 | `path` | string | Endpoint path that was probed |
@@ -234,9 +236,9 @@ The final line is always a summary:
 | `http` | int | HTTP status code received from the harness |
 | `ok` | bool | Parsed `ok` field from response body, if present |
 | `err` | string | Error code from response body, or probe-level error description |
-| `msg` | string | Error message for additional context |
+| `msg` | string | Error message for more context |
 | `ms` | int | Latency in milliseconds from request sent to response received |
-| `detail` | string | Additional context for failures (what was expected vs. what was received) |
+| `detail` | string | More context for failures (what was expected compared with what was received) |
 
 ---
 
@@ -248,7 +250,9 @@ Every endpoint is tested across multiple categories. Each category targets a dif
 
 **What it tests:** Standard, correct usage of the endpoint. Does the endpoint work as documented when given valid inputs?
 
-**Why it matters:** Happy path failures indicate fundamental bugs -- the endpoint does not work at all, even under ideal conditions. These should be fixed first.
+**Why it matters:** Happy path failures indicate that the endpoint fails under normal conditions.
+
+Fix these failures first.
 
 **Examples:**
 ```bash
@@ -275,7 +279,7 @@ SC-008: POST /sc with name=500 chars -> should accept or reject with clear error
 
 **What it tests:** Invalid JSON, wrong content types, missing required fields, garbage data. These simulate clients that send broken requests, either due to bugs in the client code or deliberate fuzzing.
 
-**Why it matters:** Malformed input probes ensure the harness does not crash, panic, or leak internal error details when receiving garbage. Every malformed request should receive a clean `{ok: false, err: "REQUEST.INVALID", msg: "..."}` response.
+**Why it matters:** Malformed input probes test for crashes, panics, and exposed internal errors. Each malformed request must receive a structured `{ok: false, err: "REQUEST.INVALID", msg: "..."}` response.
 
 **Examples:**
 ```
@@ -288,7 +292,7 @@ TR-005: POST /tr with raw text -> should return error
 
 **What it tests:** Authentication enforcement. Do protected endpoints reject unauthenticated requests? Do auth-exempt routes (like the health endpoint) work without tokens?
 
-**Why it matters:** Authentication bugs are security vulnerabilities. An endpoint that should require authentication but does not is an open door for unauthorized access.
+**Why it matters:** Authentication bugs permit unauthorized access. A protected endpoint must reject requests without valid authentication.
 
 **How to test both modes:**
 ```bash
@@ -301,9 +305,11 @@ TR-005: POST /tr with raw text -> should return error
 
 ### Traversal
 
-**What it tests:** Path injection and directory escape attempts. These probes attempt to read files outside the intended scope by manipulating URL paths with `..`, URL-encoded characters, and other traversal techniques.
+**What it tests:** Path injection and directory escape attempts. These probes try to read files outside the intended scope by manipulating URL paths with `..`, URL-encoded characters, and other traversal techniques.
 
-**Why it matters:** Path traversal is a critical security vulnerability. If any traversal probe succeeds (returns file contents it should not), it must be fixed immediately. These probes test both raw traversal (`../../etc/passwd`) and encoded traversal (`..%2F..%2Fetc%2Fpasswd`).
+**Why it matters:** Path traversal can expose restricted files. These probes test raw traversal (`../../etc/passwd`) and encoded traversal (`..%2F..%2Fetc%2Fpasswd`).
+
+If a traversal probe exposes restricted files, fix the vulnerability immediately.
 
 **Examples:**
 ```
@@ -314,13 +320,15 @@ KT-002: GET /kt/../../etc/hosts         -> must NOT return /etc/hosts
 KT-003: GET /kt/sn/probe/pb/../../kit.yaml -> must NOT leak kit.yaml
 ```
 
-**A traversal probe "PASS" means the harness correctly blocked the attempt.** A "FAIL" means the harness returned contents it should not have -- this is a security vulnerability that must be fixed immediately.
+**A traversal probe "PASS" means that the harness blocked the request.** A "FAIL" means that the harness returned restricted contents.
+
+If a traversal probe fails, fix the vulnerability immediately.
 
 ### State
 
-**What it tests:** Operations that depend on system state: querying nonexistent resources, deleting already-deleted items, operating on resources that were just created or modified by another probe.
+**What it tests:** Probes query nonexistent resources, delete items twice, and access resources that another probe just created or modified.
 
-**Why it matters:** State-related bugs often manifest as panics, null pointer dereferences, or inconsistent error messages. A harness should return clean error responses for nonexistent resources, not crash or return confusing errors.
+**Why it matters:** State errors can cause panics, null pointer dereferences, or inconsistent messages. For nonexistent resources, the harness must return structured errors.
 
 **Examples:**
 ```
@@ -406,14 +414,14 @@ Flags:
 
 For AI-assisted development, the `/sn-go-adversarial` skill enables autonomous test-debug-fix cycles. When an agent (such as Claude) is given a directive like "test the webhook system," it performs a complete adversarial testing cycle without human intervention:
 
-1. **Discovers** the API surface for the specified feature by reading handler code and route registrations
-2. **Scaffolds** a test fixture kit (`sn.probe/`) in the test SRE if one does not already exist
-3. **Generates** probes across all 8 categories, tailored to the specific endpoints
-4. **Executes** probes via HTTP requests against the running harness
-5. **Diagnoses** failures by reading the handler source code and correlating with the error response
-6. **Fixes** bugs with minimal, focused patches to the handler code
-7. **Re-probes** to verify that the fix resolved the issue without introducing new failures
-8. **Reports** structured results with a summary table and detailed findings
+1. **Discovers** the API surface for the specified feature by reading handler code and route registrations.
+2. **Scaffolds** a test fixture kit (`sn.probe/`) in the test SRE if one does not already exist.
+3. **Generates** probes across all 8 categories, tailored to the specific endpoints.
+4. **Executes** probes through HTTP requests against the running harness.
+5. **Diagnoses** failures by reading the handler source code and correlating with the error response.
+6. **Fixes** bugs with minimal, focused patches to the handler code.
+7. **Re-probes** to make sure that the fix resolved the issue without introducing new failures.
+8. **Reports** structured results with a summary table and detailed findings.
 
 ### Using the Skill
 
@@ -430,7 +438,7 @@ The agent handles the entire cycle autonomously. It reads source code to underst
 
 ### Test Fixture Kit: sn.probe
 
-The adversarial system uses a standardized test kit that provides predictable targets for probes. Having known-good and known-bad flows ensures that probe assertions can be precise (e.g., "this flow should always succeed" or "this flow should always fail with a specific error").
+The adversarial system uses a standard test kit with predictable targets. Flows with known results support precise assertions. Example assertions include "this flow must always succeed" and "this flow must always fail with a specific error".
 
 ```
 sn.probe/
@@ -497,7 +505,7 @@ The probe runner is designed for CI/CD integration. The following examples show 
 
 ### Basic Health Check (Post-Deployment Verification)
 
-Run this script immediately after deploying a new version to verify the harness is healthy:
+After you deploy a new version, run this script to make sure that the harness is healthy:
 
 ```bash
 #!/bin/bash
@@ -647,7 +655,7 @@ sentinel harness start -p ./my-sre
 curl -N http://localhost:8080/lg/live
 ```
 
-This setup lets you verify API correctness (probes), observe real-time behavior (simulator), and monitor the system's log output (live logs) all at once.
+Probes test API correctness. The simulator shows activity, and live logs show harness events. You can use all three together.
 
 ---
 
@@ -664,7 +672,7 @@ The probe runner is designed to be extended when new endpoints are added to the 
 
 2. **Register it in the `generateProbes()` switch statement** so it is included when `-feature foo` or `-feature all` is specified.
 
-3. **Use the assertion helpers** to validate responses:
+3. **Use the assertion helpers** to test responses:
 
 ```go
 func (r *ProbeRunner) fooProbes() []Probe {
@@ -696,16 +704,16 @@ func (r *ProbeRunner) fooProbes() []Probe {
 | Helper | What It Checks | When to Use |
 |--------|---------------|-------------|
 | `assertHTTP200JSON()` | HTTP 200 + valid JSON (object or array) | For endpoints that return data without an `ok` field |
-| `assertOKResponse()` | HTTP 200 + `{ok: true}` | For endpoints that should succeed |
-| `assertErrorResponse()` | HTTP 200 + `{ok: false}` | For probes that should trigger an error (malformed input, nonexistent resource) |
-| `assertOKWithField(f)` | HTTP 200 + `{ok: true, f: ...}` | For endpoints that should return a specific field |
+| `assertOKResponse()` | HTTP 200 + `{ok: true}` | For endpoints with an expected success result |
+| `assertErrorResponse()` | HTTP 200 + `{ok: false}` | For probes with an expected error (malformed input, nonexistent resource) |
+| `assertOKWithField(f)` | HTTP 200 + `{ok: true, f: ...}` | For endpoints with a required response field |
 | Custom function | Any custom validation logic | For traversal checks, specific error code validation, response body content checks |
 
 ---
 
 ## Error Codes Reference
 
-Probes validate against these error codes from the API contract. When a probe expects an error response, it checks that the error code matches the expected value for that type of request:
+Probes test error codes from the API contract. If a probe expects an error, it compares the returned code with the expected code:
 
 | Code | Meaning | Typical Trigger |
 |------|---------|-----------------|
@@ -736,7 +744,9 @@ For the complete and authoritative list, see `system-specs/errors.yaml`.
 Harness not reachable at http://localhost:8080
 ```
 
-The harness is not running, or it is running on a different port. Start it first and verify it responds:
+The harness is stopped or uses a different port.
+
+Start the harness. Make sure that it responds:
 
 ```bash
 sentinel harness start -p /path/to/sre
@@ -750,16 +760,18 @@ If it is on a different port:
 
 ### Probes Fail With "connection error"
 
-The harness crashed or became unresponsive during probing. This often happens when running stress tests with high concurrency. Check the harness logs for panics or errors:
+The harness crashed or stopped responding during the probes. High concurrency can cause this failure.
+
+Examine the harness logs for panics or errors:
 
 ```bash
 sudo journalctl -u sentinel --since "5 minutes ago"
 ```
 
 Common causes:
-- Concurrent stress probes overwhelming the harness (reduce `-concurrent`)
-- A probe triggered a panic in handler code (this is itself a bug to fix)
-- The harness ran out of file descriptors (increase `LimitNOFILE` in systemd service)
+- Concurrent stress probes overwhelming the harness (reduce `-concurrent`).
+- A probe triggered a panic in handler code (this is itself a bug to fix).
+- The harness ran out of file descriptors (increase `LimitNOFILE` in systemd service).
 
 Reduce concurrency and re-run:
 ```bash
@@ -768,10 +780,12 @@ Reduce concurrency and re-run:
 
 ### Traversal Probes Show "FAIL"
 
-**This is a security vulnerability.** If a traversal probe fails, it means the harness returned file system contents it should not have. The probe's `detail` field explains what was returned. Check the probe detail, identify which handler is vulnerable, and fix it immediately. Common fixes include:
-- Adding `filepath.Clean()` and checking for `..` in paths
-- Ensuring all path operations are relative to the SRE root
-- Using `filepath.Rel()` to verify the resolved path is within bounds
+**This is a security vulnerability.** A failed traversal probe means that the harness returned restricted filesystem contents. The `detail` field identifies the contents.
+
+Read the probe detail. Identify the vulnerable handler. Fix the handler immediately. Common fixes include:
+- Adding `filepath.Clean()` and checking for `..` in paths.
+- Ensuring all path operations are relative to the SRE root.
+- Use `filepath.Rel()` to make sure that the resolved path stays within bounds.
 
 ### Many "FAIL" on Auth Probes in Debug Mode
 
@@ -788,7 +802,7 @@ print('Mode:', d.get('mode', 'unknown'))
 
 ### JSONL Output Has Unexpected Format
 
-Ensure you are using the `-jsonl` flag and separating stdout from stderr:
+Use the `-jsonl` flag. Separate stdout from stderr:
 
 ```bash
 # Correct: redirect only stdout, discard stderr

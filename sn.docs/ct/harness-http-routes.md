@@ -1,14 +1,16 @@
 ---
 title: "Harness HTTP route reference"
-description: "This document is the canonical catalog of HTTP paths the Sentinel harness exposes on api.port (default 8080)."
+description: "Reference for harness HTTP route prefixes, default kit behavior, keyhole configuration, and dashboard proxy mappings."
 type: Reference
 tags: [api, routes]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Harness HTTP route reference
 
-This document is the **canonical catalog** of HTTP paths the Sentinel harness exposes on `api.port` (default `8080`). It complements [HTTP API Reference](/api-reference), which focuses on usage examples and payloads; this page focuses on **route prefixes** and how they interact with **default kit** and **keyhole** settings.
+This document lists HTTP paths on `api.port` (default `8080`). [HTTP API Reference](/api-reference) gives usage examples and payloads. This page describes route prefixes, the default kit, and keyhole configuration.
 
 ---
 
@@ -46,9 +48,9 @@ These interact **only when** `sentinel.yaml` sets **`default_kit`** (namespace +
 |-----------|-------------------------|--------|
 | **`blocked`** (default when empty) | **Not** mounted on the root router | The default kit owns **`GET /*`** for public pages. **`GET /hl/kt`** is still registered so APIs and the dashboard can list kits. |
 | **`header`** | Mounted, but **`X-Sentinel-Keyhole`** + Bearer required | Lets operators hit `/kt/...` URLs while keeping public traffic on the default kit. |
-| **Prefix** (e.g. `"_"`) | Mounted under **`/{prefix}/kt/...`** | Normal kit URLs move under the prefix; root stays with the default kit. |
+| **Prefix** (for example `"_"`) | Mounted under **`/{prefix}/kt/...`** | Normal kit URLs move under the prefix. Root stays with the default kit. |
 
-Without `default_kit`, the harness registers full kit routes at **`/kt/...`** as usual; `keyhole` still resolves internally but the default-kit catch-all is not used.
+Without `default_kit`, the harness registers full kit routes at **`/kt/...`** as usual. `keyhole` still resolves internally but the default-kit catch-all is not used.
 
 ---
 
@@ -96,26 +98,26 @@ Git-native Markdown content in kit `ct/` directories (**fcms** plane). Slash kit
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/fcms` (alias `/cm`) | List all content slugs |
-| GET | `/fcms/{ns}/{name}/*` (alias `/cm/...`) | Parsed content (JSON); `?raw=1` for editor round-trip |
+| GET | `/fcms/{ns}/{name}/*` (alias `/cm/...`) | Parsed content (JSON). `?raw=1` for editor round-trip |
 | GET | `/fcms/{ns}/{name}/_tree` | Hierarchical slug tree |
 | GET | `/fcms/{ns}/{name}/_meta` | Folder → form name (`cms_metadata`) |
 | POST | `/fcms/{ns}/{name}` | Create `ct/{slug}.md` |
 | PUT | `/fcms/{ns}/{name}/*` | Update content |
 | DELETE | `/fcms/{ns}/{name}/*` | Delete content |
-| GET | `/fcms/render/{ns}/{name}/{template}/*` (alias `/ct/...`) | Render HTML via `tp/{template}.gohtml` (no Lua VM) |
+| GET | `/fcms/render/{ns}/{name}/{template}/*` (alias `/ct/...`) | Render HTML through `tp/{template}.gohtml` (no Lua VM) |
 
 Full operator guide: [17-SENTINEL-CMS.md](/sentinel-cms). Content planes: [24-CONTENT-PLANES.md](/content-planes).
 
 ## ccms — collection CMS (`/ccms`)
 
-Postgres collections via Graphile (default host port **1880**). Independent of fcms content cache.
+Postgres collections through Graphile (default host port **1880**). Independent of fcms content cache.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/ccms/status` | Data plane + migrations + pub form count |
 | GET | `/ccms/forms` | Live shippable form catalog |
 | GET | `/ccms/{ns}/{name}/forms/{form}` | Editor form (HTML) or JSON (`?fmt=json`) |
-| POST | `/ccms/{ns}/{name}/forms/{form}` | Submit via Graphile (fail closed if Graphile down) |
+| POST | `/ccms/{ns}/{name}/forms/{form}` | Submit through Graphile (fail closed if Graphile down) |
 | GET | `/ccms/{ns}/{name}/forms/{form}/list` | Minimal list/browse surface |
 
 CLI: `sentinel ccms migrate|validate|status|install-refkit`.
@@ -124,7 +126,7 @@ CLI: `sentinel ccms migrate|validate|status|install-refkit`.
 
 ## MCP operator status (`GET /mcp`)
 
-Read-only snapshot of the optional MCP sidecar (`sentinel harness start --mcp`). Always HTTP 200 with `{ok: true, ...}`. Returns the full tool/resource/prompt catalog even when `enabled` is false so operators can inspect the ceiling. Never includes bearer tokens, vault values, or occupy license keys.
+This endpoint returns a read-only snapshot of the optional MCP sidecar (`sentinel harness start --mcp`). It returns HTTP 200 with `{ok: true, ...}`. The tool, resource, and prompt catalog remains visible when `enabled` is false. Operators can inspect the risk ceiling. The response excludes bearer tokens, vault values, and occupy license keys.
 
 The dashboard page `GET /mcp` and BFF `GET /api/dashboard/mcp` proxy this payload. Details: [MCP Agent Integration](/mcp-agent-integration).
 
@@ -142,7 +144,7 @@ The dashboard page `GET /mcp` and BFF `GET /api/dashboard/mcp` proxy this payloa
 | `/bk/*` | Backups |
 | `/src/*` | Source file API |
 | `/schema/*` | Schema helpers |
-| `/cfg/*` | Config API |
+| `/cfg/*` | Configuration API |
 | `/fs/pl`, `/fs/test` | Filesystem access policies (FS Control) |
 | `/mk/*` | Marketplace (SKM) |
 | `/cert/*` | TLS CA / server cert distribution |
@@ -155,19 +157,19 @@ The dashboard page `GET /mcp` and BFF `GET /api/dashboard/mcp` proxy this payloa
 
 The standalone dashboard rewrites friendly paths to harness brevity paths (see `internal/dashboard/proxy.go`). Examples:
 
-- `/api/flows` → `/fl`
-- `/api/executions` → `/ex`
-- `/api/health` → `/hl`
-- `/api/kt` or `/api/k` → `/hl/kt`
-- `/api/dashboard/mcp` → `/mcp`
-- `/api/fs/*` → `/fs/*`
+- `/api/flows` → `/fl`.
+- `/api/executions` → `/ex`.
+- `/api/health` → `/hl`.
+- `/api/kt` or `/api/k` → `/hl/kt`.
+- `/api/dashboard/mcp` → `/mcp`.
+- `/api/fs/*` → `/fs/*`.
 
 ---
 
 ## Spec sources
 
-- Machine-readable overview: `system-specs/api.yaml`
-- Kits and kit URLs: `system-specs/kits.yaml`
-- Short URL cheat sheet: `sre-url-map.md`
+- Machine-readable overview: `system-specs/api.yaml`.
+- Kits and kit URLs: `system-specs/kits.yaml`.
+- Short URL cheat sheet: `sre-url-map.md`.
 
 When changing routes in code, update those specs and this document per project conventions.

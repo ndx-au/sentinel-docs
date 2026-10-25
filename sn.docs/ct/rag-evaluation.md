@@ -1,14 +1,16 @@
 ---
 title: "RAG retrieval evaluation"
-description: "Offline, fixture-driven retrieval benchmarks for the harness RAG stack. Live PG-backed eval against a running SRE is optional; CI gates on embedded fixtures in internal/rag/testdata/retrieval_eval_fixtures.json."
+description: "Offline retrieval benchmarks, fixture tests, dashboard results, and optional tests against a live SRE."
 type: Guide
 tags: [ai, rag]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # RAG retrieval evaluation
 
-Offline, fixture-driven retrieval benchmarks for the harness RAG stack. Live PG-backed eval against a running SRE is optional; **CI gates on embedded fixtures** in `internal/rag/testdata/retrieval_eval_fixtures.json`.
+Offline, fixture-driven retrieval benchmarks for the harness RAG stack. Live PG-backed eval against a running SRE is optional. **CI gates on embedded fixtures** in `internal/rag/testdata/retrieval_eval_fixtures.json`.
 
 Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) (AI-S04). Operator path for enabling RAG: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator).
 
@@ -38,7 +40,7 @@ Defined in `internal/rag/evaluation_test.go`:
 | `top1_accuracy` | `1.0` | Expected top document ranks first |
 | `mean_reciprocal_rank` | `1.0` | MRR across all fixtures |
 
-A failing run indicates retrieval ranking regression in hybrid RRF, lexical, or modality-scoped cases. Update fixtures intentionally when changing fusion behavior; do not lower thresholds without recording rationale in `.progress/`.
+A failing run indicates retrieval ranking regression in hybrid RRF, lexical, or modality-scoped cases. Update fixtures intentionally when changing fusion behavior. Do not lower thresholds without recording rationale in `.progress/`.
 
 ### Fixture harness
 
@@ -46,15 +48,15 @@ A failing run indicates retrieval ranking regression in hybrid RRF, lexical, or 
 |----------|------|
 | `internal/rag/evaluation.go` | `EvaluateEmbeddedRetrievalFixtures`, `EvaluateRetrievalFixtures` |
 | `internal/rag/testdata/retrieval_eval_fixtures.json` | Golden lexical + semantic result sets per query |
-| `internal/rag/evaluation_test.go` | `TestRetrievalEvalRegression` + config embedding checks |
+| `internal/rag/evaluation_test.go` | `TestRetrievalEvalRegression` + configuration embedding checks |
 
-Fixtures are deterministic: they supply pre-ranked lexical and semantic `SearchResult` slices and assert fused/filtered output — no live embedding API or PostgreSQL required.
+Fixtures supply ranked lexical and semantic `SearchResult` slices. Tests assert the fused and filtered results. The tests need no live embedding API or PostgreSQL.
 
 ---
 
 ## Dashboard summary
 
-The RAG overview (`GET /rag/overview` via dashboard `/rag`) includes an `evaluation` object from `EvaluateEmbeddedRetrievalFixtures`:
+The RAG overview (`GET /rag/overview` through dashboard `/rag`) includes an `evaluation` object from `EvaluateEmbeddedRetrievalFixtures`:
 
 | Field | Description |
 |-------|-------------|
@@ -64,7 +66,7 @@ The RAG overview (`GET /rag/overview` via dashboard `/rag`) includes an `evaluat
 | `pass_rate` | `passed_count / fixture_count` |
 | `top1_accuracy` | Fraction with correct top document |
 | `mean_reciprocal_rank` | Average reciprocal rank of expected top doc |
-| `config` | Active embedding/chunk settings snapshot |
+| `config` | Active embedding/chunk configuration snapshot |
 | `cases[]` | Per-fixture `passed`, `top_document`, `missing_documents`, `reciprocal_rank` |
 
 API coverage: `go test ./internal/api -run RagOverview` (see `internal/api/rag_handlers_test.go`).
@@ -75,9 +77,9 @@ API coverage: `go test ./internal/api -run RagOverview` (see `internal/api/rag_h
 
 AI tool-loop failure classes (`not_found`, `timeout`, `runtime`) are documented separately:
 
-- Fixtures: `internal/ai/testdata/tool_loop_error_fixtures.json`
-- CI: `go test ./internal/ai -count=1 -run TestToolLoopErrorGoldenFixtures`
-- Lua API: [`02-LUA-API.md` — Tool-loop error classes](/lua-api#tool-loop-error-classes)
+- Fixtures: `internal/ai/testdata/tool_loop_error_fixtures.json`.
+- CI: `go test ./internal/ai -count=1 -run TestToolLoopErrorGoldenFixtures`.
+- Lua API: [`02-LUA-API.md` — Tool-loop error classes](/lua-api#tool-loop-error-classes).
 
 ---
 
@@ -98,6 +100,6 @@ If PG or embedding providers are not configured, skip live smoke — fixture CI 
 
 ## Related docs
 
-- [Lua API — RAG (`sn.rag`)](/lua-api#rag-snrag)
-- [Agentic AI operator guide](/agentic-ai-operator)
-- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md)
+- [Lua API — RAG (`sn.rag`)](/lua-api#rag-snrag).
+- [Agentic AI operator guide](/agentic-ai-operator).
+- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).

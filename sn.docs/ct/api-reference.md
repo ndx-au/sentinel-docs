@@ -1,10 +1,12 @@
 ---
 title: "HTTP API Reference"
-description: "Complete reference for every Sentinel HTTP endpoint. This document covers request formats, response structures, authentication, error handling, pagination, streaming, and WebSocket protocols."
+description: "Reference for Sentinel HTTP endpoints, authentication, request and response data, pagination, event streams, and WebSockets."
 type: Reference
 tags: [api]
 status: stable
 ---
+
+<!-- ndx-ste-mode: description -->
 
 # HTTP API Reference
 
@@ -14,7 +16,7 @@ Complete reference for every Sentinel HTTP endpoint. This document covers reques
 
 ## Introduction
 
-Sentinel exposes a single HTTP API that serves as the control plane for all operations: running flows, managing triggers, reading logs, editing source files, managing secrets, and more. Both the CLI and the Dashboard communicate with Sentinel exclusively through this API. For a **harness route catalog** (prefixes, keyhole, dashboard proxy rewrites), see [Harness HTTP route reference](/harness-http-routes).
+Sentinel exposes one HTTP API for flows, triggers, logs, source files, secrets, and other operations. The CLI and Dashboard use this API. [Harness HTTP route reference](/harness-http-routes) lists prefixes, keyhole behavior, and dashboard rewrites.
 
 ### Design Philosophy
 
@@ -22,7 +24,7 @@ The API follows several important design principles that differ from conventiona
 
 1. **Always HTTP 200.** Every response returns HTTP status code 200, even errors. The actual success or failure is communicated in the JSON response body. This simplifies client logic for AI agents and automation scripts that consume the API -- they never need to handle HTTP-level error branching. The only exception is WebSocket upgrade requests, which use standard HTTP upgrade semantics.
 
-2. **Brevity Regime.** Endpoint paths and query parameters are deliberately short. Paths use two-character prefixes (`/fl` for flows, `/ex` for executions, `/tr` for triggers, `/lg` for logs, etc.). Query parameters are similarly abbreviated (`?lv=` for level, `?h=` for history). This is intentional: Sentinel is designed for AI-agent consumption where token efficiency matters. Every byte saved in a URL is a byte saved in every prompt.
+2. **Brevity Regime.** Paths and query parameters use short names to reduce tokens in agent prompts. Example prefixes include `/fl` for flows and `/ex` for executions. Other examples include `/tr` for triggers and `/lg` for logs. Query parameters include `?lv=` for level and `?h=` for history.
 
 3. **Auth-Exempt Routes.** Certain routes bypass the gateway authentication entirely. Webhooks (`/wh/*` and `/kt/{ns}/{name}/wh/*`) use their own per-endpoint authentication (HMAC signatures, CIDR allow-lists). TLS certificate endpoints (`/cert/*`) must be unauthenticated so clients can retrieve certificates for pinning. The configuration status endpoint (`/api/config`) is also public so the Dashboard can discover the server's capabilities before authenticating.
 
@@ -118,8 +120,8 @@ All available API routes at a glance. Routes marked with (public) bypass bearer 
 | `POST` | `/bk/plans/{id}/run` | Run backup plan immediately |
 | `GET` | `/ws` | Upgrade to multiplexed WebSocket |
 | `GET` | `/ws/{channel}` | Upgrade to channel WebSocket |
-| `GET` | `/ws/cfg` | Get WebSocket subsystem config |
-| `PUT` | `/ws/cfg` | Update WebSocket subsystem config |
+| `GET` | `/ws/cfg` | Get WebSocket subsystem configuration |
+| `PUT` | `/ws/cfg` | Update WebSocket subsystem configuration |
 | `GET` | `/ws/cn` | List WebSocket connections |
 | `GET` | `/ws/cn/{name}` | Get WebSocket connection |
 | `DELETE` | `/ws/cn/{name}` | Close WebSocket connection |
@@ -144,7 +146,7 @@ All available API routes at a glance. Routes marked with (public) bypass bearer 
 | `GET` | `/docker/{stub}` | Get Docker stack details |
 | `POST` | `/docker/{stubs}/up` | Start Docker stacks |
 | `POST` | `/docker/{stubs}/down` | Stop Docker stacks |
-| `POST` | `/docker/{stub}/save` | Save Docker stack config |
+| `POST` | `/docker/{stub}/save` | Save Docker stack configuration |
 | `DELETE` | `/docker/{stub}` | Delete Docker stack |
 | `GET` | `/docker/{stub}/logs` | Stream Docker stack logs |
 | `GET` | `/mk/kits` | List marketplace kits |
@@ -173,7 +175,7 @@ By default, Sentinel listens on `http://localhost:8080`. The port is configured 
 }
 ```
 
-If TLS is enabled, an HTTPS server starts on the configured TLS port (default 8443) instead. All examples in this document use `http://localhost:8080` for brevity; substitute your actual host and port as needed.
+If TLS is enabled, an HTTPS server starts on the configured TLS port (default 8443) instead. All examples in this document use `http://localhost:8080` for brevity. Substitute your actual host and port as needed.
 
 ---
 
@@ -250,7 +252,7 @@ The following routes bypass all gateway authentication. They either have no auth
 
 ### Success Responses
 
-Successful responses return the JSON body directly. Some endpoints include an `ok: true` field; others return the data directly without a wrapper. The exact shape depends on the endpoint (documented per-endpoint below).
+Successful responses return the JSON body directly. Some endpoints include an `ok: true` field. Others return the data directly without a wrapper. The exact shape depends on the endpoint (documented per-endpoint below).
 
 ### Error Responses
 
@@ -268,7 +270,7 @@ All errors are returned as HTTP 200 with an error object in the body:
 - **`msg`**: A human-readable description of what went wrong. Suitable for logging or displaying to users.
 - **`req_id`**: A UUID v4 generated for every request. This is also returned in the `X-Request-ID` response header. Use it when reporting issues or correlating logs.
 
-**How to detect errors:** Check for the presence of a `code` field in the response. If `code` exists, the request failed. If `code` is absent, the request succeeded.
+**How to detect errors:** If the response contains a `code` field, the request failed. If `code` is absent, the request succeeded.
 
 ---
 
@@ -308,9 +310,9 @@ data: {"id":42,"ts":1707576000,"lv":"info","msg":"Processing order","eid":"exec_
 
 ```
 
-- **`id`**: A monotonically increasing log entry ID. Used for resume support via the `Last-Event-ID` header.
+- **`id`**: A monotonically increasing log entry ID. Used for resume support through the `Last-Event-ID` header.
 - **`event`**: The event type. Currently always `log` for log entries.
-- **`data`**: A JSON-encoded log event with fields: `id` (log ID), `ts` (Unix timestamp), `lv` (level: debug/info/warn/error), `msg` (message text), `eid` (execution ID, if scoped), `tid` (trace ID, if available).
+- **`data`**: This JSON log event includes `id` (log ID), `ts` (Unix timestamp), `lv` (debug/info/warn/error), and `msg` (message). Scoped events include `eid` (execution ID). Events with an available trace ID include `tid`.
 
 ### Follow Mode
 
@@ -338,7 +340,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ### Polling Interval
 
-The server polls for new log entries every 500 milliseconds. This is an internal implementation detail but useful to know: there may be up to a half-second delay between a log being written and the SSE event being sent.
+The server polls for new log entries every 500 milliseconds. An SSE event can arrive up to a half-second after the server writes the log.
 
 ### JavaScript Example
 
@@ -372,9 +374,11 @@ eventSource.addEventListener('error', () => {
 GET /hl
 ```
 
-Returns the overall system status, uptime, version, and health of every internal component. This is the first endpoint you should call to verify that Sentinel is running and healthy. The Dashboard polls this endpoint periodically to display status indicators.
+This endpoint returns the system status, uptime, version, and health of each component. The Dashboard polls it for status indicators.
 
-**When to use:** Monitoring, health probes (e.g., Kubernetes liveness/readiness), verifying the server is up after deployment.
+Use this endpoint first to make sure that Sentinel is running and healthy.
+
+**When to use:** Monitoring, health probes (for example Kubernetes liveness/readiness), verifying the server is up after deployment.
 
 **curl example:**
 ```bash
@@ -420,7 +424,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
 | `mode` | string | `"dev"` if debug mode is on, `"prod"` otherwise |
 | `up` | integer | Uptime in seconds since the harness started |
 | `time` | integer | Current server time as Unix timestamp |
-| `ver` | string | Binary version string (e.g., `"v0.1.1-dev"`) |
+| `ver` | string | Binary version string (for example `"v0.1.1-dev"`) |
 | `project` | string | SRE project name (derived from the SRE root directory name) |
 | `components` | object | Health status of each internal component |
 | `marketplace` | object | Marketplace license status (present only if marketplace is configured) |
@@ -435,9 +439,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
 GET /mcp
 ```
 
-Operator snapshot of the optional MCP sidecar. Always HTTP 200. `enabled` is false when the harness was started without `--mcp`; the catalog is still returned so the dashboard can teach the surface. Never includes tokens, vault values, or occupy license keys.
+Operator snapshot of the optional MCP sidecar. Always HTTP 200. `enabled` is false when the harness was started without `--mcp`. The catalog is still returned so the dashboard can teach the surface. Never includes tokens, vault values, or occupy license keys.
 
-**When to use:** Dashboard MCP page (`GET /mcp` on the dashboard, BFF `GET /api/dashboard/mcp`) and operator scripts that need bind/listen/risk ceiling without opening an MCP session.
+**When to use:** The Dashboard MCP page uses this endpoint (`GET /mcp`, BFF `GET /api/dashboard/mcp`). Operator scripts can inspect binding, listener, and risk limits without an MCP session.
 
 **Response (abbreviated):** `{ok, enabled, url, bind, listen, loopback, auth, risk_classes, aliases, disabled, start_hint, clients, tools, resources, prompts}`.
 
@@ -449,7 +453,7 @@ See [MCP Agent Integration](/mcp-agent-integration).
 GET /hl/kt
 ```
 
-Returns all kits that have been discovered and loaded from the SRE directory. A kit is a directory at the SRE root with a `kit.yaml` manifest. This endpoint is used by the Dashboard to populate the kit explorer sidebar.
+This endpoint returns all kits that the harness discovered and loaded from the SRE directory. Each kit has a directory and a `kit.yaml` manifest. The Dashboard uses this endpoint to fill the kit explorer sidebar.
 
 **When to use:** Discovering which kits are available, checking if a kit has UI pages, listing available kits for an AI agent.
 
@@ -482,7 +486,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl/kt
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `namespace` | string | Kit namespace (e.g., `"sn"`, `"acme"`) |
+| `namespace` | string | Kit namespace (for example `"sn"`, `"acme"`) |
 | `name` | string | Display name from manifest |
 | `kit_name` | string | Kit name from `kit.yaml` (`kit-name`) |
 | `description` | string | Human-readable description from `kit.yaml` |
@@ -490,7 +494,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl/kt
 | `has_ui` | boolean | Whether the kit has UI page templates |
 | `page_count` | integer | Number of registered pages |
 | `form_count` | integer | Number of registered forms |
-| `on` | boolean | Operational enable state (`kit_runtime`; default `true`) |
+| `on` | boolean | Operational enable state (`kit_runtime`. Default `true`) |
 | `ic` | string | Resolved catalog icon filename under `pb/` (`kt.ic.svg`, `.png`, or `.jpg` — first match wins) |
 | `th` | string | Resolved card thumbnail filename (`kt.th.*`) |
 | `hr` | string | Resolved hero banner filename (`kt.hero.*`) |
@@ -506,7 +510,9 @@ Extension priority for each basename is **svg → png → jpg**. See **Kit devel
 POST /hl/reload
 ```
 
-Forces a full reload of all kits and flows from the SRE directory on disk. This re-scans the SRE root, re-parses all `kit.yaml` manifests, re-discovers all flows from `fl/` directories, and re-registers all triggers. Use this after making changes to files outside of the API (e.g., editing files directly with a text editor or pulling changes from git).
+This endpoint reloads all kits and flows from the SRE directory. It scans the root and parses each `kit.yaml` manifest. It discovers flows in `fl/` directories and registers their triggers again.
+
+After file changes outside the API, use this endpoint. Examples include direct edits and Git pulls.
 
 Note: If hot-reload is enabled in `sentinel.yaml`, the harness automatically detects file changes and reloads. This endpoint is for manual forced reloads.
 
@@ -541,7 +547,7 @@ Disabled kits remain off after reload (`kit_runtime` is re-applied). See `specs/
 **Error conditions:**
 - `sre_root_unknown`: SRE root path not configured.
 - `reload_unavailable`: Reload function not available (internal harness error).
-- `reload_failed`: Reload failed (e.g., parse error in a `kit.yaml`).
+- `reload_failed`: Reload failed (for example parse error in a `kit.yaml`).
 
 ### Reload One Kit
 
@@ -551,7 +557,7 @@ POST /hl/kt/{ns}/{name}/rl
 
 Reloads a single kit directory `{ns}.{name}/` from disk: manifest, flows, forms, and page cache. `{name}` is the manifest `kit-name`, not the directory slug.
 
-If the kit is disabled (`on: false`), manifest and forms still reload; flows and triggers stay off until `POST .../on`.
+If the kit is disabled (`on: false`), manifest and forms still reload. Flows and triggers stay off until `POST .../on`.
 
 **curl example:**
 ```bash
@@ -676,11 +682,11 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Full flow ID in format `{ns}-{name}:{flow}` (e.g., `sn-core-agent:assistant`) |
+| `id` | string | Full flow ID in format `{ns}-{name}:{flow}` (for example `sn-core-agent:assistant`) |
 | `name` | string | Flow filename without `.lua` extension |
 | `desc` | string | Description from the flow's skill twin (`.lua.md` file) |
 | `ver` | string | Version from the kit's `kit.yaml` |
-| `kit` | string | Kit directory name (e.g., `sn.core-agent`) |
+| `kit` | string | Kit directory name (for example `sn.core-agent`) |
 | `params` | object | Expected parameters and their types |
 | `triggers` | array | IDs of triggers attached to this flow |
 | `stats` | object | Run statistics: `last_run` (ISO8601) and `run_count` |
@@ -696,7 +702,7 @@ Returns details for a single flow.
 **When to use:** Inspecting a specific flow before executing it, checking its parameters or trigger configuration.
 
 **Path parameters:**
-- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format (e.g., `sn-core-agent:assistant`)
+- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format (for example `sn-core-agent:assistant`).
 
 **curl example:**
 ```bash
@@ -714,12 +720,12 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl/sn-core-agent:as
 POST /fl/{id}/run
 ```
 
-Triggers an execution of the specified flow. The request body is passed to the flow as parameters, accessible inside the Lua `main()` function via the function's parameters or the trigger context. Flow execution is **asynchronous** -- this endpoint returns immediately with an execution ID. Use `/ex/{id}` to poll for completion, or `/ex/{id}/lg` to stream logs in real-time.
+Triggers an execution of the specified flow. The request body is passed to the flow as parameters, accessible inside the Lua `main()` function through the function's parameters or the trigger context. Flow execution is **asynchronous** -- this endpoint returns immediately with an execution ID. Use `/ex/{id}` to poll for completion, or `/ex/{id}/lg` to stream logs in real-time.
 
 **When to use:** Running a flow on-demand from the CLI, Dashboard, or an external system. This is the "manual trigger" mechanism.
 
 **Path parameters:**
-- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format
+- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format.
 
 **Request body:** Any valid JSON object. All key-value pairs become available as flow parameters.
 
@@ -774,7 +780,7 @@ Returns a paginated list of execution history, optionally filtered by flow ID or
 |-----------|------|---------|-------------|
 | `limit` | integer | 20 | Maximum items to return (max: 100) |
 | `offset` | integer | 0 | Number of items to skip |
-| `flow` | string | (none) | Filter by flow ID (e.g., `sn-core-agent:assistant`) |
+| `flow` | string | (none) | Filter by flow ID (for example `sn-core-agent:assistant`) |
 | `status` | string | (none) | Filter by status: `queued`, `running`, `completed`, or `failed` |
 
 **curl examples:**
@@ -829,7 +835,7 @@ Returns detailed information about a specific execution, including its parameter
 **When to use:** Checking if a specific execution completed, retrieving its result, diagnosing why it failed.
 
 **Path parameters:**
-- `{id}` -- Execution ID (e.g., `exec_abc123`)
+- `{id}` -- Execution ID (for example `exec_abc123`).
 
 **curl example:**
 ```bash
@@ -862,7 +868,7 @@ Streams log entries for a specific execution using Server-Sent Events. If the ex
 **When to use:** Watching a flow's progress in real-time, debugging a running flow, capturing log output for a completed execution.
 
 **Path parameters:**
-- `{id}` -- Execution ID
+- `{id}` -- Execution ID.
 
 **Query parameters:**
 
@@ -960,7 +966,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## Triggers
 
-Triggers define how flows are invoked automatically. Sentinel supports four trigger types: `cron` (scheduled), `webhook` (HTTP callback), `event` (internal event bus), and `manual` (API-only, no automatic invocation). Triggers are created either declaratively in flow code or via the API.
+Triggers define how flows are invoked automatically. Sentinel supports four trigger types: `cron` (scheduled), `webhook` (HTTP callback), `event` (internal event bus), and `manual` (API-only, no automatic invocation). Triggers are created either declaratively in flow code or through the API.
 
 ### List Triggers
 
@@ -1014,10 +1020,10 @@ curl -H "Authorization: Bearer $TOKEN" "http://localhost:8080/tr?flow=sn-core-ag
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique trigger ID (prefixed by type: `cr_` for cron, `wh_` for webhook, etc.) |
+| `id` | string | Unique trigger ID (for example `cr_` for cron and `wh_` for webhook) |
 | `flow` | string | Flow ID this trigger invokes |
 | `type` | string | `cron`, `webhook`, `event`, or `manual` |
-| `src` | string | Origin: `flow` (declared in Lua) or `api` (created via API) |
+| `src` | string | Origin: `flow` (declared in Lua) or `api` (created through API) |
 | `on` | boolean | Whether the trigger is currently enabled |
 | `created` | string | Creation timestamp (ISO8601) |
 | `last` | string | Last invocation timestamp (ISO8601) |
@@ -1159,7 +1165,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ## Webhooks
 
-Webhook endpoints are how external services (Stripe, GitHub, Slack, Telegram, etc.) send data into Sentinel. Webhook routes are **auth-exempt** -- they bypass the gateway's bearer token authentication entirely. Instead, each webhook trigger defines its own authentication (`hmac`, `bearer`, `header`, CIDR allow-lists, or rate limits).
+Webhook endpoints are how external services (such as Stripe, GitHub, Slack, and Telegram) send data into Sentinel. Webhook routes are **auth-exempt** -- they bypass the gateway's bearer token authentication entirely. Instead, each webhook trigger defines its own authentication (`hmac`, `bearer`, `header`, CIDR allow-lists, or rate limits).
 
 ### Global Webhook
 
@@ -1167,7 +1173,7 @@ Webhook endpoints are how external services (Stripe, GitHub, Slack, Telegram, et
 ANY /wh/*
 ```
 
-The catch-all route for global webhooks. Any HTTP method (GET, POST, PUT, DELETE, etc.) is accepted. The path after `/wh/` is matched against registered webhook triggers' `path` field.
+The catch-all route for global webhooks. It accepts any HTTP method, including GET, POST, PUT, and DELETE. The path after `/wh/` is matched against registered webhook triggers' `path` field.
 
 **When to use:** Receiving callbacks from external services like Stripe, GitHub, or any SaaS platform that sends webhooks.
 
@@ -1195,8 +1201,8 @@ ANY /kt/{ns}/{name}/wh/*
 Kit-scoped webhook endpoint. Functions identically to the global webhook but is namespaced under a specific kit. This allows multiple kits to define webhooks with the same path without conflicts.
 
 **Path parameters:**
-- `{ns}` -- Kit namespace (e.g., `sn`)
-- `{name}` -- Kit name (e.g., `core`)
+- `{ns}` -- Kit namespace (for example `sn`).
+- `{name}` -- Kit name (for example `core`).
 
 **curl example:**
 ```bash
@@ -1222,7 +1228,7 @@ Renders the form as a complete HTML page. The form definition (fields, labels, v
 **When to use:** Displaying a form to end users in a browser.
 
 **Path parameters:**
-- `{stub}` -- The form's URL stub (defined in the form YAML)
+- `{stub}` -- The form's URL stub (defined in the form YAML).
 
 **curl example:**
 ```bash
@@ -1490,7 +1496,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fm
 
 ## Secrets
 
-Secrets are encrypted key-value pairs stored in the Sentinel vault (AES-256-GCM encryption at rest). They are used to store API tokens, passwords, and other sensitive values that flows access via `ctx.secret("name")` in Lua.
+Secrets are encrypted key-value pairs stored in the Sentinel vault (AES-256-GCM encryption at rest). They are used to store API tokens, passwords, and other sensitive values that flows access through `ctx.secret("name")` in Lua.
 
 ### List Secrets
 
@@ -1624,7 +1630,9 @@ curl -X PUT -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/src/sn.core-agent/fl/assistant.lua
 ```
 
-**ETag conflict detection:** When updating a file, include the `etag` from the GET response. If the file has been modified since you read it (the ETag has changed), the server returns a `RESOURCE.CONFLICT` error. This prevents lost updates when multiple editors are working on the same file.
+**ETag conflict detection:** If the file changed after your GET request, the server returns a `RESOURCE.CONFLICT` error. This prevents concurrent editors from overwriting changes.
+
+When you update a file, include the `etag` from the GET response.
 
 **Error conditions:**
 - `RESOURCE.NOT_FOUND`: File does not exist.
@@ -1637,7 +1645,7 @@ GET /{folder}/*
 PUT /{folder}/*
 ```
 
-Access source files using the kit ID format. The `{folder}` is the two-letter subdirectory prefix (e.g., `fl` for flows, `cn` for connectors, `md` for modules). The wildcard must end with `/src` (for source code) or `/skill` (for the `.md` skill twin).
+Access source files using the kit ID format. The `{folder}` is the two-letter subdirectory prefix (for example `fl` for flows, `cn` for connectors, `md` for modules). The wildcard must end with `/src` (for source code) or `/skill` (for the `.md` skill twin).
 
 **When to use:** Accessing source code when you know the kit and flow name but prefer the structured path format.
 
@@ -1691,7 +1699,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cn
 GET /cfg/project
 ```
 
-Returns the contents of `sentinel.yaml`, the project-level configuration file that lives in the SRE root and is committed to git. This file contains project metadata (name, description, version) and behavioral settings (hot-reload, git integration).
+Returns the contents of `sentinel.yaml`, the project-level configuration file that lives in the SRE root and is committed to git. This file contains project metadata (name, description, version) and behavioral configuration (hot-reload, git integration).
 
 **When to use:** Reading the current project configuration, displaying project metadata in a UI.
 
@@ -1716,7 +1724,7 @@ PUT /cfg/project
 
 Updates `sentinel.yaml`. The entire file contents are replaced. Use the `etag` from the GET response for conflict detection.
 
-**When to use:** Changing project settings, updating the project name or version.
+**When to use:** Changing project configuration, updating the project name or version.
 
 **curl example:**
 ```bash
@@ -1729,7 +1737,7 @@ curl -X PUT -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/cfg/project
 ```
 
-**Important:** Never put infrastructure settings (`api.port`, `logging`, `security`) in `sentinel.yaml`. Those belong in `.sentinel/config.json`.
+**Important:** Never put infrastructure configuration (`api.port`, `logging`, `security`) in `sentinel.yaml`. Those belong in `.sentinel/config.json`.
 
 ---
 
@@ -1775,7 +1783,7 @@ GET /git/st
 
 Returns lists of modified, staged, and untracked files. Equivalent to `git status --porcelain`.
 
-**When to use:** Seeing which files have been changed, deciding what to commit.
+**When to use:** Review changed files before you select what to commit.
 
 **curl example:**
 ```bash
@@ -1830,7 +1838,7 @@ Returns the contents of a file at a specific git revision. Equivalent to `git sh
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `f` | string | (required) | File path relative to SRE root |
-| `rev` | string | `HEAD` | Git revision (commit SHA, branch name, tag, `HEAD~1`, etc.) |
+| `rev` | string | `HEAD` | Git revision (for example a commit SHA, branch name, tag, or `HEAD~1`) |
 
 **curl example:**
 ```bash
@@ -1848,7 +1856,7 @@ POST /git/commit
 
 Stages the specified files and creates a git commit. Equivalent to `git add {files} && git commit -m {msg}`.
 
-**When to use:** Committing changes made via the source editing API or the Dashboard editor.
+**When to use:** Committing changes made through the source editing API or the Dashboard editor.
 
 **curl example:**
 ```bash
@@ -1947,7 +1955,7 @@ curl -o server.crt http://localhost:8080/cert/server.crt
 GET /api/config
 ```
 
-Returns non-sensitive configuration status. This is the only authenticated-exempt JSON endpoint (besides webhooks). The Dashboard calls this before authenticating to discover what features are available (TLS, vault, git, etc.).
+Returns non-sensitive configuration status. This is the only authenticated-exempt JSON endpoint (besides webhooks). The Dashboard calls this before authenticating to discover what features are available (including TLS, the vault, and Git).
 
 **When to use:** Feature discovery, Dashboard initialization, checking server capabilities.
 
@@ -2015,7 +2023,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cm
 }
 ```
 
-The slug format is `{kitName}/{contentSlug}`. The content slug comes from either the `slug` field in the Markdown file's YAML frontmatter, or (if no slug is specified) the filename without the `.md` extension. Subdirectories in `ct/` create path segments in the slug.
+The slug format is `{kitName}/{contentSlug}`. The Markdown frontmatter can define a `slug` field. Otherwise, the content slug is the filename without `.md`. Subdirectories in `ct/` add path segments.
 
 **Error conditions:**
 - `CMS.UNAVAILABLE`: No kit in the SRE has a `ct/` directory.
@@ -2031,8 +2039,8 @@ Returns the fully parsed content for a specific slug. The response includes fron
 **When to use:** Rendering a blog post, displaying documentation, serving structured content to a frontend.
 
 **Path parameters:**
-- `{kitName}` -- Kit directory name (e.g., `acme.blog`)
-- `{contentSlug}` -- Content slug, which may contain path segments (e.g., `hello-world` or `tutorials/getting-started`)
+- `{kitName}` -- Kit directory name (for example `acme.blog`).
+- `{contentSlug}` -- Content slug, which can contain path segments (for example `hello-world` or `tutorials/getting-started`).
 
 **curl example:**
 ```bash
@@ -2091,9 +2099,9 @@ curl -H "Authorization: Bearer $TOKEN" \
 | `date` | string | Publication date (RFC3339 or YYYY-MM-DD format) |
 | `description` | string | Short description / summary |
 | `tags` | string[] | List of tag strings for categorization |
-| `meta` | object | Any additional frontmatter fields not recognized by the parser |
+| `meta` | object | Any more frontmatter fields not recognized by the parser |
 
-**Important:** The `agent_context` frontmatter field is always stripped from API responses. It is only available in Lua via `sn.cms.get()`. This allows content authors to include AI agent instructions in their Markdown that are visible to automation flows but never exposed to external API consumers.
+**Important:** The `agent_context` frontmatter field is always stripped from API responses. It is only available in Lua through `sn.cms.get()`. This allows content authors to include AI agent instructions in their Markdown that are visible to automation flows but never exposed to external API consumers.
 
 **Preamble:** HTML string rendered from any content that appears before the first heading in the Markdown file. If the document starts immediately with a heading, the preamble is an empty string.
 
@@ -2104,7 +2112,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 | `title` | string | Original heading text |
 | `slug` | string | URL-safe slug, scoped to parent heading. Duplicate slugs are deduplicated with `-2`, `-3` suffixes |
 | `level` | integer | Heading level (1-6) |
-| `html` | string | Rendered HTML of the content directly under this heading (paragraphs, code blocks, tables, etc.) |
+| `html` | string | Rendered HTML of the content directly under this heading (including paragraphs, code blocks, and tables) |
 | `sections` | object | Nested child sections (same structure, recursively) |
 
 **Error conditions:**
@@ -2125,7 +2133,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## Storage Points
 
-Storage points represent S3-compatible object storage endpoints (AWS S3, Backblaze B2, Garage, etc.). They allow flows to upload and manage files in cloud storage. Credentials are stored encrypted in the vault. See the [Storage Guide](/storage) for full documentation on configuring and using storage.
+Storage points represent S3-compatible object storage endpoints (such as AWS S3, Backblaze B2, and Garage). They allow flows to upload and manage files in cloud storage. Credentials are stored encrypted in the vault. See the [Storage Guide](/storage) for full documentation on configuring and using storage.
 
 ### List Storage Points
 
@@ -2314,7 +2322,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ## PostgreSQL Connections
 
-Manage PostgreSQL connection pools. These pools are used by Lua flows via `ctx.pg("name")`.
+Manage PostgreSQL connection pools. These pools are used by Lua flows through `ctx.pg("name")`.
 
 ### List PostgreSQL Connections
 
@@ -2380,7 +2388,7 @@ Tests a PostgreSQL connection without saving it to either the vault or the persi
 POST /pg/{name}/reconnect
 ```
 
-Reconnects an existing PostgreSQL pool (e.g., after a database restart).
+Reconnects an existing PostgreSQL pool (for example after a database restart).
 
 ---
 
@@ -2469,7 +2477,7 @@ Returns a single backup run record.
 POST /bk/plans/{id}/run
 ```
 
-Runs the plan immediately from the harness. The run is recorded in `backup_runs`, local artifact retention is applied under `.sentinel/backups`, and object storage upload occurs only if the plan has a configured `storage_point_id`.
+This endpoint runs the plan immediately and records the run in `backup_runs`. It applies local retention under `.sentinel/backups`. If the plan has a `storage_point_id`, it also uploads the artifact to object storage.
 
 ---
 
@@ -2523,7 +2531,7 @@ Accepts a multi-vendor JSON bundle with a top-level `vendors` array.
 POST /lib/scrape
 ```
 
-Fetches one or more documentation URLs, sends the extracted content to a registered LLM provider/model, validates the generated JSON collection, and optionally imports it immediately.
+This endpoint fetches documentation URLs and sends the extracted content to a registered LLM provider and model. It validates the resulting JSON collection. It can also import the collection immediately.
 
 Example body:
 
@@ -2545,16 +2553,16 @@ Example body:
 ### Backup Event Patterns
 
 The harness emits these internal event-bus patterns for reactive flows:
-- `backup.schedule.synced`
-- `backup.run.started`
-- `backup.run.completed`
-- `backup.run.failed`
+- `backup.schedule.synced`.
+- `backup.run.started`.
+- `backup.run.completed`.
+- `backup.run.failed`.
 
 ---
 
 ## WebSocket
 
-Sentinel provides two WebSocket upgrade endpoints: a multiplexed endpoint (`/ws`) that uses an envelope protocol for subscribing to multiple channels over a single connection, and per-channel endpoints (`/ws/{channel}`) that deliver raw messages for a specific channel. The websocket subsystem is disabled by default. Administrators can enable it through `.sentinel/config.json` or the dashboard Sockets page. Separate admin-only management endpoints expose configuration and outbound connection control.
+Sentinel provides two WebSocket upgrade endpoints. The multiplexed endpoint (`/ws`) uses envelopes for multiple channels on one connection. Per-channel endpoints (`/ws/{channel}`) deliver raw messages for one channel. WebSockets are disabled by default. Administrators can enable them in `.sentinel/config.json` or on the dashboard Sockets page. Separate management endpoints provide configuration and outbound connection controls. Only administrators can use these management endpoints.
 
 ### Multiplexed WebSocket
 
@@ -2566,7 +2574,7 @@ Upgrades the HTTP connection to a multiplexed WebSocket. Clients send JSON envel
 
 If the websocket subsystem is disabled, the upgrade is rejected with standard HTTP `503 Service Unavailable`.
 
-**When to use:** Dashboard connections that need to listen to multiple channels simultaneously (notifications, status updates, log streams), or any client that wants to manage multiple subscriptions over a single socket.
+**When to use:** Use this endpoint for multiple subscriptions on one connection. Dashboard examples include notifications, status updates, and log streams.
 
 **Envelope protocol:**
 
@@ -2586,7 +2594,7 @@ All messages (client-to-server and server-to-client) are JSON objects with an `o
 |-----------|--------|-------------|
 | `ack` | `ch` | Confirms a `sub` or `unsub` operation. |
 | `pub` | `ch`, `data` | A message was published to a channel you are subscribed to. |
-| `error` | `msg` | An error occurred (e.g., missing channel name). |
+| `error` | `msg` | An error occurred (for example missing channel name). |
 
 **Client-to-server examples:**
 ```json
@@ -2642,12 +2650,12 @@ ws.send(JSON.stringify({
 GET /ws/{channel}
 ```
 
-Upgrades to a channel-specific WebSocket. Unlike the multiplexed endpoint, messages on this connection are **raw payloads** with no envelope wrapping. Every message sent by any client on this channel (or by Lua flows via `sn.ws.broadcast()`) is delivered as-is to all connected clients.
+Upgrades to a channel-specific WebSocket. Unlike the multiplexed endpoint, messages on this connection are **raw payloads** with no envelope wrapping. Every message sent by any client on this channel (or by Lua flows through `sn.ws.broadcast()`) is delivered as-is to all connected clients.
 
 **When to use:** Simple, single-purpose real-time connections where envelope overhead is unnecessary. For example, a status dashboard page that only needs to show health updates.
 
 **Path parameters:**
-- `{channel}` -- Channel name (e.g., `status`, `notifications`, `live-data`)
+- `{channel}` -- Channel name (for example `status`, `notifications`, `live-data`).
 
 **JavaScript example:**
 ```javascript
@@ -2669,7 +2677,7 @@ PUT /ws/cfg
 
 Reads or updates websocket runtime configuration. These endpoints are admin-only and require dashboard signature authentication in production.
 
-`GET /ws/cfg` returns the current config plus an `active` flag indicating whether the subsystem is started.
+`GET /ws/cfg` returns the current configuration plus an `active` flag indicating whether the subsystem is started.
 
 `PUT /ws/cfg` accepts:
 
@@ -2689,7 +2697,7 @@ Changes are persisted to `.sentinel/config.json` and applied immediately without
 GET /ws/cn
 ```
 
-Returns all active outbound WebSocket connections created by Lua flows via `sn.ws.open()`. This does not list inbound browser connections to `/ws` or `/ws/{channel}`. Private kit-scoped connections are hidden from this unscoped management endpoint.
+Returns all active outbound WebSocket connections created by Lua flows through `sn.ws.open()`. This does not list inbound browser connections to `/ws` or `/ws/{channel}`. Private kit-scoped connections are hidden from this unscoped management endpoint.
 
 This endpoint is admin-only. In production it requires dashboard signature authentication rather than a bearer token.
 
@@ -2802,11 +2810,11 @@ All error codes follow the `DOMAIN.ACTION` format. Here is the complete list:
 | `AUTH.INVALID` | Invalid or expired token/signature | Bearer token not in valid tokens list, or signature verification failed |
 | `AUTH.IP_DENIED` | IP not in whitelist | Debug mode: request from non-whitelisted IP |
 | `AUTH.RATE_LIMIT` | Rate limit exceeded | Too many requests from the same IP |
-| `REQUEST.INVALID` | Malformed request | JSON parse error, missing Content-Type, etc. |
+| `REQUEST.INVALID` | Malformed request | Examples: JSON parse error or missing Content-Type |
 | `REQUEST.MISSING` | Required parameter missing | A required field was not provided |
 | `RESOURCE.NOT_FOUND` | Resource does not exist | Flow, execution, trigger, or secret not found |
 | `RESOURCE.CONFLICT` | ETag mismatch | Source file was modified since last read (concurrent edit) |
-| `SYSTEM.ERROR` | Internal server error | Unhandled panic, database error, etc. |
+| `SYSTEM.ERROR` | Internal server error | Examples: unhandled panic or database error |
 | `SYSTEM.TIMEOUT` | Operation timeout | Flow execution or HTTP operation timed out |
 | `CMS.UNAVAILABLE` | CMS cache not initialized | No kit in the SRE has a `ct/` content directory |
 | `CMS.NOT_FOUND` | Content slug not found | Requested CMS slug does not exist in the specified kit |
@@ -2841,13 +2849,13 @@ Rate limiting applies to all endpoints including auth-exempt routes. Each unique
 
 ## CORS (Cross-Origin Resource Sharing)
 
-CORS is configured via the `cors_origins` setting in `.sentinel/config.json`. When configured, the following headers are set on responses:
+CORS is configured through the `cors_origins` setting in `.sentinel/config.json`. When configured, the following headers are set on responses:
 
-- `Access-Control-Allow-Origin`: The matched origin
-- `Access-Control-Allow-Methods`: `GET, POST, PUT, DELETE, OPTIONS`
-- `Access-Control-Allow-Headers`: `Authorization, Content-Type, X-Request-ID`
-- `Access-Control-Expose-Headers`: `X-Request-ID`
-- `Access-Control-Max-Age`: `86400` (24 hours)
+- `Access-Control-Allow-Origin`: The matched origin.
+- `Access-Control-Allow-Methods`: `GET, POST, PUT, DELETE, OPTIONS`.
+- `Access-Control-Allow-Headers`: `Authorization, Content-Type, X-Request-ID`.
+- `Access-Control-Expose-Headers`: `X-Request-ID`.
+- `Access-Control-Max-Age`: `86400` (24 hours).
 
 Preflight `OPTIONS` requests are handled automatically and return `204 No Content`.
 
@@ -2855,18 +2863,18 @@ Preflight `OPTIONS` requests are handled automatically and return `204 No Conten
 
 ## Best Practices
 
-1. **Always check for errors in the response body.** Since all responses are HTTP 200, check for the presence of a `code` field to detect errors. Do not rely on HTTP status codes.
+1. **Examine errors in the response body.** A `code` field indicates failure. All responses use HTTP 200, so status codes do not identify application errors.
 
 2. **Use ETags for source editing.** When updating source files, always include the `etag` from the GET response. This prevents accidental overwrites from concurrent editors.
 
 3. **Stream logs instead of polling.** For long-running flows, use the SSE endpoint `/ex/{id}/lg?follow=true` instead of repeatedly polling `/ex/{id}`. SSE is more efficient and provides real-time output.
 
-4. **Use pagination for large result sets.** Always pass `limit` and `offset` when listing executions or other potentially large collections. The defaults are reasonable for interactive use but may not be sufficient for automation.
+4. **Use pagination for large result sets.** Pass `limit` and `offset` when you list executions or other large collections. Defaults suit interactive use. Automation can need different values.
 
 5. **Cache form responses.** Form responses are cached permanently by default (keyed by submission UUID). The Dashboard retrieves cached responses directly instead of re-rendering.
 
 6. **Use the health endpoint for monitoring.** The `/hl` endpoint provides component-level health status. Use it as a Kubernetes liveness probe or in monitoring dashboards. A `status` of `"degraded"` indicates at least one component is unhealthy.
 
-7. **Store all credentials in the vault.** Never hardcode API tokens, passwords, or keys in flow source code. Use `POST /sc` to store them in the vault and access them via `ctx.secret("name")` in Lua.
+7. **Store all credentials in the vault.** Never hardcode API tokens, passwords, or keys in flow source code. Use `POST /sc` to store them in the vault and access them through `ctx.secret("name")` in Lua.
 
-8. **Prefer multiplexed WebSocket for multi-channel clients.** If your client needs to subscribe to multiple channels, use the `/ws` multiplexed endpoint with the envelope protocol rather than opening multiple `/ws/{channel}` connections.
+8. **Prefer multiplexed WebSocket for multi-channel clients.** For multiple channels, use the `/ws` endpoint with envelopes. Avoid separate `/ws/{channel}` connections for each channel.

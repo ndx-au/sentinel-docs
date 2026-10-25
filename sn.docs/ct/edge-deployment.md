@@ -1,14 +1,16 @@
 ---
 title: "Edge Deployment Guide"
-description: "This guide walks you through deploying Sentinel in a production environment behind a reverse proxy with edge security."
+description: "How to deploy Sentinel behind a reverse proxy, configure TLS and edge security, and monitor production operation."
 type: Guide
 tags: [deployment]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Edge Deployment Guide
 
-This guide walks you through deploying Sentinel in a production environment behind a reverse proxy with edge security. The primary architecture uses Cloudflare for CDN and DDoS protection with Caddy as the origin reverse proxy, but alternative configurations (nginx, no Cloudflare) are also covered.
+This guide explains production deployment with a reverse proxy and edge security. The primary architecture uses Cloudflare for CDN and DDoS protection. Caddy provides the origin reverse proxy. The guide also covers nginx and deployments without Cloudflare.
 
 Production deployment of Sentinel requires careful attention to security, performance, and reliability. This guide covers each aspect in detail, from initial configuration through monitoring and backup strategies.
 
@@ -36,11 +38,11 @@ This dual-layer TLS architecture gives you edge performance and security without
 
 ## Prerequisites
 
-Before beginning, ensure you have:
+Before you start, make sure that you have:
 
-- **A Linux server** running a systemd-based distribution (Ubuntu 22.04+, Debian 12+, Rocky Linux 9+, etc.). The server should have at least 1 CPU core and 512MB RAM for a basic deployment, with more resources for high-traffic workloads.
+- **A Linux server** with systemd, such as Ubuntu 22.04+, Debian 12+, or Rocky Linux 9+. A basic deployment needs at least 1 CPU core and 512MB RAM. Heavy traffic needs more resources.
 - **A domain name** managed in Cloudflare (the domain's DNS must be configured to use Cloudflare's nameservers).
-- **Caddy installed** on the server. Install via package manager (`apt install caddy` on Debian/Ubuntu) or download from [caddyserver.com](https://caddyserver.com). Caddy version 2.x is required.
+- **Caddy installed** on the server. Install through package manager (`apt install caddy` on Debian/Ubuntu) or download from [caddyserver.com](https://caddyserver.com). Caddy version 2.x is required.
 - **The Sentinel binary** deployed to `/usr/local/bin/sentinel`. Copy the release binary and set execute permissions: `chmod +x /usr/local/bin/sentinel`.
 - **An SRE project** at `/opt/sentinel-sre`. This is the directory containing your `sentinel.yaml`, kits, and the `.sentinel/` configuration directory.
 
@@ -73,12 +75,12 @@ This produces a 64-character hexadecimal string. Use this as the value in the `t
 **Configuration details:**
 
 - `api.port` -- The port Sentinel listens on. In this architecture, Sentinel only accepts connections from localhost (Caddy), so 8080 is fine. Do not expose this port in your firewall.
-- **Content-plane ports (dedicated, not path-merged):** Graphile/ccms defaults to host **1880**; wpcms ingress stays on its own port (**8800** legacy default, target **1800**). If you expose Graphile publicly, add a separate reverse_proxy upstream — do not multiplex Graphile under the harness path for MVP. See [Content planes](/content-planes).
+- **Content-plane ports (dedicated, not path-merged):** Graphile/ccms defaults to host **1880**. wpcms ingress stays on its own port (**8800** legacy default, target **1800**). If you expose Graphile publicly, add a separate reverse_proxy upstream — do not multiplex Graphile under the harness path for MVP. See [Content planes](/content-planes).
 - `api.tokens` -- An array of bearer tokens that clients must provide in the `Authorization: Bearer <token>` header. In production, always configure at least one token. When tokens are configured, the harness runs in production mode and rejects unauthenticated requests.
-- `api.debug_mode` -- Must be `false` in production. Debug mode disables token authentication and enables additional diagnostic endpoints that should not be publicly accessible.
+- `api.debug_mode` -- Set this to `false` in production. Debug mode disables token authentication and enables more diagnostic endpoints. Keep these endpoints private.
 - `state.encrypt_db` -- Encrypts the SQLite state database using SQLCipher (AES-256). Requires the `SENTINEL_STATE_PASSPHRASE` environment variable to be set.
 
-**Important security note:** Sentinel listens on `localhost:8080` only in this architecture. Caddy proxies external HTTPS traffic to it. Do NOT enable Sentinel's built-in TLS (`tls.*` config options) when running behind Caddy -- Caddy owns TLS termination. Enabling both creates unnecessary complexity and can cause certificate conflicts.
+**Important security note:** Sentinel listens on `localhost:8080` only in this architecture. Caddy proxies external HTTPS traffic to it. Do NOT enable Sentinel's built-in TLS (`tls.*` configuration options) when running behind Caddy -- Caddy owns TLS termination. Enabling both creates unnecessary complexity and can cause certificate conflicts.
 
 ---
 
@@ -93,24 +95,24 @@ Cloudflare offers four SSL modes. Understanding the differences is critical for 
 | Full | HTTPS | No | Encrypted but MITM-vulnerable | Avoid -- does not verify origin cert |
 | **Full (strict)** | HTTPS | **Yes, validated** | End-to-end verified | **Use this in production** |
 
-**Why Full (Strict) is the only acceptable option:** In "Full" mode (without "strict"), Cloudflare connects to your origin via HTTPS but does not verify the origin's certificate. This means an attacker who compromises the network between Cloudflare and your server could present a fake certificate and intercept traffic (a man-in-the-middle attack). Full (Strict) mode validates the origin certificate, closing this vulnerability.
+**Why Full (Strict) is the only acceptable option:** In "Full" mode without "strict", Cloudflare uses HTTPS without verifying the origin certificate. An attacker between Cloudflare and the origin can present a fake certificate to intercept traffic. Full (Strict) mode makes sure that the origin certificate is valid.
 
 ### Enable Full (Strict)
 
-1. Log into the Cloudflare Dashboard
-2. Select your domain
-3. Navigate to **SSL/TLS** > **Overview**
-4. Select **Full (strict)**
+1. Log into the Cloudflare Dashboard.
+2. Select your domain.
+3. Navigate to **SSL/TLS** > **Overview**.
+4. Select **Full (strict)**.
 
 ### Generate a Cloudflare Origin Certificate
 
 Cloudflare Origin Certificates are free certificates that Cloudflare trusts. They are only valid for connections from Cloudflare to your origin (they are not trusted by browsers directly). This is exactly what we need.
 
-1. In the Cloudflare Dashboard, navigate to **SSL/TLS** > **Origin Server**
-2. Click **Create Certificate**
-3. Select your domain (e.g., `your-domain.com` and `*.your-domain.com` for wildcard coverage)
-4. Choose the validity period (15 years is the default and is fine for origin certificates since they are only used between Cloudflare and your server)
-5. Download the certificate (`origin.pem`) and private key (`origin.key`)
+1. In the Cloudflare Dashboard, navigate to **SSL/TLS** > **Origin Server**.
+2. Click **Create Certificate**.
+3. Select your domain (for example `your-domain.com` and `*.your-domain.com` for wildcard coverage).
+4. Choose the validity period (15 years is the default and is fine for origin certificates since they are only used between Cloudflare and your server).
+5. Download the certificate (`origin.pem`) and private key (`origin.key`).
 
 Place the certificate files on your server with appropriate permissions:
 
@@ -127,7 +129,7 @@ sudo chmod 600 /etc/caddy/certs/origin.key
 sudo chown caddy:caddy /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
 ```
 
-**Security note:** The private key (`origin.key`) must be kept confidential. If it is compromised, an attacker could impersonate your origin server. Store it with restrictive permissions (600) and ensure only the Caddy process user can read it.
+**CAUTION:** Restrict `origin.key` to the Caddy process user with permissions 600. A compromised private key permits origin impersonation.
 
 ---
 
@@ -172,7 +174,7 @@ your-domain.com {
 }
 ```
 
-Caddy automatically obtains and renews Let's Encrypt certificates when you provide an email address. The disadvantage is that Caddy needs to be reachable on port 80 for HTTP-01 challenges (or port 443 for TLS-ALPN-01), and certificate renewal can occasionally fail.
+Caddy gets and renews Let's Encrypt certificates automatically when you provide an email address. HTTP-01 challenges need access to port 80. TLS-ALPN-01 challenges need access to port 443. Certificate renewal can occasionally fail.
 
 **Reload Caddy after making changes:**
 
@@ -180,7 +182,7 @@ Caddy automatically obtains and renews Let's Encrypt certificates when you provi
 sudo systemctl reload caddy
 ```
 
-Check that Caddy started correctly:
+Make sure that Caddy started correctly:
 
 ```bash
 sudo systemctl status caddy
@@ -195,12 +197,12 @@ When using Sentinel's CMS system to serve web content, Cloudflare can cache page
 
 ### Cloudflare Settings (Dashboard > Caching)
 
-- **Cache Level:** Standard -- this tells Cloudflare to respect `Cache-Control` headers from your origin. If your origin says a response is cacheable, Cloudflare caches it; if not, Cloudflare passes through.
+- **Cache Level:** Standard -- this tells Cloudflare to respect `Cache-Control` headers from your origin. If your origin says a response is cacheable, Cloudflare caches it. If not, Cloudflare passes through.
 - **Browser Cache TTL:** Respect Existing Headers -- this defers to the `Cache-Control` header set by Caddy or Sentinel.
 
 ### CMS Pages -- Enable Caching
 
-For public CMS pages that should be cached at the edge, set appropriate cache headers. You can do this in Caddy's configuration or in your CMS render flow:
+For public CMS pages that need edge caching, set cache headers in the Caddyfile or your CMS render flow:
 
 ```lua
 -- In your kit's render.lua page flow
@@ -226,11 +228,11 @@ function failed(err) end
 
 ### CMS API Endpoints -- Disable Caching
 
-For dynamic API endpoints (anything under `/cm/*` that returns JSON), prevent caching to ensure clients always get fresh data:
+For dynamic API endpoints (anything under `/cm/*` that returns JSON), disable caching so clients get fresh data:
 
 You can configure this in Cloudflare:
-1. Navigate to **Caching** > **Cache Rules**
-2. Create a rule: If URL path starts with `/cm/`, then **Bypass Cache**
+1. Navigate to **Caching** > **Cache Rules**.
+2. Create a rule: If URL path starts with `/cm/`, then **Bypass Cache**.
 
 Or use a response header in your flows:
 ```lua
@@ -239,10 +241,10 @@ ctx.response.headers["Cache-Control"] = "no-store"
 
 ### Cache Purging
 
-After deploying new content, purge the Cloudflare cache to ensure visitors see the latest version:
-- **Manual:** Cloudflare Dashboard > Caching > Purge Everything
-- **API:** `curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" -H "Authorization: Bearer {cf_token}" -d '{"purge_everything":true}'`
-- **Selective:** Purge specific URLs instead of everything: `-d '{"files":["https://your-domain.com/page"]}'`
+After deploying new content, purge the Cloudflare cache so visitors see the latest version:
+- **Manual:** Cloudflare Dashboard > Caching > Purge Everything.
+- **API:** `curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" -H "Authorization: Bearer {cf_token}" -d '{"purge_everything":true}'`.
+- **Selective:** Purge specific URLs instead of everything: `-d '{"files":["https://your-domain.com/page"]}'`.
 
 ---
 
@@ -395,17 +397,17 @@ your-domain.com {
 ```
 
 **What you lose without Cloudflare:**
-- No CDN caching (content served from your server for all requests)
-- No DDoS protection (your server directly absorbs attack traffic)
-- No bot mitigation
-- No global anycast network (higher latency for distant users)
-- No Cloudflare-specific features (Workers, Page Rules, etc.)
+- No CDN caching (content served from your server for all requests).
+- No DDoS protection (your server directly absorbs attack traffic).
+- No bot mitigation.
+- No global anycast network (higher latency for distant users).
+- No Cloudflare-specific features (such as Workers and Page Rules).
 
 **What you gain:**
-- Simpler architecture (one fewer layer to configure and debug)
-- No dependency on Cloudflare's infrastructure
-- Direct control over all headers and caching behavior
-- No need for Cloudflare origin certificates
+- Simpler architecture (one fewer layer to configure and debug).
+- No dependency on Cloudflare's infrastructure.
+- Direct control over all headers and caching behavior.
+- No need for Cloudflare origin certificates.
 
 For internal tools, staging environments, or low-traffic sites, this is a perfectly valid deployment pattern.
 
@@ -453,7 +455,7 @@ This tells systemd to expect a watchdog notification every 30 seconds. If the ha
 
 ### External Monitoring
 
-For production deployments, use an external monitoring service (UptimeRobot, Pingdom, Better Uptime, etc.) to monitor your public health endpoint:
+In production, monitor your public health endpoint with an external service. Examples include UptimeRobot, Pingdom, and Better Uptime:
 
 ```
 https://your-domain.com/hl
@@ -465,7 +467,7 @@ The health endpoint returns JSON with `{ok: true}` when the harness is healthy. 
 
 ## Log Aggregation Recommendations
 
-In production, you should aggregate Sentinel's logs for analysis and retention.
+In production, aggregate Sentinel logs for analysis and retention.
 
 ### Option 1: journald (Built-in)
 
@@ -509,9 +511,9 @@ Set up log rotation:
 ### Option 3: Remote aggregation
 
 For multi-server deployments, send logs to a centralized system:
-- **Loki + Grafana** -- Lightweight, works well with journald via Promtail
-- **Elasticsearch + Kibana** -- Full-text search, powerful dashboards
-- **Datadog, Splunk, etc.** -- Managed services with built-in alerting
+- **Loki + Grafana** -- Lightweight, works well with journald through Promtail.
+- **Elasticsearch + Kibana** -- Full-text search, powerful dashboards.
+- **Managed logging services, such as Datadog and Splunk** -- Managed services with built-in alerting.
 
 ---
 
@@ -524,7 +526,7 @@ For multi-server deployments, send logs to a centralized system:
 | SRE project files | `/opt/sentinel-sre/` | On every change | Git push (already versioned) |
 | State database | `/opt/sentinel-sre/.sentinel/state.db` | Daily | File backup plan or SQLite backup API |
 | Vault database | `/opt/sentinel-sre/.sentinel/vault.db` | After secret changes | File copy |
-| Config file | `/opt/sentinel-sre/.sentinel/config.json` | After config changes | File copy |
+| Configuration file | `/opt/sentinel-sre/.sentinel/config.json` | After configuration changes | File copy |
 | TLS certificates | `/etc/caddy/certs/` | After renewal | File copy |
 
 ### Automated Database Backup Script
@@ -566,7 +568,9 @@ Schedule in crontab:
 0 1 * * * /usr/local/bin/sentinel-backup.sh >> /var/log/sentinel-backup.log 2>&1
 ```
 
-**Important:** The state database backup uses SQLite's `.backup` command, which creates a consistent snapshot even while the harness is running. Do NOT simply copy `state.db` while the harness is running -- this can produce a corrupted backup if a write is in progress.
+The state database backup uses SQLite's `.backup` command. It creates a consistent snapshot during harness operation.
+
+**CAUTION:** Do not copy `state.db` during harness operation. A concurrent write can corrupt the backup.
 
 ---
 
@@ -588,17 +592,17 @@ If a single SRE outgrows one server, split it into multiple focused SREs:
 
 - **SRE per domain:** One SRE for your website CMS, another for your internal automation, a third for your monitoring.
 - **SRE per team:** Each team manages their own SRE with their own kits and flows.
-- **Load balancer:** If multiple SREs serve the same domain, use a load balancer (nginx, HAProxy, Cloudflare Load Balancing) to distribute traffic.
+- **Load balancer:** If multiple SREs serve one domain, distribute traffic through nginx, HAProxy, or Cloudflare Load Balancing.
 
 ### Queue-Based Scaling
 
-For workloads with bursty traffic (e.g., webhook floods), consider adding a message queue in front of Sentinel:
+For workloads with bursty traffic (for example webhook floods), consider adding a message queue in front of Sentinel:
 
 ```
 Webhook Source -> Message Queue (Redis, SQS) -> Consumer -> Sentinel API
 ```
 
-The consumer reads from the queue at a controlled rate and submits work to Sentinel via the API. This smooths out traffic spikes and provides durability if Sentinel is temporarily unavailable.
+The consumer reads from the queue at a controlled rate and submits work to Sentinel through the API. This smooths out traffic spikes and provides durability if Sentinel is temporarily unavailable.
 
 ---
 
@@ -606,17 +610,17 @@ The consumer reads from the queue at a controlled rate and submits work to Senti
 
 Use this checklist before going live:
 
-- [ ] `.sentinel/config.json`: `debug_mode: false`, strong tokens (64+ hex chars), `encrypt_db: true`
-- [ ] Vault passphrase set in environment (not in scripts or config files)
-- [ ] Cloudflare SSL mode: **Full (strict)**
-- [ ] Cloudflare origin certificate generated and placed in `/etc/caddy/certs/` with correct permissions
-- [ ] Caddyfile configured with origin cert and `reverse_proxy localhost:8080`
-- [ ] Caddy reloaded and healthy: `systemctl status caddy`
-- [ ] Systemd service for Sentinel configured with auto-restart
-- [ ] Firewall: only ports 80 and 443 public (Caddy); port 8080 localhost-only
-- [ ] Health monitoring configured (cron, external service, or both)
-- [ ] Log aggregation configured (journald, file, or remote)
-- [ ] Backup script scheduled and tested
+- [ ] `.sentinel/config.json`: `debug_mode: false`, strong tokens (64+ hex chars), `encrypt_db: true`.
+- [ ] Vault passphrase set in environment (not in scripts or configuration files).
+- [ ] Cloudflare SSL mode: **Full (strict)**.
+- [ ] Cloudflare origin certificate generated and placed in `/etc/caddy/certs/` with correct permissions.
+- [ ] Caddyfile configured with origin cert and `reverse_proxy localhost:8080`.
+- [ ] Caddy reloaded and healthy: `systemctl status caddy`.
+- [ ] Systemd service for Sentinel configured with auto-restart.
+- [ ] Firewall: only ports 80 and 443 public (Caddy). Port 8080 localhost-only.
+- [ ] Health monitoring configured (cron, external service, or both).
+- [ ] Log aggregation configured (journald, file, or remote).
+- [ ] Backup script scheduled and tested.
 - [ ] Test end-to-end:
   ```bash
   curl -H "Authorization: Bearer <token>" https://your-domain.com/hl
@@ -634,11 +638,11 @@ Use this checklist before going live:
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| **525 SSL Handshake Failed** | Caddy cannot present TLS certificate to Cloudflare | Check certificate paths in Caddyfile; run `systemctl status caddy` and `journalctl -u caddy` for details |
+| **525 SSL Handshake Failed** | Caddy cannot present TLS certificate to Cloudflare | Check certificate paths in Caddyfile. Run `systemctl status caddy` and `journalctl -u caddy` for details |
 | **526 Invalid SSL Certificate** | Certificate does not match domain, or is self-signed without Cloudflare trust | Use a Cloudflare origin certificate (or a valid Let's Encrypt certificate) |
-| **521 Web Server Down** | Caddy is not running or not listening on port 443 | Run `systemctl start caddy`; check firewall allows port 443 |
-| **524 Timeout** | Sentinel harness is not responding within Cloudflare's timeout (100 seconds) | Check `systemctl status sentinel`; verify the SRE path in the service file is correct |
-| **401 from Sentinel** | Missing or incorrect Bearer token in the request | Verify the `Authorization: Bearer <token>` header matches a token in `.sentinel/config.json` |
-| **502 Bad Gateway** | Caddy cannot connect to Sentinel on localhost:8080 | Verify Sentinel is running: `curl http://localhost:8080/hl` |
+| **521 Web Server Down** | Caddy is not running or not listening on port 443 | Run `systemctl start caddy`. Check firewall allows port 443 |
+| **524 Timeout** | Sentinel harness is not responding within Cloudflare's timeout (100 seconds) | Check `systemctl status sentinel`. Make sure that the SRE path in the service file is correct |
+| **401 from Sentinel** | Missing or incorrect Bearer token in the request | Make sure that `Authorization: Bearer <token>` matches a token in `.sentinel/config.json` |
+| **502 Bad Gateway** | Caddy cannot connect to Sentinel on localhost:8080 | Make sure that Sentinel responds: `curl http://localhost:8080/hl` |
 | **Stale content after deploy** | Cloudflare is serving a cached version | Purge the cache: Cloudflare Dashboard > Caching > Purge Everything |
-| **WebSocket connections fail** | Reverse proxy not forwarding upgrade headers | Ensure nginx has `proxy_set_header Upgrade` and `proxy_set_header Connection "upgrade"` directives; Caddy handles this automatically |
+| **WebSocket connections fail** | Reverse proxy not forwarding upgrade headers | Make sure that nginx has `proxy_set_header Upgrade` and `proxy_set_header Connection "upgrade"` directives. Caddy handles this automatically |

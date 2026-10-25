@@ -1,10 +1,12 @@
 ---
 title: "CLI Reference"
-description: "Complete reference for the sentinel command-line interface, covering every command, flag, environment variable, and common workflow."
+description: "Reference for Sentinel commands, flags, environment variables, and common operator procedures."
 type: Reference
 tags: [cli]
 status: stable
 ---
+
+<!-- ndx-ste-mode: description -->
 
 # CLI Reference
 
@@ -14,7 +16,7 @@ Complete reference for the `sentinel` command-line interface, covering every com
 
 ## Introduction
 
-Sentinel ships as a single static binary called `sentinel`. This binary serves as both the orchestration harness (the runtime engine that executes Lua flows) and the management CLI (used to initialize projects, manage secrets, install kits, and perform administrative tasks).
+Sentinel provides one static binary called `sentinel`. It runs Lua workflows as the harness. It also provides CLI commands for projects, secrets, kits, and administration.
 
 The fundamental operating model is:
 
@@ -23,7 +25,7 @@ The fundamental operating model is:
 3. It starts an HTTP API server that exposes endpoints for executing flows, managing triggers, querying logs, and more.
 4. Optionally, a web dashboard can be started alongside the harness for visual management.
 
-Every command operates against a project directory. If you omit `-p`, the current working directory is assumed. For clarity and safety, it is strongly recommended to always specify `-p` with an absolute path.
+Every command uses a project directory. If you omit `-p`, the command uses the current directory. Always specify `-p` with an absolute path.
 
 ---
 
@@ -41,7 +43,9 @@ cd sentinel
 go build -tags dev -o sentinel ./cmd/sentinel
 ```
 
-The `-tags dev` flag enables development features such as `api.debug_mode`, which allows the harness to run without requiring authentication tokens. This is the build you should use during local development and testing.
+The `-tags dev` flag enables development features, including `api.debug_mode`. This mode permits operation without authentication tokens.
+
+Use this build for local development and tests.
 
 **Release build** (production, smaller binary, no debug mode):
 
@@ -59,7 +63,7 @@ go build -tags dev -o sentinel.exe ./cmd/sentinel
 
 After building, the binary is available as `./sentinel` (or `./sentinel.exe` on Windows). You can copy it anywhere on your system or add it to your PATH.
 
-**Verify the installation:**
+**Make sure that the installation works:**
 
 ```bash
 ./sentinel version
@@ -90,8 +94,8 @@ These flags are available on every command and subcommand. They are defined as p
 | `--debug` | | `false` | Enable debug-level logging. When set, the harness outputs verbose log messages including kit loading details, flow registration, trigger scheduling, and internal state changes. Useful for troubleshooting startup issues or understanding execution flow. |
 | `--json` | | `false` | Output structured JSON instead of human-readable text. When enabled, all log output and command results are formatted as JSON objects. This is essential for scripting, piping output to `jq`, or integrating with log aggregation systems. |
 | `--no-color` | | `false` | Disable ANSI color codes in output. Use this when running in environments that do not support color (CI logs, file redirection, screen readers). |
-| `--no-input` | `-n` | `false` | Non-interactive mode. Instead of prompting for input, the command will fail with an error if user input would be required. Essential for CI/CD pipelines and automated scripts where no human is present. |
-| `--force-reset` | | `false` | Force kill any conflicting Sentinel processes and delete stale PID files before proceeding. Use this when a previous harness or dashboard process did not shut down cleanly and left behind a PID file that prevents a new instance from starting. |
+| `--no-input` | `-n` | `false` | Non-interactive mode. Instead of prompting for input, if the command needs user input, it fails with an error. Essential for CI/CD pipelines and automated scripts where no human is present. |
+| `--force-reset` | | `false` | Force kill any conflicting Sentinel processes and delete stale PID files before proceeding. If a previous process left a stale PID file that blocks startup, use this flag. |
 | `--host <url>` | | `""` | Remote harness URL for CLI commands that communicate with a running harness over HTTP. Defaults to the value of the `SENTINEL_HOST` environment variable if set. Example: `--host http://192.168.1.10:8080`. |
 | `--token <token>` | | `""` | Bearer token for authenticating API requests to a running harness. Defaults to the value of the `SENTINEL_API_KEY` environment variable if set. Required when the harness has authentication tokens configured. |
 
@@ -112,7 +116,9 @@ These flags are available on every command and subcommand. They are defined as p
 
 ## Environment Variables
 
-Environment variables provide an alternative to flags and configuration files. They are especially useful for secrets (which should never appear in command-line arguments where they could be visible in process listings) and for container/CI environments.
+Environment variables provide an alternative to flags and configuration files. They support secrets and container or CI environments.
+
+Keep secrets out of command arguments. Process listings can expose those arguments.
 
 ### Core Runtime Variables
 
@@ -121,10 +127,10 @@ Environment variables provide an alternative to flags and configuration files. T
 | `SENTINEL_VAULT_PASSPHRASE` | Passphrase for encrypting the vault database (AES-256-GCM). Required if the vault is encrypted. | (none) | Minimum 32 characters recommended. The vault stores all secrets accessed by `ctx.secret()` in Lua flows. |
 | `SENTINEL_STATE_PASSPHRASE` | Passphrase for encrypting the state database (SQLCipher). Only used when `state.encrypt_db` is `true` in config. | (none) | If empty and `encrypt_db` is true, the vault passphrase is used as fallback. |
 | `SENTINEL_DATA_DIR` | Override the data directory path. | `.sentinel` | Normally set in `.sentinel/config.json`. The environment variable overrides the file value. |
-| `SENTINEL_PORT` | Override the API listen port. | `8080` | Equivalent to the `api.port` config field. |
+| `SENTINEL_PORT` | Override the API listen port. | `8080` | Equivalent to the `api.port` configuration field. |
 | `SENTINEL_DEBUG` | Enable debug mode. Set to `1` or `true`. | (disabled) | Equivalent to `--debug` flag. |
-| `SENTINEL_LOG_LEVEL` | Set the minimum log level: `debug`, `info`, `warn`, or `error`. | `info` | Overrides `log.level` in config file. |
-| `SENTINEL_LOG_FORMAT` | Set the log output format: `json` or `text`. | `text` | Overrides `log.format` in config file. |
+| `SENTINEL_LOG_LEVEL` | Set the minimum log level: `debug`, `info`, `warn`, or `error`. | `info` | Overrides `log.level` in configuration file. |
+| `SENTINEL_LOG_FORMAT` | Set the log output format: `json` or `text`. | `text` | Overrides `log.format` in configuration file. |
 
 ### CLI and Remote Access Variables
 
@@ -139,7 +145,7 @@ Environment variables provide an alternative to flags and configuration files. T
 |----------|---------|---------|-------|
 | `SENTINEL_MARKETPLACE_URL` | Override kit catalog URL. | `https://kits.ndx.au` | SKM |
 | `SENTINEL_LICENSE_URL` | Override occupy/register HQ. | `https://license.ndx.au` | ndxHQ |
-| `SENTINEL_LICENSE_KEY` | License key for marketplace access. Alternative to storing it in config. | (none) | Overrides `marketplace.license_key` in config file. |
+| `SENTINEL_LICENSE_KEY` | License key for marketplace access. Alternative to storing it in config. | (none) | Overrides `marketplace.license_key` in configuration file. |
 
 ### Application Variables
 
@@ -152,10 +158,10 @@ Environment variables provide an alternative to flags and configuration files. T
 
 When the same setting is specified in multiple places, the following precedence applies (highest to lowest):
 
-1. Command-line flags (e.g., `--port 9000`)
-2. Environment variables (e.g., `SENTINEL_PORT=9000`)
-3. Configuration file (`.sentinel/config.json`)
-4. Built-in defaults
+1. Command-line flags (for example `--port 9000`).
+2. Environment variables (for example `SENTINEL_PORT=9000`).
+3. Configuration file (`.sentinel/config.json`).
+4. Built-in defaults.
 
 ---
 
@@ -165,9 +171,9 @@ These are the fundamental commands for initializing projects and running the har
 
 ### init
 
-Initialize a new Sentinel project (SRE). The init command assumes it runs at the **repository root** (current working directory). It creates repo-level files (CLAUDE.md, .gitignore, etc.) in cwd and SRE-level files (sentinel.yaml, kits, etc.) in the path specified by `-p`/`--project`.
+Initialize a new Sentinel project (SRE) from the **repository root** (current working directory). The command creates repository files in cwd, including CLAUDE.md and .gitignore. It creates SRE files, including sentinel.yaml and kits, in the path from `-p`/`--project`.
 
-A single git repo may contain multiple SREs in subfolders. Repo-level files are only written if they do not already exist, making it safe to run `init` multiple times for different SREs in the same repo.
+A Git repository can contain multiple SREs in subfolders. The command creates repository files only when they do not exist. You can run `init` for each SRE without overwriting these files.
 
 ```bash
 ./sentinel sre init [flags]
@@ -214,9 +220,13 @@ repo-root/                         # Where init is run (cwd)
     sn.example-itops/              # Legacy example IT ops compatibility kit
 ```
 
-Repo-level files (CLAUDE.md, .gitignore, .gitattributes, .claude/skills/) skip creation if they already exist, so running init for a second SRE in the same repo will not overwrite them.
+The command skips existing repository files (CLAUDE.md, .gitignore, .gitattributes, .claude/skills/). A second SRE can reuse them without overwriting them.
 
-`sn.wp-central/` and `sn.wp-edge/` are intentionally not part of the default starter-kit set. Use `--wp-central`, `--wp-edge`, or `--with-bundle wp-central|wp-edge` when you want those profiles. `--wp-central` and `--wp-edge` suppress default starter kits and skip the interactive wizard, since the user has already expressed intent via the flag.
+The default starter kits exclude `sn.wp-central/` and `sn.wp-edge/`.
+
+For WordPress profiles, use `--wp-central`, `--wp-edge`, or `--with-bundle wp-central|wp-edge`.
+
+The `--wp-central` and `--wp-edge` flags suppress default starter kits and skip the wizard.
 
 When `--wp-central` is selected, `sentinel sre init` also writes `docker-compose.wp-central.yaml` into the SRE root so the managed WordPress stack can be started directly with `sentinel harness start --compose-up wp-central`.
 For local development, that compose file currently uses floating `:latest` WordPress and MariaDB images and persists data under `./_data/wp-central/`.
@@ -259,7 +269,7 @@ The generated `sentinel.yaml` also includes `wp_central.port: 8800`, which is th
 
 **Notes:**
 
-- The `sentinel.yaml` file contains team-shared configuration (name, version, git sync settings). It should be committed to version control.
+- The `sentinel.yaml` file contains shared configuration for the name, version, and Git synchronization. Commit it to version control.
 - The `.sentinel/` directory contains machine-specific configuration, databases, and secrets. It is gitignored by default and must never be committed.
 - If vault encryption is enabled during init, you will need to set `SENTINEL_VAULT_PASSPHRASE` before starting the harness.
 - Run `sentinel sre validate` after modifying starter kits or adding new kits.
@@ -279,16 +289,16 @@ Start the harness API server. The harness discovers all kits in the project dire
 | `--port <int>` | `8080` | HTTP port for the API server. Ports 8080-8090 are within the dashboard's auto-discovery range. |
 | `--wp-port <int>` | (from `sentinel.yaml`, default `8800`) | Dedicated `sn.wp-central` WordPress ingress port. Only applies when `wp_central.enabled` is true. Overrides `wp_central.port` for that run. |
 | `-d`, `--daemon` | `false` | Run the harness as a background process. The parent waits for the child to become healthy (up to 10s) before exiting. PID file: `{SRE}/.sentinel/harness-{port}.pid`. |
-| `--drop-web-cache` | `false` | Clear all web caches (CMS content cache, template cache) on startup. Useful when content files have changed outside of hot-reload detection. |
+| `--drop-web-cache` | `false` | Clear all web caches (CMS content cache, template cache) on startup. Useful for content changes that hot reload did not detect. |
 | `--compose-up <value>` | (none) | Start Docker Compose stacks before the harness. Use `all` to start all stacks, or provide a comma-separated list of stub names. |
 | `--mcp` | `false` | Start an MCP (Model Context Protocol) server alongside the harness for AI agent tooling. |
 | `--mcp-bind <addr>` | `127.0.0.1` | MCP bind address. Use `127.0.0.1` (default) for localhost-only, or `0.0.0.0` / `::` to accept remote clients on trusted networks. |
-| `--mcp-listen <int>` | API port + 100 | MCP HTTP listen port (e.g. API `8080` → MCP `8180`). |
+| `--mcp-listen <int>` | API port + 100 | MCP HTTP listen port (for example API `8080` → MCP `8180`). |
 | `--mcp-port <int>` | (alias) | Deprecated alias for `--mcp-listen`. |
 | `--mcp-risk <list>` | `read,validate` | Comma-separated risk classes (`read`,`validate`,`execute`,`write`,`admin`) or `all`. Ceiling for every MCP client. |
 | `--mcp-aliases` | `false` | Also register `sentinel_*` tool names (canonical names only by default). |
 
-**MCP server:** When `--mcp` is set, MCP clients attach via streamable HTTP at `http://<mcp-bind>:<mcp-listen>/`. Default risk profile is read+validate only; pass `--mcp-risk all` for execute/write/admin tools. Canonical tool names only unless `--mcp-aliases` / `mcp.aliases`. `flow_run` waits for completion by default. Production mode requires the same auth as the harness API (Bearer token or Ed25519 signature). See **[MCP Agent Integration](/mcp-agent-integration)** for Cursor/Hermes setup, auth, resources, prompts, and the full tool list.
+**MCP server:** When `--mcp` is set, MCP clients attach through streamable HTTP at `http://<mcp-bind>:<mcp-listen>/`. Default risk profile is read+validate only. Pass `--mcp-risk all` for execute/write/admin tools. Canonical tool names only unless `--mcp-aliases` / `mcp.aliases`. `flow_run` waits for completion by default. Production mode requires the same auth as the harness API (Bearer token or Ed25519 signature). See **[MCP Agent Integration](/mcp-agent-integration)** for Cursor/Hermes setup, auth, resources, prompts, and the full tool list.
 
 **Required environment variables:**
 
@@ -331,7 +341,7 @@ When `--daemon` is set, the process forks into the background. The parent polls 
 ./sentinel harness start -p /home/user/my-project --mcp --mcp-bind 0.0.0.0 --mcp-listen 8180 --mcp-risk all
 ```
 
-**Cursor MCP config example** (`.cursor/mcp.json` or project MCP settings). Full guide: [18-MCP-AGENT-INTEGRATION.md](/mcp-agent-integration).
+**Cursor MCP configuration example** (`.cursor/mcp.json` or project MCP configuration). Full guide: [18-MCP-AGENT-INTEGRATION.md](/mcp-agent-integration).
 
 ```json
 {
@@ -385,7 +395,7 @@ Register the matching public key on the harness SRE: `{SRE}/.sentinel/pub-keys/{
 
 ### stop
 
-Stop a running harness. Discovers instances via port-stamped PID files. If multiple instances are running, prompts for selection or use `--port` to target directly.
+Stop a running harness. Discovers instances through port-stamped PID files. If multiple instances are running, prompts for selection or use `--port` to target directly.
 
 ```bash
 ./sentinel harness stop [flags]
@@ -428,7 +438,7 @@ Stop the harness and start a fresh process (new PID) on the same port.
 
 ### reload
 
-Send SIGUSR1 to the running harness. It re-reads config, rediscovers kits, and reloads flows/triggers without restarting.
+Send SIGUSR1 to the running harness. It re-reads configuration, rediscovers kits, and reloads flows/triggers without restarting.
 
 ```bash
 ./sentinel harness reload [flags]
@@ -440,7 +450,7 @@ Send SIGUSR1 to the running harness. It re-reads config, rediscovers kits, and r
 
 ### logs
 
-Stream logs from the running harness via the `/lg` SSE endpoint.
+Stream logs from the running harness through the `/lg` SSE endpoint.
 
 ```bash
 ./sentinel harness logs [flags]
@@ -479,7 +489,7 @@ Show all running Sentinel services (harness, dashboard, wp-proxy) in a unified t
 
 ### doctor
 
-Run pre-flight diagnostics: config validation, kit checks, database accessibility, port availability, and running instance health.
+Run pre-flight diagnostics: configuration validation, kit checks, database accessibility, port availability, and running instance health.
 
 ```bash
 ./sentinel doctor
@@ -498,7 +508,7 @@ Applies kit `dd/*.sql` to the Graphile data-plane Postgres and validates `forms/
 
 ### upgrade
 
-Check for and install binary updates from GitHub Releases.
+Search for and install binary updates from GitHub Releases.
 
 ```bash
 ./sentinel upgrade [flags]
@@ -506,7 +516,7 @@ Check for and install binary updates from GitHub Releases.
 
 | Flag | Description |
 |------|-------------|
-| `--check` | Only check for updates, don't download |
+| `--check` | Only search for updates, do not download |
 | `--yes` | Download without prompting |
 | `--url <string>` | Override release API URL |
 
@@ -517,12 +527,12 @@ Check for and install binary updates from GitHub Releases.
 The dashboard is a standalone web UI that connects to one or more harness instances. It provides visual management of flows, executions, logs, triggers, kits, forms, and secrets. The dashboard runs as its own HTTP server (default port 9090) and proxies API requests to the attached harness.
 
 The dashboard's `/rag` page is also the operator surface for Sentinel retrieval. It includes:
-- PostgreSQL connection selection for the RAG backend
-- explicit embedding provider selection
-- embedding model, task type, dimensions, and batch size controls
-- watch-folder ingestion controls
-- modality-aware search and test chat
-- lifecycle operations such as backfill, reindex, rebuild indexes, and `Re-embed Stale`
+- PostgreSQL connection selection for the RAG backend.
+- Explicit embedding provider selection.
+- Embedding model, task type, dimensions, and batch size controls.
+- Watch-folder ingestion controls.
+- Modality-aware search and test chat.
+- Lifecycle operations such as backfill, reindex, rebuild indexes, and `Re-embed Stale`.
 
 ### dashboard start
 
@@ -571,7 +581,7 @@ Stop the running dashboard process.
 
 ### dashboard status
 
-Display the dashboard's current status, including whether it is running, which port it is listening on, and which harness runtime it is currently attached to.
+Display the dashboard status. The output includes whether it runs, its listen port, and its attached harness runtime.
 
 ```bash
 ./sentinel dashboard status
@@ -612,7 +622,7 @@ Generate an Ed25519 keypair for dashboard-to-harness authentication. This is use
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--name <string>` | Yes | A human-readable name for this keypair (e.g., `laptop`, `ci-server`, `prod-dashboard`). |
+| `--name <string>` | Yes | A human-readable name for this keypair (for example `laptop`, `ci-server`, `prod-dashboard`). |
 
 The private key is stored in the dashboard's local database (`~/.sentinel/dashboard.db`). The corresponding public key must be registered with the target harness for authentication to work.
 
@@ -706,16 +716,16 @@ Validate one or more kits, or all kits in the project if no kit IDs are provided
 ```
 
 This command checks:
-- `kit.yaml` loadability
-- `README.md` presence
-- `Compatibility Matrix` presence in the README
-- `.lua.md` skill twins for Lua artifacts
-- `_test.lua` coverage for Lua artifacts
-- lightweight tool-schema guardrails
+- `kit.yaml` loadability.
+- `README.md` presence.
+- `Compatibility Matrix` presence in the README.
+- `.lua.md` skill twins for Lua artifacts.
+- `_test.lua` coverage for Lua artifacts.
+- Lightweight tool-schema guardrails.
 
 ### kit diff
 
-Show kits that have been modified since the harness last started or reloaded. Compares on-disk file modification times against harness uptime.
+Show kits with files that changed after the last harness start or reload. The command compares file modification times with harness uptime.
 
 ```bash
 ./sentinel sre kit diff
@@ -749,7 +759,7 @@ sn.diag          false     sn.diag/
 
 ### kit install
 
-Install a kit from the Sentinel Kit Marketplace (SKM). Requires prior authentication via `sentinel login`.
+Install a kit from the Sentinel Kit Marketplace (SKM). Requires prior authentication through `sentinel login`.
 
 ```bash
 ./sentinel sre kit install <kit-id>[@version]
@@ -869,7 +879,7 @@ Execute a flow manually. This is an alias for the top-level `sentinel run` comma
 
 | Flag | Description |
 |------|-------------|
-| `--async` | Don't wait for completion |
+| `--async` | Do not wait for completion |
 | `--param <key=value>` | Set parameter (repeatable) |
 | `--params-json <json>` | Set parameters as JSON string |
 | `--params-file <path>` | Set parameters from JSON file |
@@ -952,7 +962,7 @@ Execute a flow immediately. This triggers the flow's `main()` function and retur
 
 ## Secrets Commands
 
-Sentinel includes a built-in encrypted vault for storing sensitive values like API keys, tokens, and passwords. Secrets stored in the vault are accessible from Lua flows via `ctx.secret("secret_name")`.
+Sentinel includes a built-in encrypted vault for storing sensitive values like API keys, tokens, and passwords. Secrets stored in the vault are accessible from Lua flows through `ctx.secret("secret_name")`.
 
 ### secret ls
 
@@ -988,7 +998,7 @@ Create a new secret or update an existing one.
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `name` | Yes | The secret name. Used to retrieve the value in Lua via `ctx.secret("name")`. |
+| `name` | Yes | The secret name. Used to retrieve the value in Lua through `ctx.secret("name")`. |
 | `value` | No | The secret value. If omitted, the command enters interactive mode (prompting for the value with masked input) or reads from stdin with `--stdin`. |
 
 **Flags:**
@@ -998,7 +1008,7 @@ Create a new secret or update an existing one.
 | `--stdin` | `false` | Read the secret value from standard input. Useful for piping from files or other commands. |
 | `--interactive` | `false` | Prompt for the value with masked input (dots instead of characters). |
 | `--description <string>` | (none) | Optional description of the secret's purpose. |
-| `--tags <string>` | (none) | Comma-separated tags for organizing secrets (e.g., `prod,api,stripe`). |
+| `--tags <string>` | (none) | Comma-separated tags for organizing secrets (for example `prod,api,stripe`). |
 
 **Examples:**
 
@@ -1080,7 +1090,7 @@ Only SELECT and PRAGMA statements are allowed for safety. Write operations must 
 
 ### db optimize
 
-Run database optimization: REINDEX (rebuild indexes), ANALYZE (update query planner statistics), and VACUUM (reclaim unused space and defragment the database file).
+Run database optimization with REINDEX, ANALYZE, and VACUUM. These operations rebuild indexes, update query statistics, and reclaim unused space.
 
 ```bash
 ./sentinel db optimize --kit <kit-id>
@@ -1117,7 +1127,7 @@ Restore a kit's database from a previously created backup file.
 ./sentinel db restore --kit <kit-id> --from <backup-path>
 ```
 
-**Important:** The harness should be stopped before restoring a database. Restoring while the harness is running may cause data corruption.
+**CAUTION:** Stop the harness before you restore a database. A restore during operation can corrupt data.
 
 **Examples:**
 
@@ -1171,8 +1181,8 @@ Shows currently running backup jobs from recent persisted harness state.
 Shows a summary of total plans, enabled plans, running jobs, and recent failures.
 
 `sentinel backup` is distinct from `sentinel db backup`:
-- `sentinel db backup` is kit-scoped SQLite backup tooling
-- `sentinel backup` is the harness-managed subsystem for scheduled PostgreSQL and folder backups
+- `sentinel db backup` is kit-scoped SQLite backup tooling.
+- `sentinel backup` is the harness-managed subsystem for scheduled PostgreSQL and folder backups.
 
 ---
 
@@ -1312,8 +1322,8 @@ The command parses and verifies the Ed25519 signature on the key, then stores it
 
 **License key formats:**
 
-- `sk_free_...` -- Community tier (free)
-- `sk_ent_...` -- Enterprise tier
+- `sk_free_...` -- Community tier (free).
+- `sk_ent_...` -- Enterprise tier.
 
 **Example output:**
 
@@ -1345,7 +1355,7 @@ Remove the stored license key from the configuration. This does not revoke the l
 
 ## Configuration Commands
 
-Read and write `.sentinel/config.json` (per-machine infrastructure config).
+Read and write `.sentinel/config.json` (per-machine infrastructure configuration).
 
 ### config get
 
@@ -1360,7 +1370,7 @@ Retrieve a configuration value by its dot-notation key path.
 
 ### config set
 
-Set a configuration value. Auto-coerces the value to int, bool, or string. Validates the resulting config after write.
+Set a configuration value. Auto-coerces the value to int, bool, or string. Validates the resulting configuration after write.
 
 ```bash
 ./sentinel config set <key> <value>
@@ -1396,7 +1406,7 @@ Print the resolved path to `.sentinel/config.json`.
 
 ### logs
 
-Stream logs from the running harness via the `/lg` SSE endpoint. Logs are colour-coded by level with human-readable timestamps. Also available as `sentinel harness logs`.
+Stream logs from the running harness through the `/lg` SSE endpoint. Logs are colour-coded by level with human-readable timestamps. Also available as `sentinel harness logs`.
 
 ```bash
 ./sentinel logs [flags]
@@ -1703,10 +1713,10 @@ curl -H "Authorization: Bearer <your-token>" https://localhost:8443/hl
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `project not found` | The `-p` path does not point to a valid SRE directory. | Verify the directory exists and contains `sentinel.yaml`. |
+| `project not found` | The `-p` path does not point to a valid SRE directory. | Make sure that the directory exists and contains `sentinel.yaml`. |
 | `vault locked` | The vault is encrypted but `SENTINEL_VAULT_PASSPHRASE` is not set. | Set the environment variable before starting the harness. |
 | `port already in use` | Another process is listening on the requested port. | Use a different `--port` value, or use `--force-reset` to kill the conflicting Sentinel process. |
-| `invalid flow ID` | The flow identifier does not match `{namespace}-{name}:{flow}` format. | Use the correct format, e.g., `acme-billing:process-payment`. |
+| `invalid flow ID` | The flow identifier does not match `{namespace}-{name}:{flow}` format. | Use the correct format, for example `acme-billing:process-payment`. |
 | `secret not found` | The requested secret does not exist in the vault. | Create it with `sentinel secret set`. |
 | `flow timeout` | The flow's `main()` function exceeded the execution timeout. | Increase `lua.execution_timeout` in `.sentinel/config.json` (default: 30 seconds). |
 | `debug mode is disabled in production builds` | A release build has `api.debug_mode: true` in config. | Set `api.debug_mode` to `false` and configure `api.tokens` with at least one authentication token. |
@@ -1717,12 +1727,12 @@ curl -H "Authorization: Bearer <your-token>" https://localhost:8443/hl
 ## Best Practices
 
 1. **Always use `-p` with absolute paths** in scripts and automation to avoid confusion about which project directory is being targeted.
-2. **Set secrets via environment variables or interactive mode**, never as command-line arguments where they appear in process listings and shell history.
+2. **Set secrets through environment variables or interactive mode**. Keep secrets out of command arguments, process listings, and shell history.
 3. **Use `--json` for scripting** to get structured, parseable output that can be piped to `jq` or processed by other tools.
 4. **Enable `--debug` when troubleshooting** to see detailed internal logging of kit loading, flow registration, and execution steps.
 5. **Run `audit` regularly** to catch configuration issues, missing files, and structural problems before they cause runtime errors.
 6. **Use `--force-reset` sparingly** -- it kills all matching processes and deletes PID files. Only use when a clean shutdown failed.
-7. **Back up data before major changes** using `db backup` for kit SQLite files and `backup` commands for harness-level PostgreSQL or folder plans.
-8. **Test flows before scheduling them** with cron triggers. Use `sentinel run` manually first to verify correct behavior.
-9. **Use daemon mode in production** (`--daemon`) and manage the process with your system's service manager (systemd, supervisord, etc.).
-10. **Keep the binary and SRE separate** -- the Sentinel binary should not live inside the SRE project directory. Store it in `/usr/local/bin` or similar.
+7. **Back up data before major changes**. Use `db backup` for kit SQLite files. Use `backup` commands for PostgreSQL or folder plans.
+8. **Test flows before scheduling them** with cron triggers. First, use `sentinel run` manually. Make sure that the result is correct.
+9. **Use daemon mode in production** (`--daemon`). Manage the process with systemd, supervisord, or another service manager.
+10. **Keep the binary and SRE separate** -- Store the Sentinel binary in `/usr/local/bin` or another directory outside the SRE.

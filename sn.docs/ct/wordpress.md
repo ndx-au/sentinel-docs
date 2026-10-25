@@ -1,10 +1,12 @@
 ---
 title: "WordPress with Sentinel"
-description: "This document describes the WordPress platform architecture for Sentinel, covering the central origin, preview rendering, and edge content delivery."
+description: "Sentinel WordPress architecture, central origin, preview rendering, and delivery at the edge."
 type: Guide
 tags: [wordpress]
 status: stable
 ---
+
+<!-- ndx-ste-mode: description -->
 
 # WordPress with Sentinel
 
@@ -12,10 +14,10 @@ This document describes the WordPress platform architecture for Sentinel, coveri
 
 The intended boundary is:
 
-- `sn.wp-central` is the only supported ingress for the managed WordPress stack
-- operators use the normal WordPress admin UI for the initial install and editorial work
-- Sentinel integrations use a dedicated WordPress user plus an Application Password
-- the raw WordPress container is internal implementation detail, not the operator-facing entry point
+- `sn.wp-central` is the only supported ingress for the managed WordPress stack.
+- Operators use the normal WordPress admin UI for the initial install and editorial work.
+- Sentinel integrations use a dedicated WordPress user plus an Application Password.
+- The raw WordPress container is internal implementation detail, not the operator-facing entry point.
 
 ## Three-Kit Architecture
 
@@ -24,22 +26,22 @@ The WordPress platform consists of three kits that work together:
 | Kit | Runs on | Purpose |
 |-----|---------|---------|
 | `sn.wp-central` | Central harness | Manages the WordPress Docker stack, reverse proxy, change tracking, webhook delivery, and edge node registration |
-| `sn.wp-preview` | Central harness | WYSIWYG preview rendering for editors; canonical template source for edge nodes |
-| `sn.wp-edge` | Edge harness(es) | Public-facing content delivery from a local SQLite replica; receives incremental updates via webhooks |
+| `sn.wp-preview` | Central harness | WYSIWYG preview rendering for editors. Canonical template source for edge nodes |
+| `sn.wp-edge` | Edge harness(es) | Public-facing content delivery from a local SQLite replica. Receives incremental updates through webhooks |
 
 The central harness runs both `sn.wp-central` and `sn.wp-preview`. Each edge deployment runs its own harness with `sn.wp-edge`. Content flows one way: WordPress to central to edge. Templates flow from preview (where they are developed) through the dispatch folder to edge nodes.
 
 ## Central Bootstrap
 
-The following sections cover the local-development bootstrap path for a managed WordPress origin running behind Sentinel via `sn.wp-central`.
+The following sections cover the local-development bootstrap path for a managed WordPress origin running behind Sentinel through `sn.wp-central`.
 
 ## Prerequisites
 
-- Docker Desktop or a working Docker Engine on the local machine
-- a Sentinel build with dev features enabled for local work
-- an SRE initialized with `--wp-central`
-- a vault passphrase configured if the local project encrypts the vault
-- an S3-compatible bucket storage point configured for WordPress media publication
+- Docker Desktop or a working Docker Engine on the local machine.
+- A Sentinel build with dev features enabled for local work.
+- An SRE initialized with `--wp-central`.
+- A vault passphrase configured if the local project encrypts the vault.
+- An S3-compatible bucket storage point configured for WordPress media publication.
 
 Example dev build:
 
@@ -57,9 +59,9 @@ sentinel sre init ./my-central --wp-central
 
 This currently scaffolds:
 
-- `sentinel.yaml` with a `wp_central` block
-- `sn.wp-central/`
-- `docker-compose.wp-central.yaml`
+- `sentinel.yaml` with a `wp_central` block.
+- `sn.wp-central/`.
+- `docker-compose.wp-central.yaml`.
 
 The generated compose file is for development. It currently uses floating `wordpress:latest` and `mariadb:latest` images.
 
@@ -73,14 +75,14 @@ sentinel harness start -p ./my-central --force-reset --wp-port 8800
 
 Default ports:
 
-- harness: `http://127.0.0.1:8080`
-- dashboard: `http://127.0.0.1:9090`
-- WordPress ingress: `http://127.0.0.1:8800`
+- Harness: `http://127.0.0.1:8080`.
+- Dashboard: `http://127.0.0.1:9090`.
+- WordPress ingress: `http://127.0.0.1:8800`.
 
 The dedicated WordPress ingress port can be set in either place:
 
-- `sentinel.yaml` via `wp_central.port`
-- the CLI via `--wp-port`, which overrides `sentinel.yaml` for that run
+- `sentinel.yaml` through `wp_central.port`.
+- The CLI through `--wp-port`, which overrides `sentinel.yaml` for that run.
 
 ## 3. Bring Up the Managed WordPress Stack
 
@@ -92,8 +94,8 @@ sentinel harness start -p ./my-central --compose-up wp-central
 
 The development stack persists WordPress state under the SRE data tree:
 
-- `./_data/wp-central/db`
-- `./_data/wp-central/html`
+- `./_data/wp-central/db`.
+- `./_data/wp-central/html`.
 
 These paths are intentionally not hidden. They are project-local runtime data, not kit source.
 
@@ -119,8 +121,8 @@ Do not use the human admin account for Sentinel automation.
 
 Create a dedicated user in WordPress, for example:
 
-- username: `sentinel-sync`
-- role: `Administrator` during local development
+- Username: `sentinel-sync`.
+- Role: `Administrator` during local development.
 
 This user exists so Sentinel can use the REST API without depending on the operator's own login.
 
@@ -128,21 +130,21 @@ This user exists so Sentinel can use the REST API without depending on the opera
 
 For the dedicated integration user:
 
-1. open the user profile page in WordPress admin
-2. find the **Application Passwords** section
-3. create a password such as `sentinel-wp-central-dev-pass`
-4. copy the generated value immediately
+1. Open the user profile page in WordPress admin.
+2. Find the **Application Passwords** section.
+3. Create a password such as `sentinel-wp-central-dev-pass`.
+4. Copy the generated value immediately.
 
-Sentinel should use the Application Password, not the user's normal login password.
+Use the Application Password for Sentinel automation.
 
 ## 7. Store the Credentials in the Sentinel Vault
 
-Store the WordPress integration credentials in the Sentinel vault so flows can retrieve them via `ctx.secret(...)`.
+Store the WordPress integration credentials in the Sentinel vault so flows can retrieve them through `ctx.secret(...)`.
 
 Recommended secret names:
 
-- `wp_central_username`
-- `wp_central_app_password`
+- `wp_central_username`.
+- `wp_central_app_password`.
 
 Example:
 
@@ -164,11 +166,13 @@ local user = ctx.secret("wp_central_username")
 local pass = ctx.secret("wp_central_app_password")
 ```
 
-Do not hardcode these values into `sentinel.yaml`, flow source, or git-tracked config files.
+Do not hardcode these values into `sentinel.yaml`, flow source, or git-tracked configuration files.
 
 ## 8. Bind a Dedicated Media Storage Point
 
-`sn.wp-central` treats bucket-backed object storage as a standard prerequisite. WordPress media publication should target a reserved storage point, not `{sre}/_data`.
+`sn.wp-central` needs bucket-backed object storage.
+
+Use a reserved storage point for WordPress media publication. Keep media outside `{sre}/_data`.
 
 Create a storage point in the dashboard, then bind it in `sentinel.yaml`:
 
@@ -182,14 +186,14 @@ wp_central:
 
 Notes:
 
-- the storage point ID is visible on the dashboard Storage page
-- the bound point is marked with a small `WP` badge
-- that reserved point should not be reused for unrelated backup or RAG selectors
-- object storage is the intended home for media/binary publication; `_data/wp-central/*` is only for the managed WordPress runtime state
+- The storage point ID is visible on the dashboard Storage page.
+- The bound point is marked with a small `WP` badge.
+- Reserve that point for WordPress media. Use other points for backups and RAG selectors.
+- Object storage is the intended home for media/binary publication. `_data/wp-central/*` is only for the managed WordPress runtime state.
 
 ## 9. Verify the REST API Path
 
-WordPress REST is currently expected to work through the Sentinel ingress. In local development, the site may expose REST routes using the fallback form:
+WordPress REST uses the Sentinel ingress. In local development, REST routes can use this fallback form:
 
 ```text
 /index.php?rest_route=/wp/v2/...
@@ -208,22 +212,22 @@ If that succeeds, Sentinel has the credential shape it needs for local integrati
 
 ## Operator Checklist
 
-- initialize the SRE with `sentinel sre init --wp-central`
-- start the harness and dashboard
-- bring up the `wp-central` compose stack
-- complete the first-run install at `/wp-admin/install.php`
-- create a dedicated integration user
-- generate an Application Password for that user
-- store the username and Application Password in the Sentinel vault
-- configure a dedicated S3-compatible storage point and bind its `storage_point_id` in `sentinel.yaml`
-- keep using the dedicated `wp-central` ingress port for admin access
+- Initialize the SRE with `sentinel sre init --wp-central`.
+- Start the harness and dashboard.
+- Bring up the `wp-central` compose stack.
+- Complete the first-run install at `/wp-admin/install.php`.
+- Create a dedicated integration user.
+- Generate an Application Password for that user.
+- Store the username and Application Password in the Sentinel vault.
+- Configure a dedicated S3-compatible storage point and bind its `storage_point_id` in `sentinel.yaml`.
+- Keep using the dedicated `wp-central` ingress port for admin access.
 
 ## Notes
 
-- `WP_ENVIRONMENT_TYPE` is currently set to `local` in the dev compose template
-- `_data/wp-central/*` should be backed up if the local instance matters
-- vault backups only help if the vault passphrase is retained separately
-- future `sn.wp-central` flows should read credentials from the vault rather than from ad hoc local files
+- `WP_ENVIRONMENT_TYPE` is currently set to `local` in the dev compose template.
+- If you need to recover the local instance, back up `_data/wp-central/*`.
+- Vault backups only help if the vault passphrase is retained separately.
+- For future `sn.wp-central` flows, read credentials from the vault.
 
 ---
 
@@ -235,9 +239,9 @@ The `sn.wp-central` kit includes a WordPress must-use plugin (`wp-plugin/sn-wp.p
 
 Hooks into WordPress post status transitions, term edits, and media changes to record events in a `wp_sn_wp_events` table. Each event receives a monotonically increasing sequence number used for cursor-based replication. Tracked event types:
 
-- `post_published`, `post_updated`, `post_trashed`, `post_restored`, `post_deleted`
-- `term_updated`, `term_deleted`
-- `media_added`, `media_updated`, `media_deleted`
+- `post_published`, `post_updated`, `post_trashed`, `post_restored`, `post_deleted`.
+- `term_updated`, `term_deleted`.
+- `media_added`, `media_updated`, `media_deleted`.
 
 Only `post` and `page` post types are tracked. Revisions and autosaves are excluded.
 
@@ -258,8 +262,8 @@ Edge nodes register themselves and maintain leases. Expired or tombstoned nodes 
 
 When the change tracker records an event, the webhook system delivers an HMAC-SHA256 signed payload to all active edge nodes. The payload is the JSON-encoded event row, signed with the `sn_wp_webhook_secret` WordPress option. Headers include:
 
-- `X-SN-Signature`: hex-encoded HMAC-SHA256 of the raw JSON body
-- `X-SN-Node-ID`: the target edge node identifier
+- `X-SN-Signature`: hex-encoded HMAC-SHA256 of the raw JSON body.
+- `X-SN-Node-ID`: the target edge node identifier.
 
 Delivery is fire-and-forget (`blocking: false`) with a 5-second timeout. Failed deliveries are logged but do not block WordPress.
 
@@ -277,7 +281,7 @@ The nonce is generated per-post using `wp_create_nonce('sn_wp_preview_' . $post-
 
 The webhook HMAC secret must be configured in two places:
 
-1. **WordPress side**: Set the `sn_wp_webhook_secret` option via WP-CLI or the database:
+1. **WordPress side**: Set the `sn_wp_webhook_secret` option through WP-CLI or the database:
 
    ```bash
    wp option update sn_wp_webhook_secret 'your-shared-secret' --path=./_data/wp-central/html
@@ -301,7 +305,7 @@ To connect the WordPress Preview button to Sentinel preview rendering:
    wp option update sn_wp_preview_url http://127.0.0.1:8080 --path=./_data/wp-central/html
    ```
 
-2. Ensure the integration user has at least `edit_posts` capability (required for draft/autosave REST API access).
+2. Make sure that the integration user has at least `edit_posts` capability for draft and autosave REST access.
 
 3. The preview page is served at `/kt/sn/wp-preview/pg/preview`. It fetches the latest autosave first, falling back to the draft with `context=edit`.
 
@@ -316,8 +320,8 @@ Templates are developed in `sn.wp-preview` and promoted to edge nodes through a 
 2. **Promote** -- run the `promote_templates` flow to copy renderable assets (`tp/`, `pb/`, `pg/`) to the dispatch folder at `_data/wp-edge-kit/` on the central SRE. This is the release gate.
 
 3. **Distribute** -- edge nodes sync from the dispatch folder. Options:
-   - **rsync/SSH**: configure `wp_edge_rsync_ssh_key` on edge nodes for automated pull
-   - **Manual copy**: download from central and place into the edge kit directories
+   - **Rsync/SSH**: configure `wp_edge_rsync_ssh_key` on edge nodes for automated pull.
+   - **Manual copy**: download from central and place into the edge kit directories.
 
 Only renderable surface files are promoted. Lua modules, `kit.yaml`, and flow definitions are not included in the dispatch.
 
@@ -354,7 +358,7 @@ To bring up a new edge node:
    curl -X POST http://127.0.0.1:8080/fl/sn-wp-edge:full_sync/run
    ```
 
-6. **Register with central** (optional, for webhook delivery): the edge node should register itself via the `/sn-wp/v1/edge/register` endpoint with its callback URL.
+6. **Register with central** (optional, for webhook delivery): Register the edge callback URL through `/sn-wp/v1/edge/register`.
 
 7. **Verify health**:
 
@@ -364,9 +368,9 @@ To bring up a new edge node:
 
 After bootstrap, the edge node maintains itself:
 
-- `webhook_ingest` processes incoming content changes in real time
-- `reconcile` runs every 15 minutes to catch any missed webhooks
-- Page rendering reads exclusively from the local SQLite replica
+- `webhook_ingest` processes incoming content changes in real time.
+- `reconcile` runs every 15 minutes to catch any missed webhooks.
+- Page rendering reads exclusively from the local SQLite replica.
 
 ---
 
@@ -396,15 +400,15 @@ Public Internet
 
 **Content editors** access `https://api.example.com/wp-admin/` for writing and editorial work. The wp-central proxy handles forwarded headers so WordPress sees `https://api.example.com` as its home URL.
 
-**Preview flow**: Editor clicks Preview in wp-admin, mu-plugin rewrites the URL to `https://example.com/post/slug?preview=true&p=42`, the CF Worker fetches the draft from `api.example.com` and renders it with the same templates used for published content.
+**Preview flow**: The editor clicks Preview in wp-admin. The mu-plugin rewrites the URL to `https://example.com/post/slug?preview=true&p=42`. The CF Worker fetches the draft from `api.example.com`. It uses the same templates for drafts and published content.
 
-**Custom harness endpoints** (SEO data, custom integrations, kit APIs) are exposed via the harness on port 8080 and grafted into the `api.example.com` URL space by the reverse proxy under a path prefix like `/sn/`. This avoids needing a separate subdomain for harness APIs.
+**Custom harness endpoints** serve SEO data, custom integrations, and kit APIs on port 8080. The reverse proxy exposes them under a prefix such as `/sn/` on `api.example.com`. No separate harness API subdomain is necessary.
 
 ### Reverse Proxy Path Routing
 
 Both Traefik and Caddy can route different paths on the same domain to different backend ports. This means the WordPress proxy (port 8800) and the harness API (port 8080) share a single domain without conflict.
 
-**Traefik example** (dynamic config):
+**Traefik example** (dynamic configuration):
 
 ```yaml
 http:
@@ -503,11 +507,11 @@ If a plugin's value is in **storing and managing data** (admin side), it works. 
 
 | Category | Why | Examples |
 |----------|-----|---------|
-| Page builders | Render via WordPress theme. No theme = no output | Elementor, WPBakery, Beaver Builder, Divi |
+| Page builders | Render through WordPress theme. No theme = no output | Elementor, WPBakery, Beaver Builder, Divi |
 | SEO plugins (frontend rendering) | Meta tag injection assumes WordPress renders `<head>` | Yoast (meta tags useless), RankMath (meta tags useless) |
-| Caching plugins | Cache a frontend that does not exist. May interfere with REST API responses | WP Super Cache, W3 Total Cache, LiteSpeed Cache |
+| Caching plugins | Cache a frontend that does not exist. Can interfere with REST API responses | WP Super Cache, W3 Total Cache, LiteSpeed Cache |
 | Comment plugins | Display comments on the WordPress frontend. No frontend = nowhere to show them | Disqus, wpDiscuz |
-| Frontend form plugins | Render forms via shortcodes in the WordPress theme | Contact Form 7, WPForms, Gravity Forms (admin still works) |
+| Frontend form plugins | Render forms through shortcodes in the WordPress theme | Contact Form 7, WPForms, Gravity Forms (admin still works) |
 | Popup, slider, and widget plugins | Inject output into the WordPress theme | OptinMonster, Slider Revolution |
 | Security plugins (firewall) | Firewall rules inspect WordPress page requests that no longer exist | Wordfence (firewall useless, login security still works) |
 | Analytics (frontend) | Inject tracking scripts into WordPress `<head>` | MonsterInsights, Google Analytics plugins |
@@ -516,23 +520,23 @@ If a plugin's value is in **storing and managing data** (admin side), it works. 
 
 | Category | Why | Examples |
 |----------|-----|---------|
-| Custom fields | Data stored in the database, exposed via REST API | Advanced Custom Fields (ACF), Meta Box, Pods |
+| Custom fields | Data stored in the database, exposed through REST API | Advanced Custom Fields (ACF), Meta Box, Pods |
 | Custom post types | REST API exposes them natively | CPT UI, Toolset Types |
-| Media management | Uploads work normally, URLs accessible via REST API | EWWW Image Optimizer, Smush, Regenerate Thumbnails |
+| Media management | Uploads work normally, URLs accessible through REST API | EWWW Image Optimizer, Smush, Regenerate Thumbnails |
 | WooCommerce (admin) | Product management works. Storefront needs Astro templates | WooCommerce (admin + REST API) |
-| Multilingual | Translation data stored in database, queryable via API | WPML, Polylang (need API integration in templates) |
+| Multilingual | Translation data stored in database, queryable through API | WPML, Polylang (need API integration in templates) |
 | Backup plugins | Operate on database and files, do not need a frontend | UpdraftPlus, BackWPup |
 | User and role management | Admin-side only | Members, User Role Editor |
 | Scheduled publishing | WordPress cron publishes the post, REST API serves it | Built-in WordPress scheduling |
 
 ### Plugins That Partially Work
 
-**Yoast / RankMath**: SEO metadata (title, description, Open Graph tags, focus keywords) is stored in `wp_postmeta` and available via the REST API. The data is usable — but you must read those fields in your edge templates and render your own `<meta>` tags. The plugin's on-page analysis score is meaningless since it analyzes WordPress theme output that no longer exists.
+**Yoast / RankMath**: SEO metadata (title, description, Open Graph tags, focus keywords) is stored in `wp_postmeta` and available through the REST API. The data is usable — but you must read those fields in your edge templates and render your own `<meta>` tags. The plugin's on-page analysis score is meaningless since it analyzes WordPress theme output that no longer exists.
 
-A Sentinel kit (e.g., `sn.wp-yoast`) can query the MariaDB `wp_postmeta` table directly for Yoast fields (`_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `_yoast_wpseo_focuskw`, `_yoast_wpseo_opengraph-title`, etc.) and expose them via a harness API endpoint. The edge renderer then fetches SEO data alongside content.
+A Sentinel kit such as `sn.wp-yoast` can query Yoast fields in MariaDB's `wp_postmeta` table. Fields include `_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `_yoast_wpseo_focuskw`, and `_yoast_wpseo_opengraph-title`. The kit can expose them through a harness API endpoint. The edge renderer fetches SEO data with the content.
 
 **Redirection plugins**: They intercept WordPress requests. In a headless setup, redirects need to happen at the CF Worker level or in the reverse proxy (Traefik/Caddy rules), not in WordPress.
 
-**Gravity Forms / WPForms (admin side)**: Form building and submission management in wp-admin works. Frontend rendering does not — form display on the public site must be built as Astro components that POST to your own endpoints or a third-party form service.
+**Gravity Forms / WPForms (admin side)**: Form creation and submission management work in wp-admin. Frontend rendering does not work. The public site needs Astro components that POST to your endpoints or a third-party form service.
 
 **WooCommerce**: Product management, order processing, and the REST API work fully. The storefront (product pages, cart, checkout) needs to be built as Astro templates that consume the WooCommerce REST API. This is a significant frontend effort but gives you complete control over the shopping experience.

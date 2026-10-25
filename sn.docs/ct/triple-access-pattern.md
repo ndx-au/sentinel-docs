@@ -1,20 +1,22 @@
 ---
 title: "Triple-Access Pattern for Sentinel Services"
-description: "The Triple-Access Pattern is a core internal architecture principle used throughout the Sentinel codebase."
+description: "How to share Sentinel business logic across REST API, CLI, and Lua interfaces."
 type: Guide
 tags: [architecture]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Triple-Access Pattern for Sentinel Services
 
 ## Overview
 
-The Triple-Access Pattern is a core internal architecture principle used throughout the Sentinel codebase. It ensures that every service feature is accessible through three distinct interfaces -- REST API, CLI, and Lua -- while maintaining zero code duplication and consistent behavior across all three. This document is intended for developers contributing to the Sentinel harness codebase, not for end users writing Lua flows.
+The Triple-Access Pattern is an internal Sentinel architecture. A shared service provides the same feature through the REST API, CLI, and Lua. This avoids duplicate business logic and keeps behavior consistent. This guide is for harness contributors.
 
 ### Why This Pattern Exists
 
-In a system like Sentinel, the same operation (e.g., "list all vendors" or "create a trigger") needs to be available in multiple contexts:
+In a system like Sentinel, the same operation (for example "list all vendors" or "create a trigger") needs to be available in multiple contexts:
 
 1. **REST API** -- External clients, the dashboard, AI agents, and automation tools interact with Sentinel through HTTP endpoints. The API must be consistent, follow the brevity regime, and always return HTTP 200 with structured error bodies.
 
@@ -22,19 +24,19 @@ In a system like Sentinel, the same operation (e.g., "list all vendors" or "crea
 
 3. **Lua** -- Flows running inside the Sentinel sandbox need to access service functionality programmatically. Lua bindings must be context-aware, handle errors using the `(result, error_string)` pattern, and integrate with the Lua VM lifecycle.
 
-Without a shared architecture, each interface would implement its own version of the business logic. This leads to subtle behavioral differences (the API validates differently than the CLI), duplicated bug fixes (fix a bug in the API handler but forget to fix it in the CLI), and maintenance burden (three places to update for every change).
+Without a shared architecture, each interface needs its own business logic. The API and CLI can then produce different results. Developers must repeat fixes and update three implementations for each change.
 
 The Triple-Access Pattern solves this by placing all business logic in a single **service layer** that the three interfaces simply call into. Each interface is a thin adapter that translates between its transport format (HTTP, CLI args, Lua tables) and the service layer's Go types.
 
 ### When to Apply This Pattern
 
-Apply this pattern whenever you are adding a new feature area to the Sentinel harness that users will interact with. If the feature only needs one interface (e.g., an internal subsystem that is never exposed), a simpler architecture may suffice. But if users or agents will access it through the API, and operators will manage it through the CLI, and flows might interact with it from Lua -- use the Triple-Access Pattern from the start. Retrofitting it later is possible (see the Migration Path section at the end) but more expensive.
+For a feature that needs API, CLI, and Lua access, use the Triple-Access Pattern from the start. For an internal feature with one interface, use a simpler architecture. The Migration Path section explains how to convert existing features. That conversion adds work.
 
 ---
 
 ## Architecture
 
-The architecture consists of five layers stacked vertically, with the three interface layers at the top all pointing down to a shared service layer, which in turn delegates to a repository layer for data persistence.
+Three interface layers call a shared service layer. The service delegates persistence to a repository layer. Shared domain models define the data for all layers.
 
 ```
 +-------------------------------------------------------------+
@@ -85,15 +87,15 @@ Each layer has a specific responsibility and a strict contract with the layers a
 
 ### 1. Domain Models (`types.go`)
 
-**Purpose:** Define the data structures that every layer works with. Domain models are the shared vocabulary of the service -- they define what a "Vendor" is, what a "Filter" looks like, and what options are available for querying.
+**Purpose:** Domain models define shared data structures. They describe entities such as a "Vendor", filters such as a "Filter", and query options.
 
-**Why a separate file:** By isolating types in `types.go`, you ensure that no layer owns the type definitions. The repository, service, and all three interface layers all import the same types. This eliminates the risk of type drift (where each layer has its own slightly different version of a struct).
+**Why a separate file:** By isolating types in `types.go`, you make sure that no layer owns the type definitions. The repository, service, and all three interface layers all import the same types. This eliminates the risk of type drift (where each layer has its own slightly different version of a struct).
 
 **Implementation guidelines:**
 
-- All types must be JSON-serializable (exported fields with `json` tags). This is required because the API layer returns them as JSON, the CLI layer may print them as JSON, and the Lua layer converts them to Lua tables via JSON.
-- Use pointer types for optional filter fields. A `nil` pointer means "no filter on this field," while a non-nil pointer (even pointing to an empty string) means "filter on this field." This distinction is essential for building correct SQL WHERE clauses.
-- Include pagination fields (Limit, Offset) in filter types so that all three interfaces have a consistent way to request pages of results.
+- All types must be JSON-serializable, with exported fields and `json` tags. The API returns JSON. The CLI can print JSON. The Lua layer converts JSON to Lua tables.
+- Use pointer types for optional filter fields. A `nil` pointer means "no filter on this field," with no SQL condition. A non-nil pointer means "filter on this field." This includes a pointer to an empty string. SQL WHERE clauses depend on this distinction.
+- Include pagination fields (Limit, Offset) in filter types. Use the same pagination fields for all three interfaces.
 - Define a generic `QueryOptions` type for the flexible query interface that AI agents and programmatic clients use. This type accepts string-based entity type selection and a map of filter keys, making it adaptable to different query styles.
 
 ```go
@@ -128,15 +130,15 @@ type QueryOptions struct {
 
 ### 2. Repository Layer (`repository.go`)
 
-**Purpose:** Handle all database interactions. The repository translates between domain model types and SQL operations. No other layer should contain SQL statements.
+**Purpose:** The repository handles database interactions. It translates between domain models and SQL operations. Other layers contain no SQL statements.
 
-**Why a separate layer:** Isolating SQL in the repository makes it possible to change the database schema, optimize queries, or even switch database engines without touching the service logic or interface layers. It also makes the service layer testable by allowing you to mock the repository.
+**Why a separate layer:** The repository isolates SQL from business logic. Developers can change schemas, optimize queries, or replace database engines without changing the interfaces. Tests can use a mock repository for the service.
 
 **Implementation guidelines:**
 
 - **Always use parameterized queries.** Never concatenate user input into SQL strings. This prevents SQL injection vulnerabilities and ensures correct handling of special characters.
-- **Handle NULL values correctly.** When scanning SQL results into Go structs, use `sql.NullString`, `sql.NullInt64`, etc. for columns that may be NULL. Map these to pointer fields in domain types.
-- **Wrap cascading operations in transactions.** If a single logical operation requires multiple SQL statements (e.g., creating a record and updating a related table), wrap them in a transaction so they succeed or fail atomically.
+- **Handle NULL values correctly.** For nullable SQL columns, use `sql.NullString`, `sql.NullInt64`, or another suitable nullable type. Map the values to pointer fields in domain types.
+- **Wrap cascading operations in transactions.** If one operation needs multiple SQL statements, use a transaction. The statements then succeed or fail as one operation.
 - **Return package-level error variables.** Define sentinel errors like `var ErrNotFound = errors.New("...")` and return them from repository methods. This allows the service layer to make decisions based on error types without parsing error strings.
 
 ```go
@@ -161,14 +163,14 @@ func (r *Repository) Export(ctx context.Context, filter *QueryOptions) (*ExportP
 
 ### 3. Service Layer (`service.go`)
 
-**Purpose:** Orchestrate business logic. The service layer is the single source of truth for "how this feature works." It validates inputs, enforces business rules, coordinates repository calls, and produces structured results. All three interface layers delegate to the service layer -- they never bypass it to call the repository directly.
+**Purpose:** The service defines "how this feature works." It validates inputs, enforces rules, coordinates repository calls, and returns structured results. All three interfaces call the service. They never call the repository directly.
 
 **Why this is the critical layer:** The service layer is where the Triple-Access Pattern delivers its value. Because the CLI, API, and Lua layers all call the same service methods, you are guaranteed consistent behavior. If you fix a validation bug in the service layer, it is fixed for all three interfaces simultaneously.
 
 **Implementation guidelines:**
 
-- **The service is a thin orchestration layer.** It should contain business logic (validation, authorization, workflow coordination) but not infrastructure concerns (HTTP parsing, CLI flag handling, Lua table conversion). Keep it focused.
-- **All logging goes through the service layer.** The repository should not log (it just returns data or errors). The interface layers should only log transport-level events (incoming request, response sent). Business-level logging (entity created, validation failed) happens in the service.
+- **The service is a thin orchestration layer.** It contains validation, authorization, and workflow coordination. HTTP parsing, CLI flags, and Lua table conversion belong in the interface layers.
+- **All logging goes through the service layer.** The repository returns data or errors. Interface layers log only transport events, such as incoming requests and sent responses. The service logs business events, such as entity creation and failed validation.
 - **Use `sync.Once` for lazy initialization.** Many services need to create database tables or load default data on first use. Using `sync.Once` ensures this happens exactly once, even under concurrent access.
 - **Return structured data, not formatted strings.** The service returns Go structs. Each interface layer formats those structs for its own needs (JSON for API, tables for CLI, Lua tables for Lua).
 
@@ -211,14 +213,16 @@ func (s *Service) Stats(ctx context.Context) (*Stats, error)
 
 **Purpose:** Expose the service to command-line users. CLI commands parse flags and arguments, call the service layer, and format the output for human or machine consumption.
 
-**Why this layer is thin:** The CLI layer's only job is to translate between command-line conventions (flags, positional arguments, table output) and service method calls. It should not contain any business logic. If you find yourself writing an `if` statement that checks a business rule in a CLI command handler, move that logic to the service layer.
+**Why this layer is thin:** The CLI translates flags, arguments, and output formats into service method calls. Business rules belong in the service.
+
+If a CLI handler uses an `if` statement for a business rule, move the rule to the service.
 
 **Implementation guidelines:**
 
-- **Commands map directly to service methods.** `sentinel lib vendor list` calls `svc.ListVendors()`. `sentinel lib export-all` calls `svc.ExportAll()`. The mapping should be obvious and mechanical.
+- **Commands map directly to service methods.** `sentinel lib vendor list` calls `svc.ListVendors()`. `sentinel lib export-all` calls `svc.ExportAll()`. Keep this mapping direct.
 - **Use the CLI formatter for human-readable output.** Tables, colors, and summary lines make the output readable for operators in a terminal.
 - **Support JSON output for machine consumption.** The generic `query` command outputs JSON specifically for AI agents and automation scripts that need to parse the results.
-- **Inherit logger and runner context from the global Runner.** Do not create your own logger or database connection -- use the ones provided by the DI container.
+- **Inherit logger and runner context from the global Runner.** Use the logger and database connection from the DI container.
 
 ```go
 var libCmd = &cobra.Command{
@@ -269,16 +273,16 @@ var queryCmd = &cobra.Command{
 
 ### 5. API Layer (`internal/api/{service}_handlers.go`)
 
-**Purpose:** Expose the service via REST HTTP endpoints. API handlers parse HTTP requests, call the service layer, and write JSON responses.
+**Purpose:** Expose the service through REST HTTP endpoints. API handlers parse HTTP requests, call the service layer, and write JSON responses.
 
-**Why this layer is thin:** Like the CLI layer, the API layer is a pure adapter. Its job is to translate HTTP conventions (query parameters, request bodies, headers) into service method calls and to translate service results (or errors) back into HTTP responses. No business logic should live here.
+**Why this layer is thin:** The API translates query parameters, request bodies, and headers into service calls. It translates service results and errors into HTTP responses. Business rules belong in the service.
 
 **Implementation guidelines:**
 
-- **Always return HTTP 200.** Sentinel's API contract requires that all responses return HTTP 200. Errors are communicated in the response body as `{ok: false, err: "CODE", msg: "..."}`. This convention exists because many HTTP clients and proxies treat non-200 status codes as failures and may retry or circuit-break, which is undesirable for application-level errors.
+- **Always return HTTP 200.** Sentinel communicates errors in the body as `{ok: false, err: "CODE", msg: "..."}`. Some HTTP clients and proxies retry or open a circuit after a non-200 response. This behavior is unsuitable for application errors.
 - **Use the brevity regime for query parameters.** Short parameter names (`?n=`, `?lv=`, `?cp=`) reduce URL length and token count for AI agent consumers. Document the full name alongside the abbreviation.
-- **Delegate all logic to the service.** The handler should contain no `if` statements about business rules. It parses the request, calls the service, and writes the response.
-- **Map service errors to response body error codes.** The service returns typed errors; the handler maps these to the appropriate error code strings.
+- **Delegate all logic to the service.** The handler parses the request, calls the service, and writes the response. Keep `if` statements for business rules in the service.
+- **Map service errors to response body error codes.** The service returns typed errors. The handler maps these to the appropriate error code strings.
 
 ```go
 type APIHandler struct {
@@ -330,13 +334,13 @@ func (h *APIHandler) Query(w http.ResponseWriter, r *http.Request) {
 
 **Purpose:** Expose the service to Lua flows running inside the Sentinel sandbox. Lua bindings allow flows to interact with harness services programmatically, enabling automation that spans multiple services.
 
-**Why this layer exists:** Without Lua bindings, flows would have to make HTTP calls to the harness's own API to access service functionality (e.g., `sn.http.get("http://localhost:8080/lib")`). This is wasteful (it goes through the full HTTP stack including serialization, transport, and deserialization) and fragile (it depends on the harness URL). Direct Lua bindings provide in-process access that is faster, simpler, and more reliable.
+**Why this layer exists:** Lua bindings give flows direct access to services within the harness process. Without bindings, flows need HTTP calls such as `sn.http.get("http://localhost:8080/lib")`. Those calls add serialization, transport, and deserialization. They also depend on the harness URL.
 
 **Implementation guidelines:**
 
 - **Registration follows the orchestrator pattern.** The Lua binding registration function is called from `orchestrator.RegisterLuaState()` during Lua VM initialization. This ensures bindings are available to every flow.
-- **Function names follow Lua convention.** Use `sn.lib.vendor_list()`, `sn.lib.endpoint_create()`, etc. The prefix matches the service's API route prefix.
-- **Accept both positional args and Lua tables.** This gives flow authors flexibility. Positional arguments work for simple calls; Lua table arguments work for complex queries with many options.
+- **Function names follow Lua convention.** Examples include `sn.lib.vendor_list()` and `sn.lib.endpoint_create()`. The prefix matches the service's API route prefix.
+- **Accept both positional args and Lua tables.** This gives flow authors flexibility. Positional arguments work for simple calls. Lua table arguments work for complex queries with many options.
 - **Error handling uses the `(result, error_string)` return pattern.** On success, return the result and `nil`. On failure, return `nil` and an error string. This is the standard Lua convention that flow authors expect.
 - **All operations are context-aware.** Use `L.Context()` to respect execution timeouts and cancellation.
 
@@ -433,41 +437,41 @@ When a Flow Loads (triggered by API call, cron, webhook, or event):
 
 ### Step-by-Step: How to Register a New Service
 
-Follow these steps exactly when adding a new service that should be accessible via all three interfaces:
+For a new service that needs all three interfaces, follow these steps:
 
 **Step 1: Create the service package** (`internal/{service_name}/`)
 
 Create these files:
-- `types.go` -- Domain models, filters, query options
-- `repository.go` -- All SQL operations
-- `service.go` -- Business logic, orchestration
-- `errors.go` -- Package-level error variables
-- `lua.go` -- Lua binding registration function
+- `types.go` -- Domain models, filters, query options.
+- `repository.go` -- All SQL operations.
+- `service.go` -- Business logic, orchestration.
+- `errors.go` -- Package-level error variables.
+- `lua.go` -- Lua binding registration function.
 
 **Step 2: Create CLI commands** (`cmd/sentinel/commands/{service_name}.go`)
 
-- Define cobra commands that call service methods
-- Register the commands in `root.go` or the appropriate parent command
-- Use the formatter for table output, JSON for machine output
+- Define cobra commands that call service methods.
+- Register the commands in `root.go` or the appropriate parent command.
+- Use the formatter for table output, JSON for machine output.
 
 **Step 3: Create API handlers** (`internal/api/{service_name}_handlers.go`)
 
-- Define handler methods on an API handler struct
-- Register routes in the router setup (follow the brevity regime for route prefixes)
-- Remember: always HTTP 200, errors in body
+- Define handler methods on an API handler struct.
+- Register routes in the router setup (follow the brevity regime for route prefixes).
+- Remember: always HTTP 200, errors in body.
 
 **Step 4: Wire it all together in the DI container**
 
-- Add the service instance to the `App` struct in `internal/app/`
-- Call the Lua binding registration in `orchestrator.RegisterLuaState()`
-- Initialize the service during app startup
+- Add the service instance to the `App` struct in `internal/app/`.
+- Call the Lua binding registration in `orchestrator.RegisterLuaState()`.
+- Initialize the service during app startup.
 
 **Step 5: Update documentation**
 
-- Add the new routes to `system-specs/api.yaml`
-- Add Lua bindings to the SRE Lua reference
-- Add CLI commands to the CLI reference
-- Update the URL map if new route prefixes were added
+- Add the new routes to `system-specs/api.yaml`.
+- Add Lua bindings to the SRE Lua reference.
+- Add CLI commands to the CLI reference.
+- Update the URL map if new route prefixes were added.
 
 ---
 
@@ -475,7 +479,7 @@ Create these files:
 
 ### Defining Error Codes
 
-Every service must define its error codes as package-level variables. This allows callers to check error types using `errors.Is()` and ensures consistent error codes across all interfaces.
+Each service must define error codes as package variables. Callers can compare error types with `errors.Is()`. All interfaces then use the same error codes.
 
 ```go
 // internal/library/errors.go
@@ -496,7 +500,7 @@ Each layer handles errors differently, but they all originate from the same serv
 - **Service** -- Maps repository errors to service-level errors. For example, if the repository returns `sql.ErrNoRows`, the service returns `ErrNotFound`. The service also logs errors at this point.
 - **CLI** -- Uses the error code to format a user-friendly message. For example, `ErrNotFound` becomes "Resource not found: {id}".
 - **API** -- Returns HTTP 200 with `{ok: false, err: "RESOURCE_NOT_FOUND", msg: "Vendor xyz not found"}`. The error code string comes directly from the error variable's message.
-- **Lua** -- Returns `(nil, "RESOURCE_NOT_FOUND: Vendor xyz not found")`. The flow author can then check the error string or simply handle any non-nil error.
+- **Lua** -- Returns `(nil, "RESOURCE_NOT_FOUND: Vendor xyz not found")`. The flow author can then examine the error string or simply handle any non-nil error.
 
 ---
 
@@ -520,9 +524,9 @@ logger.Error("vendor_delete_failed",
 **Logging guidelines:**
 
 - Use slog-style logging (key-value pairs, not printf format strings). This produces structured logs that are easy to parse and filter.
-- Include relevant IDs and names for traceability. Every log entry should contain enough context to identify the specific entity and operation.
+- Include IDs and names that identify the entity and operation in each log entry.
 - Log errors with the `"error"` key so log aggregators can filter on it.
-- The CLI inherits the Runner's logger. The API has its own middleware logger for request-level events. Lua flows log via `ctx.log()` from the execution context.
+- The CLI inherits the Runner's logger. The API has its own middleware logger for request-level events. Lua flows log through `ctx.log()` from the execution context.
 
 ---
 
@@ -568,10 +572,10 @@ sn.lib.import(data.body)  -- Directly import from API response
 Each layer has its own testing approach, but the service layer receives the most testing because it contains the most logic:
 
 - **Repository layer** -- Unit tests with an in-memory SQLite database (no mocking needed since SQLite is fast). Test SQL correctness, NULL handling, and transaction behavior.
-- **Service layer** -- Integration tests using a real (in-memory) database. Test business logic, validation rules, error cases, and cross-method interactions. This is where most tests should live.
-- **CLI layer** -- Run commands as subprocesses and verify output. Test argument parsing and output formatting.
-- **API layer** -- HTTP client tests using `httptest`. Verify request parsing, response formatting, and error code mapping.
-- **Lua layer** -- End-to-end tests via Lua flows in test SREs. Verify that Lua bindings correctly translate between Lua types and Go types.
+- **Service layer** -- Integration tests use a real database in memory. They test business logic, validation, errors, and interactions between methods. Most tests belong in this layer.
+- **CLI layer** -- Run commands as subprocesses. Make sure that the output is correct. Test argument parsing and output formatting.
+- **API layer** -- Use `httptest` for HTTP client tests. Test request parsing, response formatting, and error code mapping.
+- **Lua layer** -- End-to-end tests through Lua flows in test SREs. Make sure that Lua bindings correctly translate between Lua types and Go types.
 
 ---
 
@@ -579,12 +583,12 @@ Each layer has its own testing approach, but the service layer receives the most
 
 The `library` service in this codebase implements the full Triple-Access Pattern and serves as the reference implementation:
 
-- Domain models + filters: `internal/library/types.go`
-- Repository layer: `internal/library/repository.go`
-- Service layer: `internal/library/service.go`
-- CLI commands: `cmd/sentinel/commands/lib.go`
-- API handlers: `internal/api/apilib_handlers.go`
-- Lua bindings: `internal/library/lua.go` (planned)
+- Domain models + filters: `internal/library/types.go`.
+- Repository layer: `internal/library/repository.go`.
+- Service layer: `internal/library/service.go`.
+- CLI commands: `cmd/sentinel/commands/lib.go`.
+- API handlers: `internal/api/apilib_handlers.go`.
+- Lua bindings: `internal/library/lua.go` (planned).
 
 When adding a new service, model it after the library service. Copy its structure, adapt the types, and follow the same patterns.
 
@@ -592,14 +596,14 @@ When adding a new service, model it after the library service. Copy its structur
 
 ## Migration Path for Existing Services
 
-For services that currently have only an API handler and CLI command without a unified service layer (i.e., the business logic is duplicated across the two), follow this migration path:
+If API and CLI handlers duplicate business logic, follow this migration path:
 
 1. **Extract domain models** into `types.go`. Pull struct definitions out of handler files and CLI files into a shared types file.
 2. **Create `repository.go`** with all SQL operations. Find every SQL query in the existing handlers and CLI commands and move them into repository methods.
 3. **Create `service.go`** with orchestration logic. Extract validation, business rules, and multi-step workflows from handlers and CLI into service methods.
-4. **Refactor API handlers** to call service methods. Each handler should become a thin adapter: parse request, call service, write response.
-5. **Refactor CLI commands** to call the same service methods. Verify that behavior is identical to the API.
+4. **Refactor API handlers** to call service methods. Keep each handler limited to parsing the request, calling the service, and writing the response.
+5. **Refactor CLI commands** to call the same service methods. Make sure that behavior is identical to the API.
 6. **Add Lua bindings** in `lua.go`. Follow the registration pattern described above.
-7. **Focus tests on the service layer.** Since the service is now the single source of truth, testing it provides the highest coverage with the least effort.
+7. **Focus tests on the service layer.** Test the shared business logic here to reduce duplicate tests.
 
-This migration ensures all three interfaces stay in sync automatically going forward. Any new feature or bug fix only needs to be implemented once, in the service layer.
+This migration ensures all three interfaces stay in sync automatically from now on. Any new feature or bug fix only needs to be implemented once, in the service layer.

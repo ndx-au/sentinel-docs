@@ -1,10 +1,12 @@
 ---
 title: "Kit Development Guide"
-description: "Complete guide to building kits -- the fundamental unit of organization in Sentinel -- with flows, connectors, modules, forms, pages, databases, CMS content, and templates."
+description: "How to build Sentinel kits with flows, connectors, modules, forms, pages, templates, assets, and skill twins."
 type: Guide
 tags: [kits]
 status: stable
 ---
+
+<!-- ndx-ste-mode: description -->
 
 # Kit Development Guide
 
@@ -26,7 +28,7 @@ The kit philosophy is built on three principles:
 
 Every Sentinel project is ultimately a collection of kits. Even a project with a single automation flow has that flow inside a kit. The harness discovers kits automatically at startup by scanning the project root for directories that match the naming pattern and contain a `kit.yaml` manifest.
 
-Fresh projects initialized with `sentinel sre init` now ship with a starter ecosystem as working references: `sn.core-agent`, `sn.core-rag`, `sn.tools-http`, `sn.supervisor`, `sn.eg-support`, `sn.eg-itops`, `sn.eg-rag-chat`, plus the legacy compatibility examples `sn.example-support` and `sn.example-itops`.
+Starter content for `sentinel sre init` provides working references. Core kits include `sn.core-agent`, `sn.core-rag`, `sn.tools-http`, and `sn.supervisor`. Examples include `sn.eg-support`, `sn.eg-itops`, and `sn.eg-rag-chat`. Legacy compatibility examples include `sn.example-support` and `sn.example-itops`.
 
 ---
 
@@ -34,7 +36,7 @@ Fresh projects initialized with `sentinel sre init` now ship with a starter ecos
 
 When the harness starts, it scans the project root directory for kit directories. A directory is recognized as a kit if:
 
-1. Its name follows the `{namespace}.{name}` pattern (e.g., `acme.billing`, `sn.core-agent`, `my.utils`).
+1. Its name follows the `{namespace}.{name}` pattern (for example `acme.billing`, `sn.core-agent`, `my.utils`).
 2. It contains a `kit.yaml` file at its root.
 
 Both conditions must be met. A directory called `acme.billing` without a `kit.yaml` is ignored. A directory called `utilities` with a `kit.yaml` is also ignored because it does not match the naming pattern.
@@ -48,7 +50,7 @@ Both conditions must be met. A directory called `acme.billing` without a `kit.ya
 
 **Discovery is flat**: Kits must be direct children of the project root. Nested kits (a kit inside another kit) are not supported. The harness does not recurse into subdirectories.
 
-**Discovery is automatic**: You do not need to list kits in any configuration file. Simply create the directory with a `kit.yaml` and the harness finds it on startup (or via hot-reload if the harness is already running).
+**Discovery is automatic**: You do not need to list kits in any configuration file. Simply create the directory with a `kit.yaml` and the harness finds it on startup (or through hot-reload if the harness is already running).
 
 **Flow ID format**: Flows within a kit have a fully-qualified ID of `{namespace}-{name}:{flow}`. For example, the file `acme.billing/fl/process-payment.lua` becomes the flow `acme-billing:process-payment`. The `fl/` directory prefix and `.lua` extension are stripped.
 
@@ -56,7 +58,7 @@ Both conditions must be met. A directory called `acme.billing` without a `kit.ya
 
 ## Kit Structure
 
-A kit directory can contain any combination of the following subdirectories. Only `kit.yaml` is required; everything else is optional.
+A kit directory can contain any combination of the following subdirectories. Only `kit.yaml` is required. Everything else is optional.
 
 ```
 acme.billing/
@@ -119,8 +121,8 @@ acme.billing/
 | `pg/` | Pages | `.yaml` files (page definitions referencing templates) |
 | `fm/` | Forms | `.yaml` files (form definitions with fields and events) |
 | `tp/` | Templates | `.gohtml` files (Go HTML templates for rendering pages) |
-| `pb/` | Public assets | Any file type (served publicly via HTTP) |
-| `dd/` | Data definitions / migrations | **ccms:** ordered `.sql` migrations (`sentinel ccms migrate`). Legacy kit SQLite helpers may still use `.yaml` schemas — do not confuse with ccms SQL migrations. |
+| `pb/` | Public assets | Any file type (served publicly through HTTP) |
+| `dd/` | Data definitions / migrations | **ccms:** ordered `.sql` migrations (`sentinel ccms migrate`). Legacy kit SQLite helpers can still use `.yaml` schemas — do not confuse with ccms SQL migrations. |
 
 ---
 
@@ -148,7 +150,7 @@ For common workflows, use scaffold presets instead of starting from empty files:
 
 You can also create a kit by hand:
 
-1. Create the directory at the project root: `mkdir acme.billing`
+1. Create the directory at the project root: `mkdir acme.billing`.
 2. Create the manifest file `acme.billing/kit.yaml`:
 
 ```yaml
@@ -164,7 +166,7 @@ author: Your Name
 mkdir -p acme.billing/{fl,cn,md,fm,pg,tp,pb,dd}
 ```
 
-The harness discovers the kit on next startup (or immediately via hot-reload if running).
+The harness discovers the kit on next startup (or immediately through hot-reload if running).
 
 Validate it before handoff:
 
@@ -465,12 +467,12 @@ end
 
 **Execution order:**
 
-- Normal execution: `setup()` -> `main()` -> `cleanup()`
-- Error execution: `setup()` -> `main()` (error occurs) -> `failed(err)` -> `cleanup()`
+- Normal execution: `setup()` -> `main()` -> `cleanup()`.
+- Error execution: `setup()` -> `main()` (error occurs) -> `failed(err)` -> `cleanup()`.
 
 **Important notes:**
 
-- The `main(params)` function receives a params table containing trigger data. Additional context is available through the `ctx` global.
+- The `main(params)` function receives a params table containing trigger data. More context is available through the `ctx` global.
 - There is no `flow = {}` metadata table. Flow metadata is auto-discovered from the file's triggers and the kit manifest.
 - The `ctx` global is available in all four functions.
 
@@ -577,8 +579,8 @@ end
 ```
 
 Webhook URLs are constructed as:
-- Global: `/wh/{webhook-path}` (e.g., `/wh/stripe-events`)
-- Kit-scoped: `/kt/{ns}/{name}/wh/{webhook-path}` (e.g., `/kt/acme/billing/wh/stripe-events`)
+- Global: `/wh/{webhook-path}` (for example `/wh/stripe-events`).
+- Kit-scoped: `/kt/{ns}/{name}/wh/{webhook-path}` (for example `/kt/acme/billing/wh/stripe-events`).
 
 **Event trigger** -- Execute when an internal event is emitted:
 
@@ -594,7 +596,7 @@ function main(params)
 end
 ```
 
-Events are emitted from Lua flows via `sn.event.emit("event.name", data)`. A flow can listen for multiple events by declaring multiple `event()` entries in its triggers table.
+Events are emitted from Lua flows through `sn.event.emit("event.name", data)`. A flow can listen for multiple events by declaring multiple `event()` entries in its triggers table.
 
 **Form trigger** -- Execute when a form is submitted:
 
@@ -881,8 +883,8 @@ on_submit: confirmation.gohtml
 
 When a form is submitted, the harness automatically emits an event:
 
-- Event name pattern: `kf.{namespace}.{name}.{form-name}`
-- Example: Submitting the `payment` form in `acme.billing` emits `kf.acme.billing.payment`
+- Event name pattern: `kf.{namespace}.{name}.{form-name}`.
+- Example: Submitting the `payment` form in `acme.billing` emits `kf.acme.billing.payment`.
 
 Any flow that listens for this event is triggered with the form data available in `ctx.fm`:
 
@@ -908,7 +910,7 @@ Fields support these validation features:
 
 - **`required: true`**: The field must have a non-empty value.
 - **`validation: "regex"`**: The field value must match the provided regular expression.
-- **`type` validation**: The `email` type checks for valid email format; `number` checks for numeric input.
+- **`type` validation**: The `email` type checks for valid email format. `number` checks for numeric input.
 
 Client-side validation provides immediate feedback. Server-side validation runs before the form event is emitted.
 
@@ -950,7 +952,7 @@ Templates use Go's `html/template` package. They receive data from the harness a
 
 | Variable | Description |
 |----------|-------------|
-| `{{ .kit_name }}` | The kit identifier (e.g., `acme.billing`) |
+| `{{ .kit_name }}` | The kit identifier (for example `acme.billing`) |
 | `{{ .page.name }}` | The page name from the YAML definition |
 | `{{ .page.title }}` | The page title from the YAML definition |
 | `{{ .user }}` | User information (if authenticated) |
@@ -1002,7 +1004,7 @@ Two special template functions are available for CMS rendering:
 {{- end -}}
 ```
 
-The function returns `template.HTML` (safe, no additional escaping). It returns an empty string for nil results, missing paths, or empty paths -- it never panics.
+The function returns `template.HTML` (safe, no more escaping). It returns an empty string for nil results, missing paths, or empty paths -- it never panics.
 
 **safeHTML(str)** -- Marks a string as safe HTML, bypassing `html/template` auto-escaping. Use this only for HTML generated by the CMS parser (trusted content), never for user-supplied input.
 
@@ -1108,13 +1110,13 @@ end)
 
 ### Schema Design Patterns
 
-**Use TEXT for IDs**: SQLite is typeless internally, but TEXT PRIMARY KEY with generated IDs (e.g., `inv_` prefix + random bytes) provides human-readable, unique identifiers.
+**Use TEXT for IDs**: SQLite is typeless internally, but TEXT PRIMARY KEY with generated IDs (for example `inv_` prefix + random bytes) provides human-readable, unique identifiers.
 
 **Use TIMESTAMP DEFAULT CURRENT_TIMESTAMP**: For audit trails and chronological queries.
 
 **Create indexes for frequent queries**: If you frequently query by `customer_id`, create an index. Without it, SQLite does a full table scan.
 
-**Use transactions for multi-step operations**: Any operation that modifies multiple tables or multiple rows should be wrapped in `sn.db.transaction()` to ensure atomicity.
+**Use transactions for multi-step operations**: Wrap changes to multiple tables or rows in `sn.db.transaction()` to make the operation atomic.
 
 ### Cross-Kit Database Access
 
@@ -1162,15 +1164,15 @@ Assets are served with appropriate Content-Type headers based on file extension.
 
 ### Kit catalog images (optional)
 
-Place branding files under `{namespace}.{name}/pb/` using **fixed basenames**. The harness picks the first existing extension per slot: **`.svg` → `.png` → `.jpg`**. No manifest or dashboard config entry is required — drop files on disk and reload the kit/SRE.
+Place branding files under `{namespace}.{name}/pb/` using **fixed basenames**. The harness picks the first existing extension per slot: **`.svg` → `.png` → `.jpg`**. No manifest or dashboard configuration entry is required — drop files on disk and reload the kit/SRE.
 
 Authoritative dimensions and basenames: `system-specs/kits.yaml` → `branding.images`.
 
-The harness does **not** validate pixel size. The dashboard (`/kits`, `/kitview`) uses `object-fit: fill` in fixed aspect slots; wrong dimensions look **warped** on purpose.
+The harness does **not** validate pixel size. The dashboard (`/kits`, `/kitview`) uses `object-fit: fill` in fixed aspect slots. Wrong dimensions look **warped** on purpose.
 
 | Basename | Role | Target size | `GET /hl/kt` field |
 |----------|------|-------------|-------------------|
-| `kt.th` | Card thumbnail on `/kits` | **960×480** (2:1) | `th` (e.g. `kt.th.svg`) |
+| `kt.th` | Card thumbnail on `/kits` | **960×480** (2:1) | `th` (for example `kt.th.svg`) |
 | `kt.ic` | Kit icon / avatar | **256×256** (square) | `ic` |
 | `kt.hero` | Banner on `/kitview` | **1920×480** (4:1) | `hr` |
 
@@ -1196,7 +1198,7 @@ public_url: https://harness.example.com
 
 The dashboard **Instances** attach address remains the API endpoint the console can reach (often `localhost:8080`). `public_url` is for browser-facing kit images and **Launch** links (reverse proxies, TLS).
 
-**List response** — each kit may include:
+**List response** — each kit can include:
 
 | Field | Meaning |
 |-------|---------|
@@ -1205,7 +1207,7 @@ The dashboard **Instances** attach address remains the API endpoint the console 
 
 #### Kit UI favicon (separate from catalog images)
 
-For kits with a web UI (`pg/`), `kit.yaml` `branding.favicon` points at **`/pb/favicon.ico`** by convention. How the kit page emits `<link rel="icon">` is up to the kit templates; the harness only serves the file from `pb/`.
+For kits with a web UI (`pg/`), `kit.yaml` `branding.favicon` points at **`/pb/favicon.ico`** by convention. How the kit page emits `<link rel="icon">` is up to the kit templates. The harness only serves the file from `pb/`.
 
 #### Optional design spec
 
@@ -1215,13 +1217,15 @@ For kits with a web UI (`pg/`), `kit.yaml` `branding.favicon` points at **`/pb/f
 
 ## fcms kits (file CMS)
 
-Any kit with Markdown files (`.md`) in its `ct/` directory participates in the **fcms** plane. The harness discovers and parses all `.md` files at startup, building a bbolt-backed content cache. No additional configuration is needed -- just create the `ct/` directory and add Markdown files.
+Any kit with Markdown files (`.md`) in its `ct/` directory participates in the **fcms** plane. The harness discovers and parses all `.md` files at startup, building a bbolt-backed content cache. No more configuration is needed -- just create the `ct/` directory and add Markdown files.
 
-**Note:** fcms content lives in `ct/` so the `md/` directory remains reserved for Lua modules. Product language is **fcms**; Lua API remains `sn.cms.*` for compatibility. For Postgres collections use **ccms** (`forms/pub/`, `dd/`) — see [Content planes](/content-planes).
+**Note:** fcms content lives in `ct/`. The `md/` directory is for Lua modules. The Lua API keeps `sn.cms.*` for compatibility.
+
+For Postgres collections, use **ccms** (`forms/pub/`, `dd/`). The [Content planes](/content-planes) guide gives details.
 
 ### ccms kits (collection CMS)
 
-Kits may include:
+Kits can include:
 
 | Path | Purpose |
 |------|---------|
@@ -1255,8 +1259,8 @@ acme.blog/
 The slug is the unique identifier for a piece of content within a kit:
 
 - Default slug = filename without `.md`, relative to `ct/`, using `/` as separators.
-- `ct/hello-world.md` becomes slug `hello-world`
-- `ct/tutorials/getting-started.md` becomes slug `tutorials/getting-started`
+- `ct/hello-world.md` becomes slug `hello-world`.
+- `ct/tutorials/getting-started.md` becomes slug `tutorials/getting-started`.
 - Override with `slug:` in frontmatter to use a custom slug.
 - Slugs must be unique within a kit.
 
@@ -1289,7 +1293,7 @@ Content starts here in Markdown format...
 | `date` | string | No | Publication date in RFC3339 or YYYY-MM-DD format. |
 | `description` | string | No | Short summary for listings and SEO. |
 | `tags` | string[] | No | Tag list for categorization and filtering. |
-| `agent_context` | object | No | AI agent metadata. **Never exposed via the REST API.** Available to Lua flows via `sn.cms.get()` but stripped from `/cm/*` API responses. Use for AI-specific context like tone instructions, content briefs, or editorial notes. |
+| `agent_context` | object | No | AI agent metadata. **Never exposed through the REST API.** Available to Lua flows through `sn.cms.get()` but stripped from `/cm/*` API responses. Use for AI-specific context like tone instructions, content briefs, or editorial notes. |
 | *(other fields)* | any | No | Any unknown fields are stored in a `meta{}` map. |
 
 ### cms_full_html Flag
@@ -1319,8 +1323,8 @@ assets:
 
 **How it works:**
 
-- In rendered HTML, `src="images/hero.jpg"` becomes `src="https://cdn.example.com/blog/assets/hero.jpg"`
-- Similarly, `href="images/logo.png"` becomes `href="https://cdn.example.com/blog/assets/logo.png"`
+- In rendered HTML, `src="images/hero.jpg"` becomes `src="https://cdn.example.com/blog/assets/hero.jpg"`.
+- Similarly, `href="images/logo.png"` becomes `href="https://cdn.example.com/blog/assets/logo.png"`.
 - Paths not in the `assets:` map pass through unchanged.
 - Leading `/` is trimmed from local paths before lookup (both `/images/hero.jpg` and `images/hero.jpg` match).
 - `bucket:` trailing slash is trimmed automatically.
@@ -1348,10 +1352,10 @@ end
 
 ### CMS REST API
 
-Content is also available via HTTP:
+Content is also available through HTTP:
 
-- `GET /cm` -- List all slugs across all CMS kits
-- `GET /cm/{kitName}/{slug}` -- Get parsed content for a specific slug (agent_context is stripped)
+- `GET /cm` -- List all slugs across all CMS kits.
+- `GET /cm/{kitName}/{slug}` -- Get parsed content for a specific slug (agent_context is stripped).
 
 ### Complete CMS Template Example
 
@@ -1503,10 +1507,10 @@ webhook, or direct API call.
 ### Best Practices for Skill Twins
 
 1. **Keep them current**: Update the skill twin whenever you change the code. Stale documentation is worse than no documentation.
-2. **Focus on "why" not "what"**: The code shows what happens. The skill twin should explain why decisions were made.
+2. **Focus on "why" not "what"**: Explain the reasons for design decisions in the skill twin.
 3. **Document dependencies explicitly**: List every secret, database table, connector, and external service.
 4. **Include examples**: Show example trigger payloads, expected outputs, and error scenarios.
-5. **Use them for onboarding**: When a new team member (human or AI) needs to understand a flow, the skill twin should be sufficient.
+5. **Use them for onboarding**: Give new team members and AI agents enough context to understand the flow.
 
 ---
 
@@ -1515,9 +1519,9 @@ webhook, or direct API call.
 ### Test File Convention
 
 Test files must:
-- Live in the same directory as the code they test
-- End with `_test.lua`
-- Contain functions prefixed with `test_`
+- Live in the same directory as the code they test.
+- End with `_test.lua`.
+- Contain functions prefixed with `test_`.
 
 Example: `acme.billing/fl/process-payment_test.lua` tests `acme.billing/fl/process-payment.lua`.
 
@@ -1597,10 +1601,10 @@ This creates a `acme.billing/` directory linked to the external repository.
 
 For wider distribution, publish your kit to the Sentinel Kit Marketplace:
 
-1. Authenticate: `sentinel login`
-2. Ensure your `kit.yaml` has `name`, `version`, `description`, and `author` fields.
+1. Authenticate: `sentinel login`.
+2. Make sure that `kit.yaml` contains `name`, `version`, `description`, and `author` fields.
 3. Publish through the marketplace dashboard or API.
-4. Users install with: `sentinel sre kit install acme.billing`
+4. Users install with: `sentinel sre kit install acme.billing`.
 
 Published kits are signed with Ed25519 keys for integrity verification.
 
@@ -1620,17 +1624,17 @@ version: 2.1.0
 
 ## Building Reusable Services
 
-If your kit needs to expose functionality via multiple interfaces (CLI, REST API, Lua flows), follow the [Triple-Access Pattern](/triple-access-pattern) guide. This ensures:
+If your kit needs to expose functionality through multiple interfaces (CLI, REST API, Lua flows), follow the [Triple-Access Pattern](/triple-access-pattern) guide. This ensures:
 
-- **Shared business logic** across all three interfaces
-- **Zero code duplication**
-- **Agent-friendly automation** from flows
-- **Consistent error handling and logging**
+- **Shared business logic** across all three interfaces.
+- **Zero code duplication**.
+- **Agent-friendly automation** from flows.
+- **Consistent error handling and logging**.
 
-**Example:** The Sentinel library service (for managing API vendors and endpoints) is accessible via:
-- **CLI:** `sentinel lib vendor list`
-- **REST API:** `GET /lib`
-- **Lua:** `local vendors = sn.lib.vendor_list({name="OpenAI"})`
+**Example:** The Sentinel library service (for managing API vendors and endpoints) is accessible through:
+- **CLI:** `sentinel lib vendor list`.
+- **REST API:** `GET /lib`.
+- **Lua:** `local vendors = sn.lib.vendor_list({name="OpenAI"})`.
 
 **Learn more:** [Triple-Access Pattern Guide](/triple-access-pattern)
 
@@ -1639,14 +1643,14 @@ If your kit needs to expose functionality via multiple interfaces (CLI, REST API
 ## Best Practices Summary
 
 1. **Name kits consistently**: Always use `{namespace}.{name}` pattern with lowercase alphanumeric characters.
-2. **Document everything with skill twins**: Every code file should have an up-to-date `.md` skill twin.
+2. **Document everything with skill twins**: Keep an up-to-date `.md` skill twin for each code file.
 3. **Version semantically**: Follow semver in `kit.yaml` and bump versions on every meaningful change.
 4. **Isolate databases**: Use kit-scoped databases. Import explicitly when cross-kit access is needed.
 5. **Handle errors gracefully**: Use `pcall()` for risky operations and always implement the `failed(err)` callback.
 6. **Log important events**: Use `ctx.log()` at appropriate levels for debugging and operational visibility.
 7. **Test flows thoroughly**: Write `_test.lua` files for all critical business logic.
-8. **Validate user input**: Check form data and webhook payloads before processing.
+8. **Validate user input**: Examine form data and webhook payloads before you process them.
 9. **Use transactions**: Wrap multi-step database operations in `sn.db.transaction()`.
 10. **Keep connectors focused**: One connector per external service, with authentication handled internally.
-11. **Keep kits small and focused**: A kit should do one thing well. Compose multiple kits for complex systems.
+11. **Keep kits small and focused**: Give each kit one purpose. Combine kits for complex systems.
 12. **Protect secrets**: Always use `ctx.secret()` to retrieve sensitive values. Never hardcode credentials.

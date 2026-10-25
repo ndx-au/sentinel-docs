@@ -1,8 +1,11 @@
+<!-- ndx-ste-mode: description -->
+
 # sentinel-docs
 
-Public documentation for Sentinel, implemented as a Sentinel SRE served through
-the **fcms** plane (file CMS). Staging: **https://sn-docs.dwp.solutions**.
-Production: **https://docs.ndx-sentinel.com** (dedicated VM).
+This repository contains the public Sentinel documentation.
+A Sentinel SRE serves it through the **fcms** plane (file CMS).
+Staging uses **https://sn-docs.dwp.solutions**.
+Production uses **https://docs.ndx-sentinel.com** on a dedicated VM.
 
 ## Layout
 
@@ -35,37 +38,42 @@ curl http://127.0.0.1:8290/hl
 
 ## Adding a doc
 
-Add `sn.docs/ct/<slug>.md` with `title`, `description`, and a required OKF
-`type` (`Overview`, `Guide`, `Reference`, or `Playbook`), plus `tags` and
-`status`. Add the slug to the sidebar nav in `sn.docs/tp/docs.gohtml`, and
-link it from `index.md`. Then regenerate the NotebookLM sidecar:
+1. Create `sn.docs/ct/<slug>.md`.
+2. Add `title`, `description`, and the required OKF `type`.
+3. Select `Overview`, `Guide`, `Reference`, or `Playbook` for the type.
+4. Add `tags` and `status`.
+5. Add the slug to the sidebar in `sn.docs/tp/docs.gohtml`.
+6. Link the document from `index.md`.
+7. Regenerate the NotebookLM bundle:
 
 ```bash
 python3 tools/bundle_docs.py
 ```
 
-That writes `notebooklm/index.md` and `notebooklm/sentinel-docs.md` only.
-Never put generated output in `ct/` — `ct/index.md` is the public homepage.
+The script writes `notebooklm/index.md` and `notebooklm/sentinel-docs.md`.
+The public homepage is `ct/index.md`.
 
-`ct/` changes are picked up by the harness file watcher — no reload needed.
-Changes to `kit.yaml`, `tp/`, or `pg/` require `POST /hl/kt/sn/docs/rl` (kit
-reload) or a harness restart.
+Never write generated output into `ct/`.
+
+The harness file watcher detects `ct/` changes without a reload.
+Changes to `kit.yaml`, `tp/`, or `pg/` need a kit reload or harness restart.
+The kit reload endpoint is `POST /hl/kt/sn/docs/rl`.
 
 ## Deployment (production VM)
 
-The prod VM runs the same SRE repo. Required setup:
+The production VM runs the same SRE repository.
 
-1. **Checkout**: clone `github.com/ndx-au/sentinel-docs` to the VM (polling
-   target: `main` branch).
-2. **Harness**: `sentinel harness start -p <repo> -d --port 8290`. The harness
-   binds `0.0.0.0` — firewall the port so only the host reverse proxy can reach
-   it (for example, allow the proxy container’s bridge network to the host
-   process).
-3. **public_url**: production overrides `public_url` in `sentinel.yaml` to
-   `https://docs.ndx-sentinel.com` (or use an env/config override if the
-   harness supports one — staging keeps the sn-docs value; do not commit the
-   prod override to `main` if it would break staging, prefer per-host config).
-4. **Reverse proxy** (Caddy or equivalent) on the VM:
+1. **Checkout**: Clone `github.com/ndx-au/sentinel-docs` to the VM. Poll the `main` branch.
+2. **Harness**: Start `sentinel harness start -p <repo> -d --port 8290`.
+   The harness binds `0.0.0.0`.
+   Restrict the port so only the host reverse proxy can reach it.
+   For a container proxy, permit its bridge network to reach the host process.
+3. **public_url**: Set `public_url` in the production `sentinel.yaml` to `https://docs.ndx-sentinel.com`.
+   Keep the staging value separate through configuration for each host.
+   If the harness supports an environment or configuration override, you can use that override.
+   If a production override breaks staging, do not commit it to `main`.
+4. **Reverse proxy**: Configure Caddy or an equivalent reverse proxy on the VM:
+
    ```
    docs.ndx-sentinel.com {
        encode gzip
@@ -78,20 +86,20 @@ The prod VM runs the same SRE repo. Required setup:
        }
    }
    ```
-   Public URLs are clean slugs: `/getting-started` →
-   `/fcms/render/sn/docs/docs/getting-started`. The JSON API (`/fcms/...`,
-   `/cm/...`) is intentionally NOT routed publicly.
-5. **Deploy model**: harness-native polling of `main` (a Sentinel trigger/flow
-   inside this SRE, not crontab). On new `main`: pull, and the file watcher
-   picks up `ct/` changes automatically; `kit.yaml`/`tp/`/`pg/` changes need a
-   kit reload (`POST /hl/kt/sn/docs/rl`) or harness restart. Later: a CI
-   workflow can replace polling and conditionally issue the kit reload.
-6. **main protection**: enable branch protection + PR workflow once prod is
-   operational.
+
+   Public requests use clean slugs.
+   The reverse proxy maps `/getting-started` to `/fcms/render/sn/docs/docs/getting-started`.
+   It does not expose the JSON API (`/fcms/...`, `/cm/...`).
+5. **Deploy model**: Use a Sentinel trigger and flow in this SRE to poll `main`.
+   After new commits, pull `main`.
+   The file watcher detects `ct/` changes.
+   After `kit.yaml`/`tp/`/`pg/` changes, reload the kit with `POST /hl/kt/sn/docs/rl` or restart the harness.
+   A future CI workflow can replace polling and request reloads when necessary.
+6. **main protection**: After production is operational, enable branch protection and a PR workflow.
 
 ## Staging wiring
 
-- Point the staging DNS name (`sn-docs.dwp.solutions`) at the staging host
-  behind a private reverse proxy, with TLS appropriate for that zone.
-- Reverse-proxy to the local harness (`127.0.0.1:8290` or the Docker host
-  gateway equivalent) using the same rewrite rules as the prod block above.
+1. Point `sn-docs.dwp.solutions` at the staging host behind a private reverse proxy.
+2. Configure TLS for that zone.
+3. Forward requests to `127.0.0.1:8290` or the equivalent Docker host gateway.
+4. Use the production rewrite rules above.

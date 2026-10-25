@@ -1,14 +1,16 @@
 ---
 title: "Agentic AI — UAT trail"
-description: "Hands-on acceptance trail for M1 — Agentic AI completion. Work through each section in order; sample payloads are copy-paste ready."
+description: "Acceptance procedures for Agentic AI completion, with example payloads and expected results."
 type: Playbook
 tags: [ai, uat]
 status: stable
 ---
 
+<!-- ndx-ste-mode: description -->
+
 # Agentic AI — UAT trail
 
-Hands-on acceptance trail for **M1 — Agentic AI completion**. Work through each section in order; sample payloads are copy-paste ready.
+Hands-on acceptance trail for **M1 — Agentic AI completion**. Work through each section in order. Sample payloads are copy-paste ready.
 
 | Reference | Path |
 |-----------|------|
@@ -55,7 +57,7 @@ Edit `.sentinel\config.json` and set:
 "vault_passphrase": "uat-trail-2026!"
 ```
 
-On first harness start the vault database is created. You may also export:
+The harness creates the vault database at first start. You can also export:
 
 ```powershell
 $env:SENTINEL_VAULT_PASSPHRASE = "uat-trail-2026!"
@@ -111,7 +113,7 @@ Open **http://localhost:9090** (dashboard) or **http://127.0.0.1:8080** (API dir
 
 | Symptom | Fix |
 |---------|-----|
-| `not yet healthy` on `-d` start | Rebuild recent `sndev`; check `C:\Users\<you>\.sentinel\dashboard-9090.log`. |
+| `not yet healthy` on `-d` start | Rebuild recent `sndev`. Check `C:\Users\<you>\.sentinel\dashboard-9090.log`. |
 | `PID file exists` (foreground) | Confirm delete, or use `-d` to auto-replace. |
 | Attach 502 on Instances | Start harness (Terminal B) first, then connect. |
 | Port 9090 in use (foreground) | Confirm kill, or use `-d` to auto-replace. |
@@ -362,7 +364,7 @@ curl -s -X POST "$BASE/fl/sn-core-agent:assistant/run" \
   }'
 ```
 
-**Expect:** Model references prior turn (memory hydrated via `sn.md.agent.run` → `agent_memory`).
+**Expect:** Model references prior turn (memory hydrated through `sn.md.agent.run` → `agent_memory`).
 
 **Dashboard:** Agents → **Memory** — session `trail-session-1` shows turns.
 
@@ -402,7 +404,7 @@ curl -s -X POST "$BASE/fl/sn-eg-support:handle_ticket/run" \
 
 ## 9 — Canary partial rollout *(no key for math-only check)*
 
-Set canary to **0** — all executions should see AI disabled:
+Set canary to **0**. Make sure that all executions report AI disabled:
 
 ```bash
 curl -s -X PUT "$BASE/ai/release" \
@@ -517,7 +519,7 @@ Open `sn.core-agent\fl\my-uat-agent.lua` — **expect** `sn.md.agent.run({...})`
 Skip unless PostgreSQL + pgvector are configured in `sentinel.yaml` and RAG subsystem is initialized.
 
 1. Enable `rag_enabled: true` on Release.
-2. Ingest sample docs via `sn.core-rag` or dashboard RAG page.
+2. Ingest sample docs through `sn.core-rag` or dashboard RAG page.
 3. Run assistant with RAG params:
 
 ```json
@@ -575,7 +577,7 @@ go test ./internal/scaffold -count=1 -run Preset
 
 ## Related docs
 
-- [Agentic AI operator guide](/agentic-ai-operator)
-- [RAG retrieval evaluation](/rag-evaluation)
-- [AI provider extension](/ai-provider-extension)
-- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md)
+- [Agentic AI operator guide](/agentic-ai-operator).
+- [RAG retrieval evaluation](/rag-evaluation).
+- [AI provider extension](/ai-provider-extension).
+- [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).
