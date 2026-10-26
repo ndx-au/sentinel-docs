@@ -35,3 +35,6 @@ Old numeric filename (~/code/sentinel/docs/) → new slug (sn.docs/ct/). Maintai
 ## Additional guides
 
 - [Security readiness and shared responsibility](security-readiness.md)
+
+- `sqlcipher-offline-migration.md` — verified offline copy conversion, recovery and operator boundaries.
+- `sqlcipher-rollout-checklist.md` — separate approvals and installation checklist.

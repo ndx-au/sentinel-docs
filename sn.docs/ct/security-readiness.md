@@ -41,7 +41,7 @@ Protect all traffic with TLS and make sure that certificates are valid.
 The dashboard stores privileged harness credentials and relies on trusted ingress.
 It does not provide a general login or role-based access system for end users.
 
-The harness and dashboard listen on all interfaces.
+The harness can listen on all interfaces. The security closure fixes the dashboard listener to IPv4 loopback. It has no public bind flag. For remote access, use authenticated ingress or a controlled tunnel that can reach loopback in the dashboard network namespace. A separate container cannot reach this listener through the usual container address.
 An empty dashboard whitelist allows all peers.
 A production build does not automatically enable TLS or make these listeners private.
 Apply explicit firewall rules and authenticated ingress.
@@ -156,3 +156,15 @@ Send a minimal reproduction with fake data.
 Never publish customer data or credentials.
 
 Related guide: [NDX Trust preparation](/ndx-trust-soc2).
+
+
+## Offline SQLCipher conversion
+
+The reviewed copy converter preserves fail-closed startup. Follow the
+[offline migration runbook](/sqlcipher-offline-migration) and separate
+[rollout checklist](/sqlcipher-rollout-checklist). Conversion does not approve
+installation. Native CGO/SQLCipher release validation and matching runtime keys
+are required. The security closure also binds MCP sessions to authenticated
+identity and permission profile and extends scoped AI checks to streaming and retries.
+Native AI stream callbacks wait for full validation, with 4 MiB and 16,384-chunk
+limits. Kit and host APIs still require trusted operators and deployment isolation.

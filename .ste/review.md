@@ -43,7 +43,7 @@ The linter still exits with status 1.
 The command was:
 
 ```bash
-node /home/bilbo/code/ndx-skills-private/skills/ndx-ste/scripts/lint.mjs README.md sn.docs/ct
+node <skill-directory>/scripts/lint.mjs README.md sn.docs/ct
 ```
 
 The results need context:

@@ -26,6 +26,8 @@ okf_version: "0.2"
 * [Content planes — fcms, ccms, wpcms](../sn.docs/ct/content-planes.md) - Sentinel content planes: fcms for files, ccms for collections, and wpcms for WordPress.
 * [NDX Trust — SOC2 Type II preparation](../sn.docs/ct/ndx-trust-soc2.md) - Preparation for a SOC2 Type II observation period for hosted NDX systems.
 * [Security readiness and shared responsibility](../sn.docs/ct/security-readiness.md) - Sentinel product security boundaries, responsibilities for deployment, and limits of assurance.
+* [Offline SQLCipher migration](../sn.docs/ct/sqlcipher-offline-migration.md) - Convert verified copies of legacy plaintext state or dashboard databases without weakening encrypted startup.
+* [SQLCipher rollout checklist](../sn.docs/ct/sqlcipher-rollout-checklist.md) - Operator approvals and verification required before installing an encrypted database copy.
 
 # Reference
 
