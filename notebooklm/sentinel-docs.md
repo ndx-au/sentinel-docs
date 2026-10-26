@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-25T12:16:07Z"
+  at: "2026-10-26T04:18:49Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -1559,6 +1559,33 @@ curl -H "Authorization: Bearer my-secret-token" http://localhost:8080/fl
 #### Signature-Based Authentication (Dashboard)
 
 The Sentinel Dashboard uses Ed25519 signature-based authentication. The Dashboard signs each request with its private key and sends the signature in the `X-Sn-Sig` header. The harness verifies the signature against registered public keys stored in the SRE's `.sentinel/` directory. This is handled automatically by the Dashboard and is not typically used by API clients directly.
+
+#### Signing protocol v2 (security-readiness builds)
+
+Builds containing the signing security update require a `v2` envelope in
+`X-Sn-Sig` and decimal Unix nanoseconds in `X-Sn-Time`. The signature binds the
+method, intended authority, exact escaped path/raw query, raw-body digest,
+content type/encoding and MCP session/protocol fields. Each request has a fresh
+nonce; accepted nonces are durably recorded in the instance state database
+before the operation executes. A replay or unavailable replay store is denied.
+
+Upgrade the harness, dashboard, MCP proxy/stdio signer and development signing
+helper together. Old signature formats are refused for reads and mutations;
+there is no automatic legacy downgrade. A configured-key failure stops a
+request rather than silently switching to bearer. Explicit bearer-only profiles
+continue to work. Keep management/signing traffic on a trusted TLS path.
+
+Signed request bodies are limited to 32 MiB and must match the exact bytes and
+content type sent, including multipart boundaries. Chunked request bodies without
+trailers work; signed requests with trailers are refused. SSE and response
+streaming are unaffected. Sign again for each attempt; do not reuse a captured
+header pair. Maintain synchronized clocks; signatures predating verifier startup
+are refused and must be re-signed. These changes are part of the
+security-readiness work and are not a claim that an older released binary has them.
+
+Back up replay metadata with state. If restoration loses recent nonce history,
+rotate registered signing keys or keep signed interfaces unavailable for the
+full six-minute signature acceptance horizon before exposing the restored instance.
 
 #### Debug Mode
 
@@ -18115,6 +18142,17 @@ sentinel mcp proxy --upstream http://127.0.0.1:8180 --keypair-name cursor-agent
 ```
 
 Point Cursor at the proxy URL printed by the command (no auth headers needed).
+
+Security-readiness builds use signing protocol v2. Upgrade the harness, dashboard
+key store client and signing proxy/stdio binary together. The proxy signs the
+final upstream authority, escaped target/query and exact body with a fresh nonce;
+it strips client-supplied credentials. Signing or key-loading failure stops the
+request, even when a disposable/debug upstream would allow unsigned access.
+Legacy signatures are refused rather than silently downgraded. Bearer-only MCP
+profiles remain supported. See [signature authentication](/api-reference#signing-protocol-v2-security-readiness-builds)
+for body limits, clock synchronization, durable replay state and coordinated
+upgrade requirements. No live database conversion is performed by the proxy.
+
 
 ---
 

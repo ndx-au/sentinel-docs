@@ -196,6 +196,17 @@ sentinel mcp proxy --upstream http://127.0.0.1:8180 --keypair-name cursor-agent
 
 Point Cursor at the proxy URL printed by the command (no auth headers needed).
 
+Security-readiness builds use signing protocol v2. Upgrade the harness, dashboard
+key store client and signing proxy/stdio binary together. The proxy signs the
+final upstream authority, escaped target/query and exact body with a fresh nonce;
+it strips client-supplied credentials. Signing or key-loading failure stops the
+request, even when a disposable/debug upstream would allow unsigned access.
+Legacy signatures are refused rather than silently downgraded. Bearer-only MCP
+profiles remain supported. See [signature authentication](/api-reference#signing-protocol-v2-security-readiness-builds)
+for body limits, clock synchronization, durable replay state and coordinated
+upgrade requirements. No live database conversion is performed by the proxy.
+
+
 ---
 
 ## Connect Cursor
