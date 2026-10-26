@@ -240,3 +240,19 @@ goroutines, with 64 active dispatches and no partial dispatch on saturation. Thi
 separate from the 32 active workflow limit. Split larger fanout deliberately and
 handle `EVENT.BUSY`. Tool argument batches validate before any callback; native Lua
 results reject unbounded or cyclic values.
+
+
+Native sleep and PostgreSQL calls preserve the Lua deadline and cancellation.
+SMTP sends are capped at 30 seconds, or the earlier caller deadline, with a 1 MiB
+message limit and 100 recipients. Use bare email addresses and a single-line
+subject. Provide both `username` and `password`, or neither; configured credentials
+require verified STARTTLS with TLS 1.2 or newer. Never disable certificate checking
+to make authentication succeed. Plain unauthenticated relay traffic still requires
+an appropriately protected deployment network. Server acceptance of DATA does not
+prove inbox delivery; reconcile uncertain results before retrying.
+
+When agent authority is bound, SMTP needs a complete `connector.smtp` grant before
+dialing and uses checked public destinations. An isolated network-namespace test
+covers an authorized send and denied recipient mutation. This does not establish
+real relay configuration, live delivery, operational confidentiality or complete
+production permission wiring.
