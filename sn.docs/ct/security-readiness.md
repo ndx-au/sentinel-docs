@@ -168,3 +168,41 @@ are required. The security closure also binds MCP sessions to authenticated
 identity and permission profile and extends scoped AI checks to streaming and retries.
 Native AI stream callbacks wait for full validation, with 4 MiB and 16,384-chunk
 limits. Kit and host APIs still require trusted operators and deployment isolation.
+
+## First-release security branch: management and file controls
+
+The following applies to the unreleased security remediation branch; upgrade all
+participating clients before rollout. It is not a statement about older releases.
+
+The dashboard accepts a local Host authority (`localhost`, a loopback IP, and the
+actual port), rejects foreign browser origins and does not grant CORS access.
+Use an authenticated operator tunnel with a local browser URL. An ingress that
+connects to dashboard loopback must share or explicitly reach its network namespace
+and preserve the supported local authority. Do not publish its port as an unauthenticated
+service. Authentication at the ingress and local OS user trust remain operator controls;
+the dashboard has no general end-user login/RBAC. Each hosted instance needs separate
+credentials, storage and administrative access.
+
+The signing proxy is restricted to loopback and trusted native clients. It rejects
+browser Origin headers, cross-site fetch metadata and non-local Host values before
+signing or forwarding. A local process can still use its authority: protect the host
+and key store. The MCP sidecar retains harness credential verification and SDK
+origin/rebinding protection. An unauthenticated sidecar cannot bind publicly.
+
+FS Control uses pinned directory handles for actual reads/writes/deletes. Managed
+file connectors carry per-execution grants, including form entry paths; missing
+enforcement denies access. Symlink components are refused even when their targets
+are inside the root, because they can bypass a more-specific deny. Use ordinary
+paths in policies. Reads and writes are capped at 16 MiB. Hardlinks, bind mounts,
+host administrators and changes to operator-owned root directories remain host
+security responsibilities; FS Control is not a hostile-tenant kernel sandbox.
+
+Servers cap active handlers at 32 and body-bearing handlers at four, with a 32 MiB
+request read limit and no unbounded admission queue. Request body read deadlines
+are 15 seconds for dashboard, harness and MCP; streaming responses retain no write
+timeout. Workflow registration, asynchronous execution and both form entry paths
+share a 32-active-execution cap per manager, including recovery. Saturation rejects
+work before creating a job. Accepted asynchronous jobs retain their existing execution
+lifetime rather than being canceled when an HTTP request ends. These are engineering
+bounds, not a distributed user quota or complete network denial-of-service protection.
+Enforce connection/rate limits and OS resource budgets at deployment ingress too.
