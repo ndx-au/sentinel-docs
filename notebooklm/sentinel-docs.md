@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-26T05:14:02Z"
+  at: "2026-10-26T20:58:27Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -20403,6 +20403,40 @@ work before creating a job. Accepted asynchronous jobs retain their existing exe
 lifetime rather than being canceled when an HTTP request ends. These are engineering
 bounds, not a distributed user quota or complete network denial-of-service protection.
 Enforce connection/rate limits and OS resource budgets at deployment ingress too.
+
+
+### First-release branch: metadata and native HTTP
+
+Flow inspection has no execution host APIs. Keep metadata and top-level declarations
+free of network, files, secrets and model calls; perform work in execution hooks.
+Inspection uses a 100 ms evaluation budget, a 1 MiB regular source-file limit inside
+the SRE and the shared manager admission limit. Host-dependent or invalid metadata
+falls back to a default manifest. Source symlinks and named pipes are refused.
+
+Native `sn.http.*` and the HTTP connector now inherit the Lua deadline and
+cancellation. Their timeout is capped at 30 seconds and responses at 16 MiB. Supply
+credentials in headers, not URL userinfo; URL fragments are rejected. HTTP connector
+logs retain only the target origin and fixed error classes, not private URL paths
+or query values.
+
+The developing agent authority mechanism keeps model observation restricted across
+an execution and its delegated children, including actions after plain model output.
+When authority is bound, filesystem and native HTTP effects consult those grants.
+Restricted HTTP requests refuse redirects, private/loopback destinations and common
+address-translation ranges; they pin checked public DNS answers and inherit neither
+proxy settings nor a cookie jar. Custom network routing still requires deployment
+egress controls. Private-service automation remains an operator responsibility.
+
+This agent mechanism is not yet wired across every production entry and host API.
+The local approval store and CLI are mechanisms awaiting full runtime integration;
+do not treat them as a complete human-approval boundary or a release approval.
+
+Events accept bounded JSON data, reject cycles and unsupported values, and give each
+subscriber a frozen copy. The bus reserves an entire batch before creating dispatch
+goroutines, with 64 active dispatches and no partial dispatch on saturation. This is
+separate from the 32 active workflow limit. Split larger fanout deliberately and
+handle `EVENT.BUSY`. Tool argument batches validate before any callback; native Lua
+results reject unbounded or cyclic values.
 
 # Offline SQLCipher migration
 
