@@ -58,6 +58,77 @@ Three ways to publish HTML from the same content:
 
 **Important:** `md/` in a kit is reserved for **Lua modules** (`sn.md.*`). CMS Markdown lives only in **`ct/`**.
 
+## XSLT themes
+
+Set `cms_theme: editorial` in a kit's `kit.yaml` to use an XSLT theme for its
+existing `/fcms/render/{ns}/{name}/{template}/{slug}` URLs. Kits without this
+setting continue using their Go templates. A theme is operator-managed kit code:
+
+```text
+themes/editorial/
+  theme.yaml
+  page.xsl
+  common.xsl
+```
+
+`theme.yaml` maps URL template names to stylesheet files relative to the theme:
+
+```yaml
+templates:
+  page: page.xsl
+```
+
+Stylesheets use XSLT 3.0. `xsl:include` and `xsl:import` can refer to files
+within the theme directory; external document and network reads are denied.
+Stylesheet and manifest files are limited to 1 MiB each, source XML to 8 MiB,
+and primary serialized output to 16 MiB; transforms have a five-second
+deadline. These are practical bounds, not a hard peak-memory limit. Operators
+are responsible for installing reasonable, trusted stylesheets.
+
+fcms stores the versioned XML representation in its content cache. Theme HTML
+is generated from that XML per request, so edits to stylesheets and included
+files take effect without waiting for the HTML cache TTL. The cache is rebuilt
+from Markdown on startup when its XML version changes.
+
+The XML root is `<document version="1">`. Front matter appears under
+`metadata/field`, where `@name` identifies a key and list values use `item`.
+The ordered Markdown tree is under `content`: Goldmark node names are lowercase
+elements such as `heading`, `paragraph`, `text`, `link`, `list`, `fencedcodeblock`,
+and GFM `table` nodes. Headings have `level` and `id`; links and images have
+`destination` and `title`; list and code nodes carry their properties as
+attributes. `text` nodes have `softbreak` and `hardbreak` attributes. Custom
+attributes (such as `{#id .class data-*}`) are preserved as XML attributes on
+their corresponding elements. GFM extensions (tables with `align`, task lists
+with `checked`, strikethrough, autolinks) are fully represented. Raw HTML is
+escaped XML text in `rawhtml` or `htmlblock` nodes; a theme chooses how to
+handle it. Source content is sanitized so illegal XML 1.0 control characters and
+invalid UTF-8 bytes do not break XML well-formedness. Stylesheets should use
+`xsl:apply-templates` for child nodes so mixed text and markup retain their order.
+
+When `assets.yaml` is present at the kit root, `src` and `href` attributes in
+the final rendered HTML are rewritten to mapped bucket URLs, matching the
+standard asset rewriting behavior of fcms.
+
+For example, a minimal `page.xsl` that displays a title and heading text is:
+
+```xml
+<xsl:stylesheet version="3.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="html"/>
+  <xsl:template match="/">
+    <html><body>
+      <h1><xsl:value-of select="document/metadata/field[@name='title']"/></h1>
+      <xsl:apply-templates select="document/content/*"/>
+    </body></html>
+  </xsl:template>
+  <xsl:template match="heading"><h2><xsl:apply-templates/></h2></xsl:template>
+  <xsl:template match="paragraph"><p><xsl:apply-templates/></p></xsl:template>
+  <xsl:template match="text"><xsl:value-of select="."/></xsl:template>
+</xsl:stylesheet>
+```
+
+Add templates for the Markdown and GFM nodes your content uses; this short
+example is not a complete Markdown renderer.
+
 ---
 
 ## On-disk layout
