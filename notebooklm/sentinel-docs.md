@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-27T02:30:20Z"
+  at: "2026-10-27T06:17:14Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -20537,6 +20537,29 @@ refused: rotate or revoke the key and restart the harness as one operator-contro
 change. Merely replacing a key file does not update the running verifier. Keep
 control of the separate operator credential and the service restart procedure.
 No customer installation or running service is changed automatically by this work.
+
+
+### First-release branch: persistent executable changes
+
+A restricted execution must have both an applicable filesystem grant and a
+single-use exact approval before it writes, appends to or deletes executable
+workflow/script files, migration SQL, kit manifests, Docker configuration,
+environment files, or files under skill/twin instruction directories. An
+`automatic` grant alone does not approve these changes. The ticket binds the
+actual operation, path, content and append mode. Ordinary data-file grants retain
+their configured behavior, as do ordinary trusted operator flows.
+
+This protection applies at the native FS Control effect used by `ctx.fs` and the
+file connector. It does not cover every persistent source API, arbitrary SQL,
+MCP administrative action or operating-system file link. Continue to restrict
+those boundaries separately. A model request is refused while an action admitted
+before model observation is still in progress in the same origin; retry only after
+the action has completed and its result has been reconciled. Failed audit
+completion reports an unknown outcome that must be reconciled before retrying.
+
+PostgreSQL transaction callbacks also run under the transaction deadline; the
+previous Lua context is restored afterward. Test evidence for that callback uses
+an isolated Lua VM and a transaction double, not a live PostgreSQL server.
 
 # Offline SQLCipher migration
 
