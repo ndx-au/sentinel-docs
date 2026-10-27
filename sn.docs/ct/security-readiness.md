@@ -310,3 +310,33 @@ quoted SQL identifiers are escaped. These checks do not make arbitrary SQL a kit
 isolation boundary. Do not grant unrestricted raw SQL to an agent as a substitute
 for reviewed operations and database permissions; backend/file-access review remains
 open on the first-release branch.
+
+
+## First-release branch: MCP credential audiences
+
+Credentials listed in `mcp.clients` are MCP-only by default. Use separate bearer
+credentials or signing keys for agents and operators. An agent credential cannot
+use the ordinary harness API, keyhole access, or its WebSocket/SSE authentication
+path to obtain owner authority outside the MCP tool filters. The same credential
+continues to authenticate on the MCP sidecar, where its tool/resource/prompt ACL
+applies. Public content and independently authenticated webhooks have their own
+boundaries; do not reuse agent credentials for those services.
+
+Setting a client's `allow_harness_api` to `true` explicitly retains ordinary owner
+API access. Only use that setting for an actual operator credential: its MCP tool
+filters cannot constrain its authority on the ordinary API. Existing credentials
+not listed as MCP clients retain ordinary owner behavior.
+
+When the MCP client list is nonempty, every MCP caller must match exactly one
+configured identity. Unknown, mismatched or duplicate identities deny access to
+tools, resources, prompts and sessions; they do not inherit the server ceiling.
+Duplicate or unresolved credential configurations prevent harness startup. Map a
+bearer client to an existing API token, or an Ed25519 client to its registered
+public-key filename stem.
+
+Audience bindings are startup snapshots. Configure changes through a controlled
+restart. If named Ed25519 MCP clients are configured, live public-key reload is
+refused: rotate or revoke the key and restart the harness as one operator-controlled
+change. Merely replacing a key file does not update the running verifier. Keep
+control of the separate operator credential and the service restart procedure.
+No customer installation or running service is changed automatically by this work.
