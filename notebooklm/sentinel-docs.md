@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-27T02:02:04Z"
+  at: "2026-10-27T02:18:16Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -20497,6 +20497,16 @@ Audit records avoid raw action payloads; retain private action files under opera
 access controls. Native callback regions cannot call a model, and restricted
 native callback-bearing arguments are currently unsupported. Real SQL handles,
 delegated budget accounting and the final agent scenario suite still need proof.
+
+
+Native SQLite execution, queries, transactions and schema inspection now inherit
+the Lua caller's cancellation with a 30-second ceiling. Cancellation before a call
+prevents database acquisition; cancellation during a transaction rolls back its
+uncommitted writes. Schema names are single portable database labels, not paths;
+quoted SQL identifiers are escaped. These checks do not make arbitrary SQL a kit
+isolation boundary. Do not grant unrestricted raw SQL to an agent as a substitute
+for reviewed operations and database permissions; backend/file-access review remains
+open on the first-release branch.
 
 # Offline SQLCipher migration
 
