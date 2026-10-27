@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-27T06:23:22Z"
+  at: "2026-10-27T06:25:50Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -20573,14 +20573,16 @@ retain their existing scope behavior.
 
 Concurrent requests reserve their estimated input and request slots before the
 provider is called. Overlapping requests can temporarily be counted conservatively
-until all complete. A failed provider attempt consumes a request slot and is marked
-as a failed attempt with unknown price; the ledger does not invent billed tokens.
+until all complete. A failed attempt, including one stopped after reservation, consumes a request
+slot and is marked as a failed attempt with unknown price; the ledger does not
+invent billed tokens.
 If a successful call returns inconsistent or missing usage, or its accounting record
 cannot be saved, later model requests are blocked in that process. Reconcile the
 provider call and accounting before an operator-controlled restart. The provider
 may already have performed the request when an accounting error is reported.
 
-Input estimates are approximate. Provider output, charges on errors, process crashes
+Input estimates are approximate; non-text embedding parts receive only a minimum
+reservation because provider token costs vary. Provider output, charges on errors, process crashes
 and separate instances can exceed locally observed usage. These controls are not a
 hard monetary spending limit; use the provider and deployment controls appropriate
 to the service as well.
