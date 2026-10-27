@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-27T06:27:51Z"
+  at: "2026-10-27T06:45:44Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -20495,8 +20495,8 @@ Ordinary large or binary operator arguments may be explicitly omitted from gener
 audit records. Such an omission is never an approvable restricted-agent action.
 Audit records avoid raw action payloads; retain private action files under operator
 access controls. Native callback regions cannot call a model, and restricted
-native callback-bearing arguments are currently unsupported. Real SQL handles,
-delegated budget accounting and the final agent scenario suite still need proof.
+native callback-bearing arguments are currently unsupported. The final agent
+scenario suite and remaining persistent-effect boundaries still need proof.
 
 
 Native SQLite execution, queries, transactions and schema inspection now inherit
@@ -20550,7 +20550,7 @@ actual operation, path, content and append mode. Ordinary data-file grants retai
 their configured behavior, as do ordinary trusted operator flows.
 
 This protection applies at the native FS Control effect used by `ctx.fs` and the
-file connector. It does not cover every persistent source API, arbitrary SQL,
+file connector. It does not cover every persistent source API,
 MCP administrative action or operating-system file link. Continue to restrict
 those boundaries separately. A model request is refused while an action admitted
 before model observation is still in progress in the same origin; retry only after
@@ -20588,6 +20588,26 @@ output, charges on errors, process crashes
 and separate instances can exceed locally observed usage. These controls are not a
 hard monetary spending limit; use the provider and deployment controls appropriate
 to the service as well.
+
+### First-release branch: raw database access
+
+Restricted `sn.db` SQLite query and execution operations, and PostgreSQL handle
+query and execution operations, require an applicable grant and a separate,
+single-use exact approval, even when the grant is automatic. The approval binds
+the SQL arguments to the actual configured SQLite database path or PostgreSQL
+pool configuration and its handle acquisition. Restricted callback-based database
+transactions remain unsupported. Restricted schema inspection is limited to the
+current kit; trusted operator behavior is unchanged.
+
+Review the complete private action file before approval and protect it as sensitive:
+SQL and parameters can contain credentials or customer data. General audit entries
+do not contain the raw action. An approved SQL statement can itself access other
+resources where database or operating-system permissions allow it; approval does
+not turn SQLite into a cross-kit isolation boundary. PostgreSQL pool identity is a
+configuration binding, not proof of the physical server identity or role privileges.
+Use appropriately restricted database roles, filesystem permissions and deployment
+controls. Preparing exact PostgreSQL action files from pool configuration still
+needs a supported operator workflow before this feature is release-ready.
 
 # Offline SQLCipher migration
 
