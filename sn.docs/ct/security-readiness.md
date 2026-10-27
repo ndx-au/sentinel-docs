@@ -379,8 +379,9 @@ provider is called. Overlapping requests can temporarily be counted conservative
 until all complete. A failed attempt, including one stopped after reservation, consumes a request
 slot and is marked as a failed attempt with unknown price; the ledger does not
 invent billed tokens.
-If a successful call returns inconsistent or missing usage, or its accounting record
-cannot be saved, later model requests are blocked in that process. Reconcile the
+If a successful call returns inconsistent usage, reports no usage despite a
+nonzero input estimate, or its accounting record cannot be saved, later model
+requests are blocked in that process. Reconcile the
 provider call and accounting before an operator-controlled restart. The provider
 may already have performed the request when an accounting error is reported.
 
