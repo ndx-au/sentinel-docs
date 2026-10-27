@@ -230,9 +230,12 @@ address-translation ranges; they pin checked public DNS answers and inherit neit
 proxy settings nor a cookie jar. Custom network routing still requires deployment
 egress controls. Private-service automation remains an operator responsibility.
 
-This agent mechanism is not yet wired across every production entry and host API.
-The local approval store and CLI are mechanisms awaiting full runtime integration;
-do not treat them as a complete human-approval boundary or a release approval.
+The unreleased branch now initializes an approval runtime and binds private
+execution identity before registration, asynchronous execution and both form entry
+paths. MCP-started flows begin with agent restrictions. Model calls during trigger
+registration are refused before the provider. Remaining SQL resource identity,
+credential audience, persistent code and final end-to-end assurance work is open;
+this is not a release approval or a complete security boundary claim.
 
 Events accept bounded JSON data, reject cycles and unsupported values, and give each
 subscriber a frozen copy. The bus reserves an entire batch before creating dispatch
@@ -254,5 +257,46 @@ prove inbox delivery; reconcile uncertain results before retrying.
 When agent authority is bound, SMTP needs a complete `connector.smtp` grant before
 dialing and uses checked public destinations. An isolated network-namespace test
 covers an authorized send and denied recipient mutation. This does not establish
-real relay configuration, live delivery, operational confidentiality or complete
-production permission wiring.
+real relay configuration, live delivery or operational confidentiality.
+
+
+## First-release branch: execution policy and operator approval
+
+An optional owner-managed `.sentinel/execution-policy.json` is read at startup.
+Keep it a regular file, at most 1 MiB, writable only by the owner on Unix. Invalid,
+unreadable, duplicate-key or unknown-field policies prevent startup. Policy changes
+require a controlled restart. Without this file, ordinary trusted operator flows
+retain their existing permissions; model-derived actions and MCP-started flows have
+no native grants by default. One harness still administers one trusted-operator SRE.
+
+Profiles may restrict canonical SRE-relative flow paths and authenticated actor IDs.
+Exact operation grants explicitly select `automatic` or `required` approval, with
+argument constraints or an explicit any-arguments choice. Actor, flow and ancestor
+grants intersect. Model observation permanently narrows an execution origin,
+including cached handles, parents and siblings. Generic native operations without
+a matching restricted grant deny. Broad automatic grants need careful review;
+persistent code and control-plane effects remain under assessment.
+
+A required native action waits up to five minutes, or the earlier synchronous
+caller deadline, for a local operator's exact approval. Use the local `approvals
+runtime`, `approvals grant` and `approvals revoke` CLI commands against the existing
+instance state and key configuration. Review the complete action file, canonical
+source, authenticated actor and execution ID before granting. Tickets are single
+use and bind the runtime, actor, execution, source digest, operation, arguments and
+handle acquisition. An unrelated ticket cannot release the action. Restart
+invalidates outstanding tickets. Storage, audit or clock failure denies dispatch.
+The CLI provides no remote approval mode or automatic database initialization.
+
+Native HTTP starts its bounded network timer after approval; total work still
+inherits its caller deadline. Asynchronous root jobs retain their independent
+workflow lifetime. Delegation is limited to depth 16 and 2,048 descendant attempts
+per origin, shared across children; failed dispatch does not refund attempts.
+Rejected delegation creates no workflow execution record. Event fanout and the
+32-active-workflow limit apply separately.
+
+Ordinary large or binary operator arguments may be explicitly omitted from general
+audit records. Such an omission is never an approvable restricted-agent action.
+Audit records avoid raw action payloads; retain private action files under operator
+access controls. Native callback regions cannot call a model, and restricted
+native callback-bearing arguments are currently unsupported. Real SQL handles,
+delegated budget accounting and the final agent scenario suite still need proof.
