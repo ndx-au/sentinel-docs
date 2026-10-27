@@ -385,8 +385,9 @@ requests are blocked in that process. Reconcile the
 provider call and accounting before an operator-controlled restart. The provider
 may already have performed the request when an accounting error is reported.
 
-Input estimates are approximate; non-text embedding parts receive only a minimum
-reservation because provider token costs vary. Provider output, charges on errors, process crashes
+Input estimates are approximate and do not include tool schemas; non-text embedding
+parts receive only a minimum reservation because provider token costs vary. Provider
+output, charges on errors, process crashes
 and separate instances can exceed locally observed usage. These controls are not a
 hard monetary spending limit; use the provider and deployment controls appropriate
 to the service as well.
