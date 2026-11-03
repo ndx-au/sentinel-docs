@@ -14,7 +14,7 @@ This guide gives patterns for Sentinel automation. The examples cover external s
 
 The guide groups patterns by category. Each pattern explains its purpose and includes code examples. A flow can combine webhooks, retries with exponential backoff, and structured logs.
 
-All code examples use the current Sentinel Lua flow style with `function setup()`, `function main(params)`, `function cleanup()`, and `function failed(err)` as top-level functions. All trigger types pass data to `main(params)` as a Lua table argument. The `ctx` global is available for logging, secrets, and form data, but `ctx.get()` and `ctx.set()` are stubs (always return nil / do nothing). Use `params.*` or local variables instead.
+All code examples use the current Sentinel Lua flow style with a top-level `triggers = {}` table. `webhook()`, `cron()`, and `event()` **only** work in that table — not inside `setup()`. Registration requires `setup()`, `main()`, and `cleanup()`. Pattern snippets below often show only `main()` for brevity. All trigger types pass data to `main(params)` as a Lua table argument. The `ctx` global is available for logging, secrets, and form data, but `ctx.get()` and `ctx.set()` are stubs (always return nil / do nothing). Use `params.*` or local variables instead. Cron expressions are **5-field** (`Minute Hour Dom Month Dow`) or `@every` / descriptors — not 6-field seconds.
 
 ---
 
@@ -33,18 +33,15 @@ Webhook services retry failed deliveries. Signature verification protects agains
 **How it works:** The external service hashes the request body with a shared secret, typically with SHA-256. It sends the hash in a request header. Sentinel can test the signature before the flow runs. Requests with missing or invalid signatures are rejected.
 
 ```lua
-function setup()
-  -- Register a webhook trigger with HMAC authentication.
-  -- The 'key' parameter references a secret stored in the Sentinel vault.
-  -- The 'sig_hdr' parameter tells Sentinel which HTTP header contains the signature.
-  -- The 'alg' parameter specifies the HMAC algorithm to use for verification.
+triggers = {
+  -- HMAC webhook. `key` is a vault secret name. `sig_hdr` is the signature header.
   webhook("/stripe", {
     auth = "hmac",
     key = "stripe_webhook_secret",
     alg = "sha256",
     sig_hdr = "Stripe-Signature"
   })
-end
+}
 
 function main(params)
   -- By the time main() runs, signature verification has already succeeded.
@@ -78,13 +75,13 @@ end
 **When to use:** Use this pattern for Telegram Bot API `setWebhook` (`X-Telegram-Bot-Api-Secret-Token`). It also supports providers with static secrets in named headers instead of body HMACs.
 
 ```lua
-function setup()
+triggers = {
   webhook("/telegram", {
     auth = "header",
     key = "telegram_webhook_secret",
     hdr = "X-Telegram-Bot-Api-Secret-Token",
   })
-end
+}
 ```
 
 `auth = "bearer"` is the same check against `Authorization: Bearer <secret>`.
@@ -95,20 +92,20 @@ end
 
 **Why this matters:** Webhook floods can exhaust database connections and fill the execution queue. Legitimate requests can then time out. Rate limits restrict request volume. IP whitelists restrict requests to known sources.
 
-**How it works:** You configure rate limits and allowed IP ranges in `sentinel.yaml`. Sentinel enforces these limits at the router level before your flow code runs.
+**How it works:** Put `rps` and `cidrs` on the Lua `webhook()` opts in `triggers = {}`. The harness enforces those limits before your flow code runs. Do not put a `webhooks:` map in `sentinel.yaml` for this.
 
-```yaml
-# sentinel.yaml
-webhooks:
-  /api/webhook:
-    auth: hmac
-    key: webhook_secret
-    rps: 100              # Maximum 100 requests per second. Requests exceeding
-                          # this rate receive an error response. The external
-                          # service will typically retry later.
-    cidrs:                # IP whitelist using CIDR notation. Only requests from
-      - 35.184.0.0/16    # these IP ranges will be accepted. All other source
-      - 35.185.0.0/16    # IPs receive an immediate rejection.
+```lua
+triggers = {
+  webhook("/api/webhook", {
+    auth = "hmac",
+    key = "webhook_secret",
+    rps = 100,                    -- max requests per second for this path
+    cidrs = {                     -- source IP allowlist
+      "35.184.0.0/16",
+      "35.185.0.0/16",
+    }
+  })
+}
 ```
 
 Set `rps` (requests per second) above the expected peak traffic. If the service documents a maximum rate, start with that rate and add a 50% buffer. Use the service's documented webhook source IP ranges for `cidrs`.
@@ -122,9 +119,9 @@ Set `rps` (requests per second) above the expected peak traffic. If the service 
 **How it works:** The database stores processed event IDs. Before it processes an event, the flow searches for its ID. If the ID exists, the flow returns success without repeating the work. This pattern is called "at-least-once delivery with deduplication."
 
 ```lua
-function setup()
+triggers = {
   webhook("/stripe")
-end
+}
 
 function main(params)
   -- params contains all parsed request fields as strings.
@@ -168,7 +165,7 @@ Create the `processed_events` table with a UNIQUE constraint on `event_id`. This
 
 ## Cron Patterns
 
-Cron triggers run flows on a schedule. Tasks include reports, data cleanup, service health tests, synchronization, and notifications. Sentinel uses standard cron expressions with optional timezones.
+Cron triggers run flows on a schedule. Tasks include reports, data cleanup, service health tests, synchronization, and notifications. Sentinel uses **5-field** cron (`Minute Hour Dom Month Dow`) or descriptors such as `@every 5m`. There is no 6-field seconds field. Optional `tz` sets the timezone.
 
 Cron jobs run within the harness process. If the harness is stopped, scheduled jobs do not run and are not retroactively executed when the harness restarts. For critical scheduled tasks, consider adding monitoring to detect missed executions.
 
@@ -179,12 +176,10 @@ Cron jobs run within the harness process. If the harness is stopped, scheduled j
 **Why this matters:** Digest emails reduce alert fatigue by consolidating many individual events into a single actionable summary. They are also useful for stakeholders who need regular updates but do not monitor dashboards in real time.
 
 ```lua
-function setup()
-  -- Schedule for 9 AM Eastern every day. The timezone parameter ensures
-  -- the job runs at the correct local time regardless of the server's
-  -- system timezone, and correctly handles daylight saving time transitions.
+triggers = {
+  -- 9 AM Eastern every day. `tz` handles DST independently of the server clock.
   cron("0 9 * * *", {tz = "America/New_York"})
-end
+}
 
 function main(params)
   ctx.log("info", "Generating daily digest...")
@@ -245,12 +240,10 @@ end
 **Why this matters:** Regular health tests detect unavailable dependencies before users report errors. An alerting system can notify your team about those failures.
 
 ```lua
-function setup()
-  -- Run every 5 minutes. This frequency balances timely detection with
-  -- reasonable resource usage. For critical services, you might check
-  -- every minute; for less critical ones, every 15 minutes may suffice.
+triggers = {
+  -- Every 5 minutes. For critical services, every minute; otherwise every 15.
   cron("*/5 * * * *")
-end
+}
 
 function main(params)
   -- Set a 5-second timeout to distinguish between "slow" and "down".
@@ -284,11 +277,10 @@ end
 **Why this matters:** Without periodic cleanup, your database grows unboundedly. SQLite performance degrades as tables get very large, disk space fills up, and backups take longer. Regular cleanup keeps your system healthy and performant. Running cleanup during off-peak hours (like 3 AM on a Sunday) minimizes the impact on live traffic.
 
 ```lua
-function setup()
-  -- Run at 3 AM UTC every Sunday. This schedule avoids peak usage hours
-  -- and gives the database a full week of data before each cleanup.
+triggers = {
+  -- 3 AM UTC every Sunday — off-peak, one week of data between cleanups.
   cron("0 3 * * 0", {tz = "UTC"})
-end
+}
 
 function main(params)
   ctx.log("info", "Starting periodic cleanup...")
@@ -334,9 +326,9 @@ Webhooks come from external HTTP requests. Events come from flows or form submis
 -- Flow 1: process-order.lua
 -- This is the entry point that receives the external webhook.
 -- It processes the order and then emits events for downstream flows.
-function setup()
+triggers = {
   webhook("/orders")
-end
+}
 
 function main(params)
   -- params contains all parsed webhook request fields as strings.
@@ -364,9 +356,9 @@ function failed(err) end
 -- Flow 2: on-order-created.lua
 -- Handles post-order tasks like email confirmation and statistics.
 -- This flow is completely independent of the order processing flow.
-function setup()
+triggers = {
   event("order.created")
-end
+}
 
 function main(params)
   -- Event data is available through the params argument to main().
@@ -393,9 +385,9 @@ function failed(err) end
 -- Flow 3: check-inventory.lua
 -- Handles inventory verification independently from order processing.
 -- If stock is low, it emits another event for alerting.
-function setup()
+triggers = {
   event("inventory.check_needed")
-end
+}
 
 function main(params)
   local payload = params.event_payload
@@ -427,9 +419,9 @@ function failed(err) end
 -- Kit: acme.billing / fl/payment-failed.lua
 -- This flow lives in the billing kit. It processes payment failures
 -- and emits a generic event that any other kit can listen for.
-function setup()
+triggers = {
   webhook("/payment-failed")
-end
+}
 
 function main(params)
   -- params contains all parsed webhook request fields as strings.
@@ -459,9 +451,9 @@ function failed(err) end
 -- Kit: acme.notify / fl/on-payment-failed.lua
 -- This flow lives in a completely separate notifications kit.
 -- It listens for billing events and sends alerts.
-function setup()
+triggers = {
   event("billing.payment_failed")
-end
+}
 
 function main(params)
   local payload = params.event_payload
@@ -486,9 +478,9 @@ function failed(err) end
 ```lua
 -- Kit: acme.analytics / fl/track-payment-failure.lua
 -- A third kit that also listens for the same event, tracking metrics.
-function setup()
+triggers = {
   event("billing.payment_failed")
-end
+}
 
 function main(params)
   local payload = params.event_payload
@@ -524,15 +516,14 @@ Forms are particularly useful for building approval workflows, data entry interf
 -- Step 1: Initial form submission (e.g., checkout form)
 -- This flow triggers when the checkout form is submitted.
 -- The form event name follows the pattern: kf.{namespace}.{kit}.{form-stub}
-function setup()
+triggers = {
   event("kf.acme.shop.checkout")
-end
+}
 
 function main(params)
-  -- Form field values are available through ctx.fm.{form_stub}.{field}.
-  -- The field names match what is defined in the form YAML.
-  local items = ctx.fm.checkout.items
-  local email = ctx.fm.checkout.email
+  -- Form field values nest on the stub: ctx.fm.kf.{ns}.{kit}.{filename}.{field}
+  local items = ctx.fm.kf.acme.shop.checkout.items
+  local email = ctx.fm.kf.acme.shop.checkout.email
 
   -- Validate items against the inventory database
   local total = 0
@@ -570,15 +561,15 @@ function failed(err) end
 -- Step 2: Payment form submission
 -- This flow triggers when the payment form is submitted.
 -- The payment form includes the cart_id from step 1 as a hidden field.
-function setup()
+triggers = {
   event("kf.acme.shop.payment")
-end
+}
 
 function main(params)
-  -- Form field values are available through ctx.fm.{form_stub}.{field}.
-  local cart_id = ctx.fm.payment.cart_id
-  local card = ctx.fm.payment.card_token
-  local total = ctx.fm.payment.total
+  -- Form field values nest on the stub: ctx.fm.kf.{ns}.{kit}.{filename}.{field}
+  local cart_id = ctx.fm.kf.acme.shop.payment.cart_id
+  local card = ctx.fm.kf.acme.shop.payment.card_token
+  local total = ctx.fm.kf.acme.shop.payment.total
 
   -- Process payment through Stripe
   local stripe_key = ctx.secret("stripe_api_key")
@@ -626,9 +617,9 @@ WebSockets are ideal for scenarios where you need to push data to clients in rea
 -- This flow runs on a schedule and pushes system metrics to all
 -- connected WebSocket clients. The dashboard listens for these
 -- messages and updates its display in real time.
-function setup()
-  cron("*/10 * * * * *")  -- Every 10 seconds
-end
+triggers = {
+  cron("@every 10s")
+}
 
 function main(params)
   -- Gather current system metrics
@@ -661,9 +652,9 @@ function failed(err) end
 -- fl/event-broadcaster.lua
 -- Listens for all events matching a pattern and forwards them
 -- to WebSocket clients for real-time observation.
-function setup()
+triggers = {
   event("order.*")  -- Listen for all order-related events
-end
+}
 
 function main(params)
   -- Event trigger params include event metadata fields.
@@ -690,7 +681,7 @@ function failed(err) end
 
 ## fcms content workflow patterns
 
-**fcms** (file CMS) stores content as markdown files in the `ct/` directory of a kit, managed through the `/fcms` API (legacy alias `/cm`). Workflows handle publishing, versioning, and rendering for technical writing and agent-authored docs. For Postgres collections use **ccms** ([Content planes](/content-planes)) — do not treat `ct/` files as collection rows.
+**fcms** (file CMS) stores content as markdown files in the `ct/` directory of a kit, managed through the `/fcms` API. Workflows handle publishing, versioning, and rendering for technical writing and agent-authored docs. For Postgres collections use **ccms** ([Content planes](/content-planes)) — do not treat `ct/` files as collection rows. Lua `sn.cms` is **get and list only**; writes use HTTP `POST`/`PUT` `/fcms`.
 
 ### Pattern: Content Publishing Pipeline
 
@@ -702,28 +693,37 @@ function failed(err) end
 -- fl/publish-content.lua
 -- Triggered when an editor marks content as "ready for publish"
 -- via a form submission in the dashboard.
-function setup()
+triggers = {
   event("kf.acme.cms.publish-request")
-end
+}
 
 function main(params)
-  -- Form field values are available through ctx.fm.{form_stub}.{field}.
-  local slug = ctx.fm["publish-request"].slug
-  local reviewer = ctx.fm["publish-request"].reviewer_email
+  local form = ctx.fm.kf.acme.cms["publish-request"]
+  local slug = form.slug
+  local reviewer = form.reviewer_email
 
-  -- Fetch the content entry from CMS
+  -- Fetch the content entry from CMS (get/list only)
   local entry = sn.cms.get(slug)
   if not entry then
     return {ok = false, error = "Content not found: " .. slug}
   end
 
-  -- Update the content metadata to mark it as published.
-  -- The CMS stores metadata in the frontmatter of markdown files.
-  sn.cms.update(slug, {
-    status = "published",
-    published_at = sn.time.now(),
-    published_by = reviewer
-  })
+  -- Writes go through HTTP, not a Lua update helper.
+  local token = ctx.secret("harness_token")
+  local resp = sn.http.put(
+    "http://127.0.0.1:8080/fcms/acme/cms/" .. slug,
+    sn.json.enc({
+      frontmatter = {
+        status = "published",
+        published_at = sn.time.now(),
+        published_by = reviewer
+      },
+      markdown = form.markdown
+    }),
+    {headers = {Authorization = "Bearer " .. token}})
+  if resp.status ~= 200 then
+    return {ok = false, error = "fcms write failed"}
+  end
 
   -- Emit an event so other flows can react to the publication.
   -- For example, a flow that purges the CDN cache, updates a sitemap,
@@ -746,46 +746,39 @@ function failed(err) end
 
 ## Docker Stack Integration Patterns
 
-Sentinel can manage Docker containers through the `/docker` API endpoints, enabling flows to start, stop, and monitor containers as part of automated workflows. This is particularly useful for managing development environments, running batch processing jobs in containers, or orchestrating microservice deployments.
+Sentinel orchestrates **Compose stacks** through the `/docker` HTTP API (`GET /docker`, `POST /docker/{stubs}/up`, `POST /docker/{stubs}/down`, logs). There is no Lua helper for starting ad-hoc containers. Use `/docker` for wp-central, Graphile dataplane, and other project compose files.
 
-### Pattern: Container Lifecycle Management
+### Pattern: Compose stack up / down
 
-**When to use:** Use this pattern to start a task container, wait for completion, and remove it. Examples include data pipelines, builds, and temporary services.
+**When to use:** Bring a named stack up on a schedule or event, then stop it when the work is done. Examples include a dataplane stack, a WordPress origin, or a batch worker compose file registered with the harness.
 
-**Why this matters:** Containers give tasks isolated environments with specific dependencies. Flows can manage these containers for operational tasks. This reduces manual work and the need for separate orchestration tools.
+**Why this matters:** Stacks stay declared in compose YAML. The harness starts and stops them as a unit. Operators can also use the dashboard Docker controls.
 
 ```lua
--- fl/run-data-pipeline.lua
--- Triggered on a schedule to run a data processing pipeline
--- inside a Docker container.
-function setup()
-  cron("0 2 * * *", {tz = "UTC"})  -- 2 AM UTC daily
-end
+-- fl/start-dataplane.lua
+-- Starts the registered compose stack through the harness /docker API.
+triggers = {
+  cron("0 2 * * *", {tz = "UTC"})
+}
 
 function main(params)
-  ctx.log("info", "Starting data pipeline container...")
+  ctx.log("info", "Bringing dataplane stack up...")
 
-  -- Start a container from a pre-built image
-  local result = sn.docker.run({
-    image = "myorg/data-pipeline:latest",
-    env = {
-      DATABASE_URL = ctx.secret("pipeline_db_url"),
-      OUTPUT_BUCKET = "s3://my-bucket/output/"
-    },
-    volumes = {"/data/input:/input:ro"},
-    timeout_ms = 300000  -- 5-minute timeout
-  })
+  local token = ctx.secret("harness_token")
+  local resp = sn.http.post(
+    "http://127.0.0.1:8080/docker/dataplane/up",
+    "",
+    {headers = {Authorization = "Bearer " .. token}})
 
-  if not result.ok then
-    ctx.log("error", "Pipeline container failed: " .. result.error)
-    sentinel.emit("pipeline.failed", {error = result.error})
-    return {ok = false, error = result.error}
+  if resp.status ~= 200 then
+    ctx.log("error", "Stack up failed")
+    sentinel.emit("pipeline.failed", {status = resp.status})
+    return {ok = false, status = resp.status}
   end
 
-  ctx.log("info", "Pipeline completed successfully, exit code: " .. result.exit_code)
-  sentinel.emit("pipeline.completed", {duration_ms = result.duration_ms})
-
-  return {ok = true, exit_code = result.exit_code}
+  ctx.log("info", "Dataplane stack started")
+  sentinel.emit("pipeline.started", {})
+  return {ok = true}
 end
 
 function cleanup() end
@@ -1121,9 +1114,9 @@ end
 
 ```lua
 -- Flow 1: Start session
-function setup()
+triggers = {
   event("user.login")
-end
+}
 
 function main(params)
   local session_id = sn.crypto.random_bytes(16)
@@ -1143,9 +1136,9 @@ function failed(err) end
 
 ```lua
 -- Flow 2: Use session
-function setup()
+triggers = {
   event("user.action")
-end
+}
 
 function main(params)
   -- Look up the session from the database using the user_id
@@ -1183,10 +1176,8 @@ Testing your flows before deploying them to production is essential for reliabil
 **Why this matters:** Tests that depend on external services are slow, unreliable, and often expensive. By pointing your flows at a mock server during testing, you get fast, deterministic tests that you can run anywhere. You can also simulate error conditions (timeouts, 500 errors, rate limits) that are difficult to trigger with real services.
 
 ```lua
--- The API_URL is configurable via environment variable, defaulting to
--- the production URL. During testing, set the MOCK_API environment
--- variable to point at a local mock server.
-local API_URL = os.getenv("MOCK_API") or "https://api.example.com"
+-- Point this at a mock in a test SRE. The Lua sandbox cannot read process environment.
+local API_URL = "https://api.example.com"
 
 function setup() end
 
@@ -1199,12 +1190,7 @@ function cleanup() end
 function failed(err) end
 ```
 
-**Running tests with a mock:**
-```bash
-# Start a mock server (e.g., using a tool like mockoon, wiremock, or a simple HTTP server)
-# Then run Sentinel with the MOCK_API variable set:
-MOCK_API="http://localhost:8081" ./sentinel harness start -p ./test-sre
-```
+**Running tests with a mock:** keep a test SRE whose flows call `http://127.0.0.1:8081`. Start the mock server, then `sentinel harness start -p ./test-sre`. Do not inject mock URLs through process environment variables.
 
 ### Pattern: Database Fixtures
 

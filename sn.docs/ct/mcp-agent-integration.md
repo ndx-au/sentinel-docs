@@ -28,7 +28,7 @@ MCP runs **in-process** with the harness (streamable HTTP). Clients that only sp
 
 The dashboard **MCP** page (`GET /mcp`) is in the Background section after Agents. It shows sidecar status, binding, URL, authentication, risk limits, and connection examples. It lists named clients without tokens and the tool, resource, and prompt catalog. The page is read-only.
 
-- Dashboard BFF: `GET /api/dashboard/mcp` → harness `GET /mcp`.
+- Dashboard BFF handler: `GET /api/dashboard/mcp` (`handleAPIMCP`, not a `translatePath` rewrite) fetches harness `GET /mcp`.
 - Catalog is shown even when the sidecar is off (ceiling from `mcp.risk_classes` / default `read,validate`).
 - Starting MCP still requires `sentinel harness restart -p <sre> --mcp` (no in-UI start).
 - The page does not invoke tools or edit `mcp.clients`.

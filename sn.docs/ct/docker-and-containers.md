@@ -184,7 +184,7 @@ services:
       - "8085:8080"
     volumes:
       - ./sre:/app/sre
-    command: ["./sentinel", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
+      command: ["./sentinel", "harness", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
 ```
 
 In this mode:
@@ -207,7 +207,7 @@ services:
     volumes:
       - ./sre:/app/sre
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["./sentinel", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
+      command: ["./sentinel", "harness", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
 ```
 
 More requirements:

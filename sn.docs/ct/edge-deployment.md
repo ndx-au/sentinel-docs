@@ -20,8 +20,9 @@ Production deployment of Sentinel requires careful attention to security, perfor
 
 ```
 Internet -> Cloudflare Edge (CDN + DDoS + SSL) -> Caddy Origin Server -> Sentinel Harness
-              (Full Strict SSL, caching)            (TLS termination,    (localhost:8080)
-                                                     reverse proxy)
+              (Full Strict SSL, caching)            (TLS termination,    (:8080 all interfaces;
+                                                     reverse proxy)       firewall it. Caddy
+                                                                          proxies to localhost:8080)
 ```
 
 **Why this three-layer architecture:**
@@ -30,9 +31,9 @@ Internet -> Cloudflare Edge (CDN + DDoS + SSL) -> Caddy Origin Server -> Sentine
 
 - **Caddy** (middle layer) handles TLS between Cloudflare and your origin server using a Cloudflare origin certificate. This is required for Cloudflare's Full (Strict) SSL mode, which validates the origin certificate to prevent man-in-the-middle attacks between Cloudflare and your server. Caddy also acts as a reverse proxy, forwarding HTTP requests to Sentinel.
 
-- **Sentinel** (inner layer) stays bound to `localhost:8080` and is never directly exposed to the internet. All external traffic is routed through Caddy. Sentinel handles the application logic: running flows, serving API responses, managing CMS content, and processing webhooks.
+- **Sentinel** (inner layer) is the harness gateway. It binds all interfaces on `:PORT` (default 8080). Caddy proxies to `localhost:8080`. Firewall port 8080 from the public internet. The dashboard binds loopback only (`127.0.0.1:9090`). Sentinel handles the application logic: running flows, serving API responses, managing CMS content, and processing webhooks.
 
-This dual-layer TLS architecture gives you edge performance and security without exposing Sentinel directly to the internet. Even if an attacker discovers your server's IP address, Sentinel is not accessible on any public port -- only Caddy listens on ports 80/443.
+This dual-layer TLS architecture gives you edge performance and security without exposing the harness on 80/443. Firewall the harness port. Only Caddy should listen on ports 80/443.
 
 ---
 
@@ -74,13 +75,13 @@ This produces a 64-character hexadecimal string. Use this as the value in the `t
 
 **Configuration details:**
 
-- `api.port` -- The port Sentinel listens on. In this architecture, Sentinel only accepts connections from localhost (Caddy), so 8080 is fine. Do not expose this port in your firewall.
+- `api.port` -- The port the harness gateway listens on. The process binds all interfaces (`:8080`). Caddy proxies to `localhost:8080`. Do not expose 8080 in the host firewall. The dashboard is separate and binds `127.0.0.1:9090` only.
 - **Content-plane ports (dedicated, not path-merged):** Graphile/ccms defaults to host **1880**. wpcms ingress stays on its own port (**8800** legacy default, target **1800**). If you expose Graphile publicly, add a separate reverse_proxy upstream — do not multiplex Graphile under the harness path for MVP. See [Content planes](/content-planes).
 - `api.tokens` -- An array of bearer tokens that clients must provide in the `Authorization: Bearer <token>` header. In production, always configure at least one token. When tokens are configured, the harness runs in production mode and rejects unauthenticated requests.
 - `api.debug_mode` -- Set this to `false` in production. Debug mode disables token authentication and enables more diagnostic endpoints. Keep these endpoints private.
 - `state.encrypt_db` -- Encrypts the SQLite state database using SQLCipher (AES-256). Requires the `SENTINEL_STATE_PASSPHRASE` environment variable to be set.
 
-**Important security note:** Sentinel listens on `localhost:8080` only in this architecture. Caddy proxies external HTTPS traffic to it. Do NOT enable Sentinel's built-in TLS (`tls.*` configuration options) when running behind Caddy -- Caddy owns TLS termination. Enabling both creates unnecessary complexity and can cause certificate conflicts.
+**Important security note:** The harness gateway binds all interfaces. Rely on the host firewall so only Caddy (and local operators) can reach port 8080. Do NOT enable Sentinel's built-in TLS (`tls.*` configuration options) when running behind Caddy -- Caddy owns TLS termination. Enabling both creates unnecessary complexity and can cause certificate conflicts. The dashboard remains loopback-only.
 
 ---
 
@@ -312,7 +313,7 @@ sudo journalctl -u sentinel -f
 
 **Understanding the service configuration:**
 
-- `Type=simple` -- systemd expects the process to stay in the foreground. Sentinel's `start` command does this by default.
+- `Type=simple` -- systemd expects the process to stay in the foreground. `sentinel harness start` does this by default.
 - `User=sentinel` -- Runs the harness as a non-root, dedicated user. This limits the blast radius of any security vulnerability.
 - `Restart=on-failure` -- If the harness crashes (non-zero exit), systemd automatically restarts it after 5 seconds.
 - `LimitNOFILE=65535` -- Increases the file descriptor limit, which is necessary if the harness handles many concurrent connections.
@@ -444,14 +445,7 @@ Add to crontab:
 
 ### Systemd Watchdog
 
-Add a watchdog timeout to the systemd service to detect hangs:
-
-```ini
-# Add to [Service] section of sentinel.service
-WatchdogSec=30
-```
-
-This tells systemd to expect a watchdog notification every 30 seconds. If the harness becomes unresponsive, systemd automatically restarts it.
+Do not set `WatchdogSec` for the harness. The process does not send `sd_notify` watchdog pings. systemd then treats a healthy harness as hung and restarts it.
 
 ### External Monitoring
 
@@ -617,7 +611,7 @@ Use this checklist before going live:
 - [ ] Caddyfile configured with origin cert and `reverse_proxy localhost:8080`.
 - [ ] Caddy reloaded and healthy: `systemctl status caddy`.
 - [ ] Systemd service for Sentinel configured with auto-restart.
-- [ ] Firewall: only ports 80 and 443 public (Caddy). Port 8080 localhost-only.
+- [ ] Firewall: only ports 80 and 443 public (Caddy). Deny public access to harness `:8080` (it binds all interfaces). Dashboard stays on `127.0.0.1:9090`.
 - [ ] Health monitoring configured (cron, external service, or both).
 - [ ] Log aggregation configured (journald, file, or remote).
 - [ ] Backup script scheduled and tested.

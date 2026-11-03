@@ -22,7 +22,7 @@ Sentinel exposes one HTTP API for flows, triggers, logs, source files, secrets, 
 
 The API follows several important design principles that differ from conventional REST APIs:
 
-1. **Always HTTP 200.** Every response returns HTTP status code 200, even errors. The actual success or failure is communicated in the JSON response body. This simplifies client logic for AI agents and automation scripts that consume the API -- they never need to handle HTTP-level error branching. The only exception is WebSocket upgrade requests, which use standard HTTP upgrade semantics.
+1. **JSON errors use HTTP 200.** Authenticated JSON handlers that call `writeError` return HTTP 200 with `{ok: false, err, code, msg, req_id}` in the body. Detect failure with `ok === false` or a present `err` field -- not HTTP status, and not "any `code` field". This is **not** always HTTP 200: preflight `OPTIONS` returns 204 when CORS middleware is wired; WebSocket upgrade when the subsystem is disabled returns 503; form HTML handlers return 4xx/5xx/302; CMS HTML render (`/fcms/render`, `/ct`) returns 4xx/5xx; git handlers return 4xx/5xx.
 
 2. **Brevity Regime.** Paths and query parameters use short names to reduce tokens in agent prompts. Example prefixes include `/fl` for flows and `/ex` for executions. Other examples include `/tr` for triggers and `/lg` for logs. Query parameters include `?lv=` for level and `?h=` for history.
 
@@ -97,8 +97,8 @@ All available API routes at a glance. Routes marked with (public) bypass bearer 
 | `POST` | `/git/credentials/generate` | Generate new SSH keypair |
 | `GET` | `/cert/ca.crt` | Download CA certificate (public) |
 | `GET` | `/cert/server.crt` | Download server certificate (public) |
-| `GET` | `/cm` | List CMS content slugs |
-| `GET` | `/cm/{kitName}/{slug}` | Get CMS content by slug |
+| `GET` | `/fcms` | List CMS content slugs (legacy alias `/cm`) |
+| `GET` | `/fcms/{ns}/{name}/*` | Get CMS content by slug (legacy alias `/cm/{ns}/{name}/*`) |
 | `GET` | `/st` | List storage points |
 | `POST` | `/st` | Create storage point |
 | `GET` | `/st/{id}` | Get storage point |
@@ -160,6 +160,8 @@ All available API routes at a glance. Routes marked with (public) bypass bearer 
 | `POST` | `/mk/auth/login` | Marketplace login |
 | `POST` | `/mk/auth/poll` | Poll login status |
 | `POST` | `/mk/auth/logout` | Marketplace logout |
+
+Additional prefixes (payloads and keyhole notes: [Harness HTTP route reference](/harness-http-routes)): `GET /hl/runtime`, `/fcms` and `/fcms/render`, `/ccms/*`, `/ai/*`, `/rag/*`, `/fs/pl`, `/fs/test`, `/cfg/ip-filters`, `/st/export`, `/st/import`, `/st/{id}/objects`, `POST /lib/{id}/validate`, `/docker/capability`, `/docker/templates`, `/cm/wp/*`.
 
 ---
 
@@ -283,21 +285,25 @@ Successful responses return the JSON body directly. Some endpoints include an `o
 
 ### Error Responses
 
-All errors are returned as HTTP 200 with an error object in the body:
+JSON application errors from `writeError` are returned as HTTP 200 with:
 
 ```json
 {
+  "ok": false,
+  "err": "DOMAIN.ACTION",
   "code": "DOMAIN.ACTION",
   "msg": "Human-readable error message",
   "req_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-- **`code`**: A structured error code such as `AUTH.REQUIRED`, `RESOURCE.NOT_FOUND`, or `CMS.UNAVAILABLE`. Use this for programmatic error handling.
+- **`ok`**: Always `false` on these error bodies.
+- **`err`**: Structured error code such as `AUTH.REQUIRED`, `FLOW.NOT_FOUND`, or `CMS.UNAVAILABLE`. Prefer this field for programmatic handling.
+- **`code`**: Same value as `err` (legacy alias). Do **not** treat any `code` field as failure -- success payloads can include unrelated `code` keys.
 - **`msg`**: A human-readable description of what went wrong. Suitable for logging or displaying to users.
 - **`req_id`**: A UUID v4 generated for every request. This is also returned in the `X-Request-ID` response header. Use it when reporting issues or correlating logs.
 
-**How to detect errors:** If the response contains a `code` field, the request failed. If `code` is absent, the request succeeded.
+**How to detect errors:** `ok === false` or a present `err` field. HTTP status is not a reliable failure signal for JSON API calls. Some surfaces (forms HTML, CMS HTML render, git, disabled WebSocket, CORS preflight) use real 4xx/5xx/204/302 status codes.
 
 ---
 
@@ -439,7 +445,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
     "valid": true,
     "grace_period": false,
     "blocked": false
-  }
+  },
+  "vault_initialized": true,
+  "spec_ref": "system-specs/api.yaml"
 }
 ```
 
@@ -455,6 +463,8 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
 | `project` | string | SRE project name (derived from the SRE root directory name) |
 | `components` | object | Health status of each internal component |
 | `marketplace` | object | Marketplace license status (present only if marketplace is configured) |
+| `vault_initialized` | boolean | Whether the vault manager is wired |
+| `spec_ref` | string | Machine-readable API spec path (`system-specs/api.yaml`) |
 
 **Component statuses:** Each component reports `"ok"`, `"unavailable"` (not configured), or `"unhealthy"`. If any component is unhealthy, the top-level `status` becomes `"degraded"`.
 
@@ -466,7 +476,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
 GET /mcp
 ```
 
-Operator snapshot of the optional MCP sidecar. Always HTTP 200. `enabled` is false when the harness was started without `--mcp`. The catalog is still returned so the dashboard can teach the surface. Never includes tokens, vault values, or occupy license keys.
+Operator snapshot of the optional MCP sidecar. JSON HTTP 200 with `{ok, enabled, ...}`. `enabled` is false when the harness was started without `--mcp`. The catalog is still returned so the dashboard can teach the surface. Never includes tokens, vault values, or occupy license keys.
 
 **When to use:** The Dashboard MCP page uses this endpoint (`GET /mcp`, BFF `GET /api/dashboard/mcp`). Operator scripts can inspect binding, listener, and risk limits without an MCP session.
 
@@ -721,30 +731,33 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl
 ### Get Flow Details
 
 ```
-GET /fl/{id}
+GET /fl/{ns}.{name}/{flow}
 ```
 
-Returns details for a single flow.
+Returns details for a single flow. Canonical HTTP path is `/fl/{ns}.{name}/{flow}` (for example `/fl/sn.core-agent/assistant`). Colon IDs (`/fl/{ns}-{name}:{flow}`) are a legacy fallback.
 
 **When to use:** Inspecting a specific flow before executing it, checking its parameters or trigger configuration.
 
 **Path parameters:**
-- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format (for example `sn-core-agent:assistant`).
+- `{ns}.{name}` -- Kit directory (`sn.core-agent`).
+- `{flow}` -- Flow basename without `.lua` (`assistant`).
+
+Internal flow ID remains `{ns}-{name}:{flow}` (for example `sn-core-agent:assistant`). Slash alias `{ns}.{name}/{flow}` is also accepted by the flow manager.
 
 **curl example:**
 ```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl/sn-core-agent:assistant
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl/sn.core-agent/assistant
 ```
 
 **Response:** Same structure as a single item from the list endpoint above.
 
 **Error conditions:**
-- `RESOURCE.NOT_FOUND`: No flow with that ID exists.
+- `FLOW.NOT_FOUND`: No flow with that ID exists.
 
 ### Execute Flow
 
 ```
-POST /fl/{id}/run
+POST /fl/{ns}.{name}/{flow}/run
 ```
 
 Triggers an execution of the specified flow. The request body is passed to the flow as parameters, accessible inside the Lua `main()` function through the function's parameters or the trigger context. Flow execution is **asynchronous** -- this endpoint returns immediately with an execution ID. Use `/ex/{id}` to poll for completion, or `/ex/{id}/lg` to stream logs in real-time.
@@ -752,7 +765,7 @@ Triggers an execution of the specified flow. The request body is passed to the f
 **When to use:** Running a flow on-demand from the CLI, Dashboard, or an external system. This is the "manual trigger" mechanism.
 
 **Path parameters:**
-- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format.
+- `{ns}.{name}/{flow}` -- Canonical kit/flow path (for example `sn.core-agent/assistant`). Colon IDs are a legacy fallback.
 
 **Request body:** Any valid JSON object. All key-value pairs become available as flow parameters.
 
@@ -761,7 +774,7 @@ Triggers an execution of the specified flow. The request body is passed to the f
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello", "context": "greeting"}' \
-  http://localhost:8080/fl/sn-core-agent:assistant/run
+  http://localhost:8080/fl/sn.core-agent/assistant/run
 ```
 
 **Response:**
@@ -782,7 +795,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | `status` | string | Always `"queued"` on initial response |
 
 **Error conditions:**
-- `RESOURCE.NOT_FOUND`: Flow does not exist.
+- `FLOW.NOT_FOUND`: Flow does not exist.
 - `REQUEST.INVALID`: Request body is not valid JSON.
 
 ---
@@ -1738,7 +1751,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cfg/project
 **Response:**
 ```json
 {
-  "yaml": "name: my-project\nversion: 1.0.0\ndescription: My SRE project\ngit: true\nhotreload: true",
+  "yaml": "name: my-project\nversion: 1.0.0\ndescription: My SRE project\ngit:\n  sync: off\nhotreload:\n  yaml: full",
   "etag": "abc123"
 }
 ```
@@ -1758,7 +1771,7 @@ Updates `sentinel.yaml`. The entire file contents are replaced. Use the `etag` f
 curl -X PUT -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "yaml": "name: my-project\nversion: 1.1.0\ndescription: Updated project\ngit: true\nhotreload: true",
+    "yaml": "name: my-project\nversion: 1.1.0\ndescription: Updated project\ngit:\n  sync: off\nhotreload:\n  yaml: full",
     "etag": "abc123"
   }' \
   http://localhost:8080/cfg/project
@@ -2023,19 +2036,21 @@ The CMS (Content Management System) provides structured access to Markdown conte
 
 CMS endpoints are available only when at least one kit in the SRE has a `ct/` subdirectory. If no kit has content, all CMS endpoints return `CMS.UNAVAILABLE`.
 
+Canonical plane prefix is **`/fcms`**. Kit path in the URL is `{ns}/{name}` (not a dotted kit name). Legacy aliases: `/cm` (JSON) and `/ct` (HTML render). Example: `GET /fcms/acme/blog/hello-world` -- not `/cm/acme.blog/hello-world`.
+
 ### List CMS Content Slugs
 
 ```
-GET /cm
+GET /fcms
 ```
 
-Returns all available content slugs across all kits. Each slug is prefixed with its kit name. Slugs can contain path segments for hierarchically organized content.
+Returns all available content slugs across all kits. Each slug is prefixed with `{ns}/{name}`. Slugs can contain path segments for hierarchically organized content. Legacy alias: `GET /cm`.
 
 **When to use:** Building a content index, discovering available pages, generating a sitemap.
 
 **curl example:**
 ```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cm
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fcms
 ```
 
 **Response:**
@@ -2043,14 +2058,14 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cm
 {
   "ok": true,
   "slugs": [
-    "acme.blog/hello-world",
-    "acme.blog/tutorials/getting-started",
-    "sn.docs/api-overview"
+    "acme/blog/hello-world",
+    "acme/blog/tutorials/getting-started",
+    "sn/docs/api-overview"
   ]
 }
 ```
 
-The slug format is `{kitName}/{contentSlug}`. The Markdown frontmatter can define a `slug` field. Otherwise, the content slug is the filename without `.md`. Subdirectories in `ct/` add path segments.
+The slug format is `{ns}/{name}/{contentSlug}`. The Markdown frontmatter can define a `slug` field. Otherwise, the content slug is the filename without `.md`. Subdirectories in `ct/` add path segments.
 
 **Error conditions:**
 - `CMS.UNAVAILABLE`: No kit in the SRE has a `ct/` directory.
@@ -2058,28 +2073,29 @@ The slug format is `{kitName}/{contentSlug}`. The Markdown frontmatter can defin
 ### Get CMS Content
 
 ```
-GET /cm/{kitName}/{contentSlug}
+GET /fcms/{ns}/{name}/{contentSlug}
 ```
 
-Returns the fully parsed content for a specific slug. The response includes frontmatter metadata, a preamble (HTML rendered from content before the first heading), and a recursive section tree.
+Returns the fully parsed content for a specific slug. The response includes frontmatter metadata, a preamble (HTML rendered from content before the first heading), and a recursive section tree. Legacy alias: `GET /cm/{ns}/{name}/{contentSlug}`.
 
 **When to use:** Rendering a blog post, displaying documentation, serving structured content to a frontend.
 
 **Path parameters:**
-- `{kitName}` -- Kit directory name (for example `acme.blog`).
+- `{ns}` -- Kit namespace (for example `acme`).
+- `{name}` -- Kit name (for example `blog`). On-disk kit directory remains `{ns}.{name}`.
 - `{contentSlug}` -- Content slug, which can contain path segments (for example `hello-world` or `tutorials/getting-started`).
 
 **curl example:**
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/cm/acme.blog/hello-world
+  http://localhost:8080/fcms/acme/blog/hello-world
 ```
 
 **Response:**
 ```json
 {
   "ok": true,
-  "kit": "acme.blog",
+  "kit": "acme/blog",
   "slug": "hello-world",
   "frontmatter": {
     "title": "Hello World",
@@ -2148,12 +2164,12 @@ curl -H "Authorization: Bearer $TOKEN" \
 |------|-----------|
 | `CMS.NOT_FOUND` | No content with that slug exists in the specified kit |
 | `CMS.UNAVAILABLE` | CMS cache not initialized (no kit has a `ct/` directory) |
-| `CMS.INVALID_SLUG` | Path does not contain the required `{kitName}/{contentSlug}` format |
+| `CMS.INVALID_SLUG` | Path does not contain the required `{ns}/{name}/{contentSlug}` format |
 
 **curl example (nested slug):**
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/cm/acme.blog/tutorials/getting-started
+  http://localhost:8080/fcms/acme/blog/tutorials/getting-started
 ```
 
 ---
@@ -2325,7 +2341,7 @@ curl -X DELETE -H "Authorization: Bearer $TOKEN" \
 POST /st/{id}/test
 ```
 
-Tests connectivity for a storage point by verifying that vault credentials exist and are accessible. This does not actually connect to the storage provider -- it only checks the local credential setup.
+Tests connectivity for a storage point by calling S3 `ListObjectsV2` (`MaxKeys=1`) against the configured bucket. This is a real probe of the remote store, not a local-credentials-only check.
 
 **curl example:**
 ```bash
@@ -2370,7 +2386,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/pg
 POST /pg
 ```
 
-Adds a new PostgreSQL connection pool. The submitted connection URL is encrypted into the vault, and `.sentinel/data/pg_connections.json` stores only the connection name plus a vault secret reference.
+Adds a new PostgreSQL connection pool. Body is `{name, url}` -- not host/port/database/user/password fields. The submitted connection URL is encrypted into the vault, and `.sentinel/data/pg_connections.json` stores only the connection name plus a vault secret reference.
 
 **curl example:**
 ```bash
@@ -2378,11 +2394,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "main",
-    "host": "localhost",
-    "port": 5432,
-    "database": "myapp",
-    "user": "sentinel",
-    "password": "secret"
+    "url": "postgres://sentinel:secret@localhost:5432/myapp"
   }' \
   http://localhost:8080/pg
 ```
@@ -2836,47 +2848,35 @@ All error codes follow the `DOMAIN.ACTION` format. Here is the complete list:
 | `AUTH.REQUIRED` | Bearer token or signature required | Request to authenticated endpoint without credentials |
 | `AUTH.INVALID` | Invalid or expired token/signature | Bearer token not in valid tokens list, or signature verification failed |
 | `AUTH.IP_DENIED` | IP not in whitelist | Debug mode: request from non-whitelisted IP |
-| `AUTH.RATE_LIMIT` | Rate limit exceeded | Too many requests from the same IP |
+| `AUTH.RATE_LIMIT` | Rate limit exceeded | Too many requests for the same bearer token (100/minute) |
+| `FLOW.NOT_FOUND` | Flow does not exist | `GET`/`POST` on an unknown flow path |
 | `REQUEST.INVALID` | Malformed request | Examples: JSON parse error or missing Content-Type |
 | `REQUEST.MISSING` | Required parameter missing | A required field was not provided |
-| `RESOURCE.NOT_FOUND` | Resource does not exist | Flow, execution, trigger, or secret not found |
+| `RESOURCE.NOT_FOUND` | Resource does not exist | Execution, trigger, or secret not found |
 | `RESOURCE.CONFLICT` | ETag mismatch | Source file was modified since last read (concurrent edit) |
 | `SYSTEM.ERROR` | Internal server error | Examples: unhandled panic or database error |
 | `SYSTEM.TIMEOUT` | Operation timeout | Flow execution or HTTP operation timed out |
 | `CMS.UNAVAILABLE` | CMS cache not initialized | No kit in the SRE has a `ct/` content directory |
 | `CMS.NOT_FOUND` | Content slug not found | Requested CMS slug does not exist in the specified kit |
-| `CMS.INVALID_SLUG` | Invalid slug format | Path is missing the required `{kitName}/{contentSlug}` structure |
+| `CMS.INVALID_SLUG` | Invalid slug format | Path is missing the required `{ns}/{name}/{contentSlug}` structure |
 
 ---
 
 ## Rate Limiting
 
-By default, Sentinel enforces a rate limit of **100 requests per second per IP address**. This is configurable in `.sentinel/config.json`:
+Bearer-token requests are limited to **100 requests per minute per token**. There is no `api.rate_limit` field in `.sentinel/config.json`. The limiter is created in auth middleware (`NewRateLimiter(100, time.Minute)`).
 
-```json
-{
-  "api": {
-    "rate_limit": 200
-  }
-}
-```
+When the rate limit is exceeded, the JSON body contains `{ok: false, err: "AUTH.RATE_LIMIT", code: "AUTH.RATE_LIMIT", msg: "Rate limit exceeded"}`.
 
-When the rate limit is exceeded, the response body contains:
-
-```json
-{
-  "code": "AUTH.RATE_LIMIT",
-  "msg": "Rate limit exceeded"
-}
-```
-
-Rate limiting applies to all endpoints including auth-exempt routes. Each unique client IP gets its own counter.
+Rate limiting is **not** applied in debug mode (IP whitelist only) and **not** on auth-exempt routes (`GET /api/config`, `/wh/*`, kit webhooks, `GET /cert/*`). Webhook endpoints may have their own per-trigger rate limits.
 
 ---
 
 ## CORS (Cross-Origin Resource Sharing)
 
-CORS is configured through the `cors_origins` setting in `.sentinel/config.json`. When configured, the following headers are set on responses:
+`APIConfig` has **no** `cors_origins` key. Harness bootstrap passes `nil` origins into `NewGateway`, so CORS middleware is **unwired** on the live listener. Do not document or set `cors_origins` as a working config field.
+
+If a gateway is constructed with a non-empty origins list (code-level), middleware sets:
 
 - `Access-Control-Allow-Origin`: The matched origin.
 - `Access-Control-Allow-Methods`: `GET, POST, PUT, DELETE, OPTIONS`.
@@ -2884,13 +2884,13 @@ CORS is configured through the `cors_origins` setting in `.sentinel/config.json`
 - `Access-Control-Expose-Headers`: `X-Request-ID`.
 - `Access-Control-Max-Age`: `86400` (24 hours).
 
-Preflight `OPTIONS` requests are handled automatically and return `204 No Content`.
+In that case preflight `OPTIONS` returns `204 No Content`. With the default unwired bootstrap, those headers and the OPTIONS shortcut are not installed.
 
 ---
 
 ## Best Practices
 
-1. **Examine errors in the response body.** A `code` field indicates failure. All responses use HTTP 200, so status codes do not identify application errors.
+1. **Examine errors in the JSON body.** `ok === false` or a present `err` field indicates a JSON application error. Those bodies use HTTP 200. HTTP status still matters for forms HTML, CMS HTML render, git, disabled WebSocket (503), and CORS preflight (204).
 
 2. **Use ETags for source editing.** When updating source files, always include the `etag` from the GET response. This prevents accidental overwrites from concurrent editors.
 

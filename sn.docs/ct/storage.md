@@ -20,19 +20,20 @@ Storage points serve two primary purposes:
 
 1. **CMS URL Expansion** -- Each storage point has a stub (for example `img`, `vid`) that the CMS template renderer recognizes. At render time, a path like `/img/photo.jpg` is automatically expanded to the full public URL: `https://cdn.example.com/media/photo.jpg`. This means content authors write simple, portable paths in their markdown, and the system handles URL resolution.
 
-2. **Storage Metadata Management** -- A shared registry provides bucket metadata to the dashboard and Lua flows through `sn.st.*`. You can manage separate storage backends for images, video, and downloads. The vault stores credentials.
+2. **Object access** -- Lua `sn.st.*` can list points, get a point, `put` objects, `head` objects, and `resolve` public URLs. The vault stores credentials. You can manage separate backends for images, video, and downloads.
 
 3. **Backup Upload Destinations** -- The backup subsystem writes folder archives and PostgreSQL dumps under `.sentinel/backups`. It can then upload them to a configured storage point.
 
 ### Supported Providers
 
-All three supported providers use the S3 API protocol, which means the same client code works with any of them. The differences are in how you configure the endpoint URL and credentials.
+All four supported providers use the S3 API protocol, which means the same client code works with any of them. The differences are in how you configure the endpoint URL and credentials.
 
 | Provider | Description | Endpoint Configuration | Typical Use Case |
 |----------|-------------|----------------------|------------------|
 | **AWS S3** (`s3`) | Amazon Simple Storage Service, the original S3 implementation | Leave the endpoint field blank -- the S3 client uses AWS defaults based on the region | Production workloads, CloudFront CDN integration, wide ecosystem support |
 | **Backblaze B2** (`b2`) | Backblaze's S3-compatible API, significantly cheaper than AWS S3 for storage | Set endpoint to `s3.{region}.backblazeb2.com` (for example `s3.us-west-004.backblazeb2.com`) | Cost-effective storage for large media files, video archives |
 | **Garage** (`garage`) | Self-hosted S3-compatible storage ([Garage project](https://git.deuxfleurs.fr/Deuxfleurs/garage)) | Set endpoint to your Garage server's address | Self-hosted environments, data sovereignty requirements, air-gapped deployments |
+| **Cloudflare R2** (`r2`) | Cloudflare's S3-compatible object storage | Set endpoint to your R2 S3 API URL (`https://<accountid>.r2.cloudflarestorage.com`) | Zero-egress public assets, Cloudflare CDN |
 
 ---
 
@@ -106,7 +107,7 @@ When you create a storage point, both credentials are written to the vault atomi
 
 ## Dashboard User Guide
 
-The Storage page is available at `http://localhost:9090/storage` in the Sentinel dashboard. It appears in the left sidebar between "Databases" and "Docker", identified by a `cloud_upload` icon.
+The Storage page is available at `http://127.0.0.1:9090/storage` in the Sentinel dashboard (loopback only). It appears in the left sidebar between "Databases" and "Docker", identified by a `cloud_upload` icon.
 
 The Backups page can use any storage point listed here as an optional upload target for:
 - PostgreSQL `pg_dump` artifacts.
@@ -142,6 +143,7 @@ The table columns are:
    - **AWS S3** (selected by default) -- The endpoint field shows a hint: "Leave blank for default AWS S3". The region placeholder shows `us-east-1`.
    - **Backblaze B2** -- The endpoint field shows: "Backblaze S3-compatible endpoint" with placeholder `s3.us-west-004.backblazeb2.com`. The region placeholder shows `us-west-004`.
    - **Garage** -- The endpoint field shows: "Your Garage S3 endpoint (e.g. garage.example.com)". The region placeholder shows `garage`.
+   - **Cloudflare R2** -- The endpoint field shows your R2 S3 API URL. The region is often `auto`.
 
    Switching between providers updates the hints and placeholders to guide you toward the correct values for each provider.
 
@@ -192,7 +194,7 @@ The table columns are:
 3. **On success:** A green toast shows "Connection test passed" with details about the provider, endpoint, and bucket.
 4. **On failure:** A red toast shows the error message (for example "access key not found in vault").
 
-**Note about the current test scope:** The connectivity test examines local vault credentials and storage point configuration. It does not call S3 `ListBucket`. It does not establish whether the remote provider accepts the credentials. Full S3 connectivity tests are planned for a future release with an S3 SDK.
+The test calls `POST /st/{id}/test`, which runs S3 **ListObjectsV2** (`MaxKeys=1`) against the configured bucket using vault credentials. Success means the remote provider accepted the credentials and the list probe returned.
 
 ### Deleting a Storage Point
 
@@ -260,7 +262,7 @@ The helper startup scripts `start-dev.sh` and `start-dev.ps1` automatically impo
 
 ## Lua API
 
-Storage point metadata is available to Lua flows through the `sn.st.*` namespace.
+Lua flows use `sn.st.list`, `sn.st.get`, `sn.st.put`, `sn.st.head`, and `sn.st.resolve` (plus `sn.st.get_by_stub` for lookup by stub).
 
 ### Available Functions
 
@@ -269,7 +271,9 @@ Storage point metadata is available to Lua flows through the `sn.st.*` namespace
 | `sn.st.list()` | Returns all registered storage points |
 | `sn.st.get(id)` | Returns a single storage point by UUID |
 | `sn.st.get_by_stub(stub)` | Returns a storage point by stub |
-| `sn.st.resolve(stub, path)` | Resolves a stub plus object path to a full public URL |
+| `sn.st.resolve(ref, path)` | Resolves a stub or id plus object path to a full public URL |
+| `sn.st.head(ref, key)` | Returns object metadata (size, etag, url) for a key |
+| `sn.st.put(ref, key, data, opts?)` | Uploads object bytes. Optional `opts`: `content_type`, `cache_control`, `if_absent`, `metadata` |
 
 ### Example Usage
 
@@ -290,13 +294,14 @@ local url, err = sn.st.resolve("img", "hero-banner.jpg")
 if not err then
   print(url)
 end
+
+local info, put_err = sn.st.put("img", "hero-banner.jpg", bytes, {
+  content_type = "image/jpeg",
+  if_absent = true
+})
 ```
 
-### Important Scope Note
-
-The current Lua API is intentionally limited to storage point metadata lookup and URL resolution. It does not currently upload, download, list, or delete objects in the configured bucket.
-
-The backup subsystem can upload completed artifacts to a storage point after it creates local copies. The harness owns this operation. The Lua storage API does not provide uploads.
+The backup subsystem can also upload completed artifacts to a storage point after it creates local copies.
 
 ---
 
@@ -523,7 +528,7 @@ Creates a new storage point. Credentials are required on creation and are stored
 |-------|----------|-------------|
 | `name` | Yes | Unique human-readable label |
 | `stub` | Yes | URL stub for CMS expansion (must be unique, follow stub validation rules) |
-| `provider` | Yes | `s3`, `b2`, or `garage` |
+| `provider` | Yes | `s3`, `b2`, `garage`, or `r2` |
 | `endpoint` | No | Custom S3 endpoint URL. Leave blank for AWS S3. Required for B2 and Garage. |
 | `region` | No | AWS region or equivalent. Used by the S3 client for request signing. |
 | `bucket` | Yes | S3 bucket name |
@@ -582,17 +587,24 @@ Deletes a storage point and removes its vault credentials. Credential deletion i
 POST /st/{id}/test
 ```
 
-Tests a storage point by verifying that credentials exist in the vault and returning the configured provider metadata.
+Tests a storage point by running **ListObjectsV2** against the bucket (vault credentials required).
 
 **Success response:**
 ```json
 {
   "ok": true,
-  "msg": "credentials found, S3 connectivity test not yet implemented",
+  "msg": "remote list probe succeeded",
+  "checks": {
+    "vault_credentials_present": true,
+    "remote_list_probe": true
+  },
   "provider": "s3",
   "endpoint": "",
   "bucket": "my-media-bucket",
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "latency_ms": 42,
+  "key_count": 1,
+  "sample_keys": ["media/photo.jpg"]
 }
 ```
 
@@ -639,7 +651,7 @@ Storage point metadata is stored in the SRE state database in the `storage_point
 | `id` | TEXT PK | UUID, auto-generated on creation |
 | `name` | TEXT UNIQUE | User-chosen label, must be unique |
 | `stub` | TEXT UNIQUE | URL stub for CMS expansion, must be unique |
-| `provider` | TEXT | One of: `s3`, `b2`, `garage` |
+| `provider` | TEXT | One of: `s3`, `b2`, `garage`, `r2` |
 | `endpoint` | TEXT | S3 endpoint URL (empty for AWS defaults) |
 | `region` | TEXT | Region identifier |
 | `bucket` | TEXT | Bucket name |
@@ -652,11 +664,11 @@ Storage point metadata is stored in the SRE state database in the `storage_point
 
 ## Limitations
 
-- **No file upload/browse** -- Storage points are metadata registrations only. File management (upload, list, delete objects in the bucket) is not yet available through the dashboard or API. You must use provider-specific tools (AWS CLI, B2 CLI, Garage CLI) or third-party S3 clients to manage files.
+- **Dashboard has no object browser** -- Register and test points in the dashboard. Upload and inspect objects from Lua (`sn.st.put` / `sn.st.head`) or provider CLIs.
 
-- **Connectivity test is partial** -- The test endpoint verifies that vault credentials exist but does not perform an actual S3 `ListBucket` call. Full S3 connectivity testing requires adding an S3 SDK dependency, which is planned for a future release.
+- **Connectivity test runs ListObjectsV2** -- `POST /st/{id}/test` probes the remote bucket with vault credentials.
 
-- **Lua API is metadata-only** -- `sn.st.*` lists points, finds points by ID or stub, and resolves public URLs. It does not provide object I/O.
+- **Lua I/O** -- `sn.st` supports list, get, put, head, and resolve. It does not list bucket keys or delete objects from Lua.
 
 - **Single-region only** -- Each storage point maps to one bucket in one region. Cross-region replication must be configured at the provider level (for example AWS S3 Cross-Region Replication, B2 replication).
 

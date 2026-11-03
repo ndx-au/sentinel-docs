@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-27T07:17:37Z"
+  at: "2026-11-02T06:02:32Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -249,7 +249,7 @@ For developers building external integrations against the Sentinel HTTP API:
 | # | Document | Time | What You Will Learn |
 |---|----------|------|---------------------|
 | 6 | [HTTP API Reference](/api-reference) | 45 min | All REST endpoints, authentication, flow execution, execution history and logs, trigger management, forms, secrets, webhooks, git operations, error codes |
-|  | [Harness HTTP routes](/harness-http-routes) | 10 min | Canonical `/hl/*`, `/kt/*`, gateway/keyhole behavior, dashboard proxy mapping — complements `system-specs/api.yaml` |
+|  | [Harness HTTP routes](/harness-http-routes) | 10 min | Canonical `/hl/*`, `/kt/*`, `/fcms`, gateway/keyhole behavior, dashboard proxy mapping — complements harness `system-specs/api.yaml` |
 |  | [MCP Agent Integration](/mcp-agent-integration) | 15 min | Connect Cursor and other MCP clients to a running harness. Bind/listen flags, tools, debugging |
 |  | [The `.sentinel/` directory](/sentinel-directory) | 15 min | Gitignored harness artifacts — what each file is, what depends on it, backup/restore notes |
 |  | [fcms — file CMS (operator guide)](/sentinel-cms) | 25 min | **fcms** plane: `ct/` content, `/fcms` JSON (legacy `/cm`), `/fcms/render` HTML (legacy `/ct`), `cms.db` |
@@ -259,9 +259,9 @@ For developers building external integrations against the Sentinel HTTP API:
 
 | Plane | Guide | Notes |
 |-------|-------|--------|
-| **fcms** | [17-SENTINEL-CMS.md](/sentinel-cms) | File CMS — technical writing, agent docs |
-| **ccms** | [24-CONTENT-PLANES.md](/content-planes) | Collection CMS — Postgres + Graphile. Collections dashboard |
-| **wpcms** | [14-WORDPRESS.md](/wordpress) | WordPress platform — dedicated ingress port |
+| **fcms** | [fcms operator guide](/sentinel-cms) | File CMS — technical writing, agent docs (`/fcms`, `/fcms/render`) |
+| **ccms** | [Content planes](/content-planes) | Collection CMS — Postgres + Graphile **:1880**. Collections dashboard |
+| **wpcms** | [WordPress](/wordpress) | WordPress platform — ingress default **8800** |
 
 ### System Administrators
 
@@ -269,7 +269,8 @@ For anyone deploying, configuring, securing, or monitoring Sentinel in productio
 
 | # | Document | Time | What You Will Learn |
 |---|----------|------|---------------------|
-| 7 | [Configuration Guide](/configuration-guide) | 30 min | Two-layer configuration system, sentinel.yaml and .sentinel/config.json schemas, environment variables, three security layers, deployment checklist, performance tuning |
+| 7 | [Configuration Guide](/configuration-guide) | 30 min | Two-layer configuration system, sentinel.yaml and .sentinel/config.json schemas, environment variables, deployment checklist |
+|  | [Security readiness](/security-readiness) | 20 min | Signed requests, approvals, FS Control, SQLCipher opt-in, occupy, dashboard loopback |
 | 8 | [Edge Deployment Guide](/edge-deployment) | 15 min | Cloudflare + Caddy + Sentinel architecture, Full (Strict) SSL, Caddyfile reverse proxy, production deployment checklist |
 
 ### CLI Users
@@ -346,7 +347,7 @@ These task-oriented links take you directly to the section you need:
 - **Call an external API** -- [Lua API: HTTP Client](/lua-api#http-client-snhttp).
 - **Store data in a database** -- [Lua API: Database](/lua-api#database-sndb).
 - **Build a CMS/blog kit** -- [Kit Development: CMS Kits](/kit-development#cms-kits).
-- **Run or proxy a CMS site (`/cm`, `/ct`)** -- [Sentinel CMS operator guide](/sentinel-cms).
+- **Run or proxy a CMS site (`/fcms`, `/fcms/render`)** -- [Sentinel CMS operator guide](/sentinel-cms).
 - **Query CMS content from a flow** -- [Lua API: CMS](/lua-api#cms-sncms).
 - **Use WebSockets from a flow** -- [Lua API: WebSocket Bus](/lua-api#websocket-bus-snws).
 - **Push real-time updates to the dashboard** -- [API Reference: WebSocket](/api-reference#websocket).
@@ -377,7 +378,7 @@ These task-oriented links take you directly to the section you need:
 - **Activate a license** -- [Licensing: Issue and Activate](/licensing#issuing-a-license).
 - **Configure marketplace** -- [Configuration Guide: Marketplace](/configuration-guide#marketplace).
 - **Understand occupy licensing** -- [Licensing](/licensing).
-- **Set up OAuth for SKM** -- OAuth Setup Requirements.
+- **Register a CE or Enterprise lease** -- [Licensing](/licensing) and `sentinel register`.
 
 ---
 
@@ -392,8 +393,8 @@ Sentinel follows a **1:1 deployment model**. One harness instance runs one SRE p
                  +------------------------------+
                  |    Dashboard UI              |
                  |    (standalone process)      |
-                 |    http://localhost:9090     |
-                 |    BFF proxy to harness      |
+                 |    http://127.0.0.1:9090     |
+                 |    loopback BFF process      |
                  +-------------+----------------+
                                |
                           REST API
@@ -425,16 +426,16 @@ Sentinel follows a **1:1 deployment model**. One harness instance runs one SRE p
                                |
          +---------------------+---------------------+
          |                     |                     |
-    sn.core-agent/        acme.billing/         acme.blog/
-    (starter kit)         (your kit)            (CMS kit)
+    acme.main/            acme.billing/         acme.blog/
+    (your kit)            (your kit)            (CMS kit)
 ```
 
 **Key points about this architecture:**
 
-- The **Dashboard** is a separate process that proxies requests to the harness. It provides a web UI for managing flows, viewing executions, browsing kits, and editing files. It runs on port 9090 by default.
-- The **Harness** is the core engine running on port 8080 by default. It hosts the REST API, executes Lua flows in a sandboxed VM, manages triggers, and handles all state.
-- The **SRE directory** is just a folder on disk. The harness reads it, discovers kits and flows automatically, and watches for changes when hot-reload is enabled.
-- **No external dependencies.** The harness embeds SQLite for state and bbolt for caching. It also embeds an encrypted vault and a Lua VM.
+- The **Dashboard** is a separate process that proxies requests to the harness. It provides a web UI for managing flows, viewing executions, browsing kits, and editing files. It binds **loopback only** on port 9090 by default (`127.0.0.1:9090`).
+- The **Harness** is the core engine on port 8080 by default. It hosts the REST API, executes Lua flows in a sandboxed VM, manages triggers, and handles all state. The API listen address is all interfaces (`:8080`); firewall unused exposure.
+- The **SRE directory** is a folder on disk. The harness reads it, discovers kits and flows automatically, and watches for changes when hot-reload is enabled.
+- **No external dependencies for core orchestration.** The harness embeds SQLite for state and bbolt for caching. It also embeds an encrypted vault and a Lua VM. Optional stacks (WordPress, Graphile ccms, managed RAG) need Docker.
 
 ---
 
@@ -446,7 +447,7 @@ For engineers modifying the Go harness (`internal/*`, `cmd/sentinel/*`):
 |---|----------|------|---------------------|
 | 20 | [Harness Internals](/internals) | 45 min | Bootstrap wiring, package map, flow execution path, gateway middleware, kit discovery, hot reload, build/test conventions |
 
-The code is the source of truth. This document lists the key files and subsystems. [Harness HTTP Routes](/harness-http-routes) and `system-specs/api.yaml` contain the API route catalogs.
+The code is the source of truth. This document lists the key files and subsystems. [Harness HTTP Routes](/harness-http-routes) and the harness repo `system-specs/api.yaml` contain the API route catalogs.
 
 ---
 
@@ -457,9 +458,9 @@ These are the fundamental building blocks of every Sentinel project. Each is exp
 | Concept | What It Is |
 |---------|-----------|
 | **SRE** (Sentinel Runtime Environment) | The project folder containing all your kits, configuration, and state. One SRE = one project. It is the unit of deployment and the root of your git repository. |
-| **Flow** | A Lua script that performs work. Flows have a lifecycle of `setup()`, `main()`, `cleanup()`, and `failed(err)` functions. They run in a sandboxed VM with access to the Sentinel API. Discovered automatically from `fl/` directories inside kits. |
-| **Kit** | A self-contained module directory (for example `sn.core-agent/`, `acme.billing/`) with a `kit.yaml` manifest. Kits contain flows, connectors, modules, forms, pages, databases, and assets. They are the unit of organization and reuse. |
-| **Trigger** | A rule that causes a flow to execute. Five types: **cron** (schedule), **webhook** (HTTP POST), **event** (internal message), **manual** (API/dashboard), and **form** (user submission). Defined in YAML files inside `tp/` directories. |
+| **Flow** | A Lua script that performs work. Registration requires `setup()`, `main()`, and `cleanup()`. `failed(err)` and `timeout()` are optional. Flows run in a sandboxed VM with access to the Sentinel API. Discovered automatically from `fl/` directories inside kits. |
+| **Kit** | A self-contained module directory (for example `acme.billing/`) with a `kit.yaml` manifest. Kits contain flows, connectors, modules, forms, pages, templates, and assets. Starter kits such as `sn.core-agent/` come from [ndx-au/sre-init](https://github.com/ndx-au/sre-init) when you pass `--starter-kits` or `--with-bundle core`. |
+| **Trigger** | A rule that causes a flow to execute. Five types: **cron** (schedule), **webhook** (HTTP POST), **event** (internal message), **manual** (API/dashboard), and **form** (user submission). Defined in the flow Lua `triggers = { cron()/webhook()/event() }` table. `tp/` holds Go HTML templates, not triggers. |
 | **Execution** | A single run of a flow, identified by an execution ID. Tracks status (`queued`, `running`, `completed`, `failed`), timing, logs, return value, and errors. |
 | **Secret** | An encrypted key-value pair stored in the vault (`.sentinel/vault.db`). Used for API keys, passwords, tokens, and other sensitive data. Encrypted with AES-256-GCM. |
 | **Connector** | A reusable Lua module that wraps an external service or protocol (for example HTTP, SMTP, file I/O). Lives in `cn/` directories inside kits. |
@@ -474,8 +475,8 @@ Sentinel uses two configuration files. This separation keeps infrastructure secr
 
 | File | Location | Git-tracked? | Contains |
 |------|----------|-------------|----------|
-| `sentinel.yaml` | SRE root | Yes | Project identity: `name`, `description`, `version`, `git` configuration, `hotreload` toggle. This is your project's public configuration. |
-| `.sentinel/config.json` | `.sentinel/` directory | No (gitignored) | Machine-specific infrastructure: `api.port`, `log.level`, `tls.*` configuration, `marketplace.*` credentials. This varies per deployment. |
+| `sentinel.yaml` | SRE root | Yes | Project identity: `name`, `description`, `version`, `public_url`, `default_kit`, `git`, `hotreload.yaml`, optional `wp_*` and `data_plane` (Graphile **1880**). |
+| `.sentinel/config.json` | `.sentinel/` directory | No (gitignored) | Machine-specific infrastructure: `api.port`, `log.level`, `tls.*`, `marketplace.*`, `smtp`, `mcp`, `ip_filters`. This varies per deployment. |
 
 **Rule of thumb:** If a setting changes between machines (ports, paths, credentials), it goes in `.sentinel/config.json`. If it defines project behavior (name, version, features), it goes in `sentinel.yaml`.
 
@@ -485,36 +486,40 @@ See the [Configuration Guide](/configuration-guide) for complete schemas and exa
 
 ## Security
 
-Sentinel implements **three independent security layers** that can be enabled individually or together:
+Production controls include more than bearer tokens and TLS. See [Security readiness](/security-readiness) for the live set:
 
-1. **Authentication** -- Bearer token protection for API endpoints.
-2. **Encryption at Rest** -- SQLCipher for the state database, AES-256-GCM for the secret vault.
-3. **Transport Encryption** -- Native TLS/SSL support or reverse proxy through Caddy/nginx.
+1. **Authentication** -- Bearer tokens, plus Ed25519 dashboard signatures (`X-Sn-Sig`).
+2. **Encryption at rest** -- AES-256-GCM for the vault. SQLCipher for the state database is **opt-in** (`state.encrypt_db`, default false).
+3. **Transport** -- Native TLS or a reverse proxy (Caddy/nginx).
+4. **Execution policy** -- `.sentinel/execution-policy.json` and `sentinel approvals grant` for restricted native actions.
+5. **FS Control** -- rooted filesystem access through `ctx.fs`.
+6. **Occupy lease** -- production flow start requires a live license lease. Health (`/hl`) still answers.
 
-See [Configuration Guide: Security](/configuration-guide#security-configuration) for setup instructions and [Edge Deployment](/edge-deployment) for production TLS architecture.
+See [Configuration Guide: Security](/configuration-guide#security-configuration) and [Edge Deployment](/edge-deployment) for TLS.
 
 ---
 
 ## System Specifications
 
-Machine-readable YAML specification files live in the `system-specs/` directory at the repository root. These are authoritative and designed for code generation, tooling, and AI consumption.
+Machine-readable YAML specification files live in the **harness** repository (`github.com/ndx-au/sentinel`, directory `system-specs/`). They are not part of this docs SRE. They are designed for code generation, tooling, and AI consumption.
 
 | Spec File | What It Defines |
 |-----------|----------------|
-| `api.yaml` | All HTTP endpoints, request/response shapes, query parameters |
-| `lua-api.yaml` | Complete Lua API surface available inside flows |
+| `api.yaml` | HTTP endpoints, request/response shapes, query parameters |
+| `lua-api.yaml` | Lua API surface available inside flows |
 | `kits.yaml` | Kit directory structure and kit.yaml manifest schema |
 | `forms.yaml` | Form YAML definitions, field types, and submission events |
 | `triggers.yaml` | Trigger types, configuration options, and scheduling rules |
 | `cli-commands.yaml` | CLI commands, subcommands, flags, and arguments |
 | `config.yaml` | Configuration schemas for both sentinel.yaml and config.json |
 | `security.yaml` | Authentication, encryption, TLS, and audit logging specs |
-| `errors.yaml` | All error codes, messages, and HTTP response shapes |
+| `errors.yaml` | Error codes, messages, and HTTP response shapes |
 | `file-structure.yaml` | Project layout conventions and directory purposes |
 | `connectors.yaml` | Built-in connector APIs and extension points |
 | `modules.yaml` | Built-in module APIs and extension points |
 | `logging.yaml` | Logging system configuration and output formats |
 | `docker.yaml` | Docker integration and container management |
+| `mcp.yaml` | MCP sidecar tools, resources, and prompts |
 | `README.yaml` | Spec directory metadata and index |
 
 ---
@@ -526,7 +531,7 @@ Machine-readable YAML specification files live in the `system-specs/` directory 
 - **CLI help** -- `sentinel --help` or `sentinel [command] --help` for any command.
 - **Error codes** -- See [API Reference: Error Codes](/api-reference#error-codes) for a complete list.
 - **Troubleshooting** -- See [Troubleshooting and FAQ](/troubleshooting-faq) for common issues.
-- **Specifications** -- Parse `system-specs/*.yaml` for authoritative, machine-readable definitions.
+- **Specifications** -- Parse `system-specs/*.yaml` in the harness repository for machine-readable definitions.
 - **Version** -- Run `sentinel version` to check your installed version.
 
 ---
@@ -535,14 +540,15 @@ Machine-readable YAML specification files live in the `system-specs/` directory 
 
 | Resource | Purpose |
 |----------|---------|
-| `sre4agents.md` | Full SRE development reference for AI agents |
-| `sre-url-map.md` | URL construction cheat sheet with complete routing table |
-| `docs/20-INTERNALS.md` | Harness Go code architecture (contributors) |
-| `system-specs/` | Machine-readable YAML specifications (authoritative) |
+| [sre4agents.md](https://github.com/ndx-au/sentinel/blob/main/sre4agents.md) | Full SRE development reference for AI agents (harness repo) |
+| [sre-url-map.md](https://github.com/ndx-au/sentinel/blob/main/sre-url-map.md) | URL construction cheat sheet (harness repo) |
+| [Harness Internals](/internals) | Harness Go code architecture (contributors) |
+| [system-specs/](https://github.com/ndx-au/sentinel/tree/main/system-specs) | Machine-readable YAML specifications (harness repo) |
+| [Security readiness](/security-readiness) | Shared-responsibility controls, SQLCipher, approvals |
 
 ---
 
-Current documentation version: **Sentinel v0.3.1+**
+Unreleased source prints `sentinel version v0.1.1-dev`. Release builds substitute the git tag. sre-init currently requires harness `>=0.3.0`.
 
 **Ready to build?** Start with the [Getting Started guide](/getting-started), or jump to a specific task using the quick links above.
 
@@ -566,7 +572,7 @@ You write workflow logic in Lua. Sentinel runs the workflows and manages their t
 
 - **Real code, not YAML pipelines or visual nodes.** Your flows are Lua scripts with full programming constructs: loops, conditionals, error handling, string manipulation, HTTP calls. You are not limited to what a UI builder exposes.
 - **Git-native by design.** Your entire project lives in a plain directory that you commit to Git. There is no separate database of workflow definitions, no export/import dance, no configuration drift. Git is the source of truth.
-- **Single binary deployment.** The `sentinel` binary embeds Lua, SQLite, an encrypted vault, a web server, a cron scheduler, and a WebSocket bus. You copy the binary to a host and point it at an SRE folder.
+- **Single binary deployment.** The `sentinel` binary embeds Lua, SQLite, an encrypted vault, a web server, and a cron scheduler. A WebSocket bus is available when `ws.enabled` is true in `.sentinel/config.json`. You copy the binary to a host and point it at an SRE folder.
 - **AI-first architecture.** Every code file gets an auto-generated `.md` "skill twin" that provides persistent context for AI agents. The HTTP API uses a brevity regime (short two-character endpoints like `/fl`, `/ex`, `/lg`) optimized for token-efficient consumption by language models. Sentinel is designed to be operated by humans and AI agents equally well.
 - **Kit-based modularity.** Logic is organized into "kits" -- self-contained directories with their own flows, forms, databases, connectors, and web pages. Kits are the unit of reuse: you can share them, install them from a marketplace, or compose multiple kits in one project.
 
@@ -585,7 +591,7 @@ The harness is the `sentinel` binary itself. It is the engine that does all the 
 - Executes Lua flows in a sandboxed virtual machine when triggered.
 - Manages an encrypted secret vault for API keys and credentials.
 - Maintains an SQLite database of execution history, logs, and state.
-- Provides a WebSocket bus for real-time events.
+- Provides a WebSocket bus for real-time events when `ws.enabled` is true (default is false).
 
 You do not modify the harness. It is a compiled binary that you download or build once.
 
@@ -600,7 +606,7 @@ A Git repository can contain multiple SREs in subfolders. The default model plac
 
 When the harness starts, it scans the SRE directory, discovers all kits, registers all flows and triggers, and begins serving the API. Everything the harness needs is in this folder.
 
-New projects from `sentinel sre init` contain repository files (`CLAUDE.md`, `.gitignore`, `.gitattributes`, operator `README.md`) and a minimal `sentinel.yaml`. They contain **no kits by default**. Starter content comes from [ndx-video/sre-init](https://github.com/ndx-au/sre-init). Installation flags include `--with-bundle core`, `--starter-kits`, and `--with-local ../sre-init` for offline use. The WordPress profiles `--wp-central` / `--wp-edge` skip the wizard and install only WordPress kits. Marketplace installation uses `--with-kit` / `--with-bundle` when SKM is configured.
+New projects from `sentinel sre init` contain repository files (`CLAUDE.md`, `.gitignore`, `.gitattributes`, operator `README.md`, `AGENTS.md`) and a minimal `sentinel.yaml`. They contain **no kits by default**. `--starter-kits` defaults to **false**. Starter content comes from [ndx-au/sre-init](https://github.com/ndx-au/sre-init). Installation flags include `--with-bundle core`, `--starter-kits`, `--with-local <path>` for a local sre-init checkout, and `--force`. The WordPress profiles `--wp-central` / `--wp-edge` skip the wizard. `--wp-central` installs `sn.wp-central` and `sn.wp-preview`. Marketplace installation uses `--with-kit` / `--with-bundle` when SKM is configured.
 
 #### Kits
 
@@ -610,12 +616,13 @@ Kit directories follow a `{namespace}.{name}` naming convention. For example, `s
 
 #### Flows
 
-Flows are Lua scripts that do actual work. Every flow has up to four lifecycle functions:
+Flows are Lua scripts that do actual work. Registration requires three lifecycle functions. Two more hooks are optional:
 
-- `setup()` -- runs first, for initialization (optional).
+- `setup()` -- runs first, for initialization (required).
 - `main()` -- the primary logic (required).
-- `cleanup()` -- runs after main completes, even on success (optional).
-- `failed(err)` -- runs only if main throws an error (optional).
+- `cleanup()` -- runs last, after success or failure (required).
+- `failed(err)` -- runs if setup or main throws an error (optional; auto no-op if omitted).
+- `timeout()` -- runs if the execution deadline is reached (optional).
 
 Flows are discovered automatically from `fl/` directories inside kits. You do not need to register them anywhere -- just create a `.lua` file in the right place and restart (or let hot-reload pick it up).
 
@@ -639,11 +646,13 @@ Because the SRE is a plain folder, you simply `git init`, commit your files, and
 - **MacOS** -- Fully supported for development. Works on both Intel and Apple Silicon.
 - **Windows** -- Supported for development. Use `sentinel.exe` instead of `sentinel` in all commands. Not recommended for production.
 
-**Not required:**
+**Not required for core orchestration:**
 - No Docker, no container runtime.
 - No database server (SQLite is embedded).
 - No message broker (triggers are built in).
 - No language runtime (Lua VM is embedded in the binary).
+
+Docker is required for optional managed stacks (WordPress `--wp-central`, ccms Graphile, managed RAG).
 
 ---
 
@@ -656,12 +665,13 @@ This walkthrough takes you from zero to a running Sentinel instance with an exec
 Download the pre-built binary for your platform, or build from source:
 
 ```bash
-# If building from source (requires Go 1.25+):
+# If building from source (requires Go 1.26.10+):
 go build -tags dev -o sentinel ./cmd/sentinel
 
 # Verify it works:
 ./sentinel version
-# Output: vX.Y.Z-dev (build YYYY-MM-DD)
+# Output: sentinel version v0.1.1-dev
+# Release builds substitute the git tag. There is no build-date suffix.
 ```
 
 On Windows, the binary is `sentinel.exe`. All subsequent examples use `sentinel` -- substitute `sentinel.exe` on Windows.
@@ -684,9 +694,10 @@ sentinel sre init
 **SRE-level files** (written to the path specified by `-p`/`--project`, defaults to `.`):
 - `sentinel.yaml` -- The project manifest. Contains the project name, description, and version. This file is git-tracked and defines your project's identity.
 - `.sentinel/config.json` -- Machine-local configuration (API port, log level, TLS configuration). This is gitignored because it varies per deployment.
-- `.sentinel/vault.db` -- The encrypted secret vault (created on first use).
-- Bundled starter kits such as `sn.core-agent/`, `sn.core-rag/`, `sn.tools-http/`, `sn.supervisor/`, `sn.eg-support/`, `sn.eg-itops/`, `sn.eg-rag-chat/`, plus the legacy `sn.example-support/` and `sn.example-itops/` compatibility kits.
-- Optional WordPress profiles: `sentinel sre init --wp-central` installs `sn.wp-central/`, and `sentinel sre init --wp-edge` installs `sn.wp-edge/`. Profile flags (`--wp-central`, `--wp-edge`) suppress default starter kits and skip the interactive wizard.
+- `.sentinel/harness.env.example` and `.env.example` -- operator env templates.
+- `.sentinel/vault.db` -- The encrypted secret vault (created at init if a passphrase is set, otherwise on first secret write).
+- No kits unless you pass `--starter-kits`, `--with-bundle`, `--with-kit`, `--wp-central`, or `--wp-edge`. The `core` bundle from sre-init includes kits such as `sn.core-agent/`.
+- Optional WordPress profiles: `sentinel sre init --wp-central` installs `sn.wp-central/` and `sn.wp-preview/`. `sentinel sre init --wp-edge` installs `sn.wp-edge/`. Profile flags skip the interactive wizard.
 - Optional post-init provisioning: `sentinel sre init ... --with-kit acme.foo,acme.bar` and `sentinel sre init ... --with-bundle core,wp-central`.
 - `sentinel sre init --wp-central` also seeds `docker-compose.wp-central.yaml` so a local managed WordPress stack can be started with `sentinel harness start --compose-up wp-central`.
 - That development compose file uses floating `:latest` WordPress and MariaDB images and persists the WordPress stack under `./_data/wp-central/`.
@@ -713,8 +724,10 @@ sentinel harness start
 3. It scans the SRE directory for kit directories (any folder matching the `{namespace}.{name}` pattern with a `kit.yaml` file).
 4. For each discovered kit, it loads flows from `fl/`, registers connectors from `cn/`, loads modules from `md/`, and indexes forms from `fm/`.
 5. It parses trigger definitions and schedules cron jobs, registers webhook endpoints, and subscribes to event channels.
-6. It starts the HTTP API server on the configured port (default 8080).
-7. It starts the WebSocket bus for real-time event streaming.
+6. It starts the HTTP API server on the configured port (default 8080). The process listens on all interfaces (`:8080`). Firewall unused exposure.
+7. If `ws.enabled` is true, it starts the WebSocket bus for real-time event streaming.
+
+A new project without kits reports zero kits and zero flows until you create or install some.
 
 Example output:
 
@@ -722,8 +735,8 @@ Example output:
 Sentinel vX.Y.Z starting...
   Project: my-project
   API:     http://localhost:8080
-  Kits:    6 loaded (starter kits)
-  Flows:   6+ registered
+  Kits:    0 loaded
+  Flows:   0 registered
   Triggers: 0 active
 Press Ctrl+C to stop
 ```
@@ -752,9 +765,9 @@ You can also use the longer form:
 sentinel dashboard start localhost:8080
 ```
 
-Open your browser to `http://localhost:9090` to see the dashboard.
+Open your browser to `http://127.0.0.1:9090` to see the dashboard. The dashboard binds **loopback only** (`127.0.0.1`). Remote operators need a tunnel into that namespace.
 
-The dashboard is optional. Everything it does can also be done through the REST API or CLI. But it is very useful for development, debugging, and demonstration.
+The dashboard is optional. Everything it does can also be done through the REST API or CLI. It is useful for development, debugging, and demonstration.
 
 Recent operator pages beyond flows include:
 - `/storage` for S3-compatible storage points.
@@ -775,9 +788,15 @@ For multimodal retrieval, operators typically:
 3. Select that provider in `/rag` as the `Embedding Provider`.
 4. Choose the embedding model and initialize or backfill the corpus.
 
-#### 5. Create Your First Flow
+#### 5. Create a Kit and Your First Flow
 
-Create a file at `my-project/sn.core-agent/fl/hello.lua` with the following content:
+Default init does not install kits. Create a kit, then add a flow:
+
+```bash
+sentinel sre kit new acme.main --desc "Main automation kit"
+```
+
+Create `acme.main/fl/hello.lua` with the following content:
 
 ```lua
 -- hello.lua: A simple greeting flow
@@ -790,7 +809,7 @@ function setup()
 end
 
 function main(params)
-    -- main(params) is where your logic lives. This is the only required function.
+    -- main(params) is where your logic lives.
     -- The ctx global provides logging, secrets, execution metadata, and more.
     -- The params argument is a Lua table containing trigger data passed to this execution.
     ctx.log("info", "Hello from Sentinel!")
@@ -822,22 +841,24 @@ If hot-reload is enabled in your `sentinel.yaml` (it is by default for new proje
 **Through the REST API:**
 
 ```bash
-curl -X POST http://localhost:8080/fl/sn-core-agent:hello/run \
+curl -X POST http://localhost:8080/fl/acme.main/hello/run \
   -H "Content-Type: application/json" \
   -d '{"name": "Alice"}'
 ```
 
+The canonical HTTP path is `/fl/{ns}.{name}/{flow}`. The colon form `acme-main:hello` is a legacy alias.
+
 The response will include an execution ID:
 
 ```json
-{"ok": true, "eid": "exec_abc123", "fid": "sn-core-agent:hello", "st": "completed"}
+{"ok": true, "eid": "exec_abc123", "fid": "acme-main:hello", "st": "completed"}
 ```
 
 **Through the Dashboard:**
 
-1. Open `http://localhost:9090`.
+1. Open `http://127.0.0.1:9090`.
 2. Navigate to the Flows section.
-3. Find `sn-core-agent:hello`.
+3. Find `acme.main/hello` (internal ID `acme-main:hello`).
 4. Enter parameters: `{"name": "Alice"}`.
 5. Click Run.
 
@@ -869,16 +890,17 @@ A flow is an executable Lua script that performs work. Flows are the fundamental
 
 **Lifecycle functions:**
 
-Every flow can define up to four functions. Only `main()` is required:
+Registration requires `setup`, `main`, and `cleanup`. `failed` and `timeout` are optional:
 
 | Function | When It Runs | Required? | Typical Use |
 |----------|-------------|-----------|-------------|
-| `setup()` | First, before main | No | Initialize state, validate preconditions, acquire resources |
+| `setup()` | First, before main | Yes | Initialize state, validate preconditions, acquire resources |
 | `main()` | After setup | Yes | Core business logic |
-| `cleanup()` | After main, always | No | Release resources, send completion notifications |
-| `failed(err)` | Only if main errors | No | Error alerting, rollback, incident logging |
+| `cleanup()` | Last, after success or failure | Yes | Release resources, send completion notifications |
+| `failed(err)` | If setup or main errors | No | Error alerting, rollback, incident logging |
+| `timeout()` | If the execution deadline is reached | No | Deadline-specific cleanup |
 
-The execution order is: `setup()` then `main()` then `cleanup()`. If `main()` throws an error, `failed(err)` runs before `cleanup()`.
+The execution order is: `setup()` then `main()` then `cleanup()`. If setup or main throws an error, `failed(err)` runs before `cleanup()`.
 
 **The `ctx` global:**
 
@@ -897,15 +919,15 @@ ctx.trigger_type            -- How this flow was triggered ("manual", "cron", "w
 
 **Sandbox restrictions:**
 
-Flows run in a sandboxed Lua VM. You cannot access the filesystem directly, spawn processes, or use `os.execute()`. All external interaction goes through the Sentinel API (`sn.*` namespaces). This is a security feature -- it means a flow cannot compromise the host system.
+Flows run in a sandboxed Lua VM. The `os` library is not loaded. You cannot spawn processes. Filesystem access goes through `ctx.fs` and is subject to FS Control (rooted paths, approvals). Other external interaction goes through `sn.*` APIs. See [Security readiness](/security-readiness).
 
 **Auto-discovery:**
 
 Flows are discovered automatically from `fl/` directories inside kits. The flow ID is derived from the kit directory and filename:
 
 ```
-sn.core-agent/fl/hello.lua      --> Flow ID: sn-core-agent:hello
-acme.billing/fl/invoice.lua     --> Flow ID: acme-billing:invoice
+acme.main/fl/hello.lua          --> HTTP /fl/acme.main/hello  (internal ID acme-main:hello)
+acme.billing/fl/invoice.lua     --> HTTP /fl/acme.billing/invoice (internal ID acme-billing:invoice)
 ```
 
 You do not need to register flows in `kit.yaml` or any configuration file. Just create the `.lua` file in the right directory.
@@ -941,11 +963,11 @@ acme.billing/
     new-invoice.yaml
   pg/                # Pages -- YAML-defined web UI pages
     dashboard.yaml
-  tp/                # Trigger definitions (YAML)
-    schedules.yaml
+  tp/                # Go HTML templates (kit pages / fcms render)
+    home.gohtml
   pb/                # Public assets (CSS, JS, images)
     styles.css
-  dd/                # Data definitions (schemas, seed data)
+  dd/                # Data definitions (SQL schema for kit SQLite)
     schema.sql
 ```
 
@@ -1024,7 +1046,7 @@ Secrets are encrypted key-value pairs for storing sensitive data like API keys, 
 
 ```bash
 # Via CLI
-sentinel secret set stripe_api_key sk-live-abc123
+sentinel sre secret set stripe_api_key sk-live-abc123
 
 # Via API
 curl -X POST http://localhost:8080/sc/stripe_api_key \
@@ -1059,10 +1081,10 @@ Inside flows, you have access to a rich set of APIs through the `ctx` and `sn` g
 | `sn.json.*` | JSON encoding/decoding | `sn.json.enc(table)`, `sn.json.dec(string)` |
 | `sn.crypto.*` | Cryptography | `sn.crypto.hmac(alg, key, data)`, `sn.crypto.sha256(data)` |
 | `sn.time.*` | Time utilities | `sn.time.now()`, `sn.time.format()` |
-| `sn.cms.*` | CMS content access | `sn.cms.list(collection)`, `sn.cms.get(collection, slug)` |
+| `sn.cms.*` | CMS content access | `sn.cms.get(slug)`, `sn.cms.list(prefix?)` |
 | `sn.sleep(n)` | Pause execution | `sn.sleep(5)` -- sleep 5 seconds (max 300) |
 | `sn.md.*` | Built-in modules | AI helpers, session management, routing |
-| `sn.cn.*` | Built-in connectors | HTTP, SMTP, file operations |
+| `sn.cn.*` | Built-in connectors | `sn.cn.sn.http.exec`, `sn.cn.sn.smtp.exec`, `sn.cn.sn.file.exec` |
 | `sentinel.emit()` | Event emission | `sentinel.emit("order.created", {id = 123})` |
 
 See the [Lua API Reference](/lua-api) for complete documentation of every function.
@@ -1102,28 +1124,25 @@ repo-root/                          # Git repository root (where init runs)
     config.json                     #   - API port, log level, TLS settings
     vault.db                        #   - Encrypted secret storage (AES-256-GCM)
     state.db                        #   - Execution history, logs, audit trail
-    cms.db                          #   - Markdown parse cache (bbolt; see docs/16-SENTINEL-DIRECTORY.md)
+    cms.db                          #   - Markdown parse cache (bbolt; see /sentinel-directory)
     certs/                          #   - TLS certificates (if configured)
     data/
       uploads/                      #   - Form file uploads
-      sn.core.db                    #   - Per-kit SQLite database
+      acme.main.db                  #   - Per-kit SQLite ({ns}.{name}.db)
 
-  sn.core-agent/                    # Starter agent kit
-  sn.core-rag/                      # Starter RAG kit
-  sn.tools-http/                    # Starter tool connector kit
-  sn.supervisor/                    # Starter supervisor kit
+  acme.main/                        # A kit you create (none are installed by default)
     kit.yaml                        #   Kit manifest
     kit.yaml.md                     #   Skill twin for manifest
     fl/                             #   Flows directory
-      assistant.lua                 #     Example flow
-      assistant.lua.md              #     Skill twin for the flow
+      hello.lua                     #     Example flow
+      hello.lua.md                  #     Skill twin for the flow
     cn/                             #   Connectors directory (reusable service wrappers)
     md/                             #   Modules directory (shared Lua libraries)
     fm/                             #   Forms directory (YAML form definitions)
     pg/                             #   Pages directory (web UI definitions)
     pb/                             #   Public assets (CSS, JS, images)
-    tp/                             #   Trigger definitions (YAML)
-    dd/                             #   Data definitions (schemas, seed data)
+    tp/                             #   Go HTML templates
+    dd/                             #   Data definitions (SQL schema)
 ```
 
 For a **multi-SRE repo** (for example `sentinel sre init -p central --wp-central` then `sentinel sre init -p edge --wp-edge`):
@@ -1161,16 +1180,23 @@ Key observations:
 #### Create a New Kit
 
 ```bash
-sentinel sre kit new --namespace acme --name billing --description "Billing and invoicing workflows"
+sentinel sre kit new acme.billing --desc "Billing and invoicing workflows"
 ```
 
 This creates the `acme.billing/` directory with a `kit.yaml` manifest and the standard subdirectory structure. You can then start adding flows to `acme.billing/fl/`.
 
 #### Add a Cron-Triggered Flow
 
-Create `sn.core-agent/fl/daily-report.lua`:
+Create `acme.main/fl/daily-report.lua`:
 
 ```lua
+triggers = {
+    cron("0 8 * * *"),
+}
+
+function setup()
+end
+
 function main(params)
     ctx.log("info", "Generating daily report...")
 
@@ -1188,15 +1214,25 @@ function main(params)
 
     return { orders = rows[1].total }
 end
+
+function cleanup()
+end
 ```
 
-Then define the trigger directly in the flow using `triggers = { cron("0 8 * * *") }` (daily at 8 AM).
+Cron expressions are 5-field (`Minute Hour Dom Month Dow`). The `triggers = {}` table is parsed at load time. Do not call `cron()` inside `setup()`.
 
 #### Set Up a Webhook Receiver
 
-Create `sn.core-agent/fl/github-webhook.lua`:
+Create `acme.main/fl/github-webhook.lua`:
 
 ```lua
+triggers = {
+    webhook("github"),
+}
+
+function setup()
+end
+
 function main(params)
     local event_type = params.event
     local payload = params.payload and sn.json.dec(params.payload)
@@ -1209,6 +1245,9 @@ function main(params)
     end
 
     return { ok = true, event = event_type }
+end
+
+function cleanup()
 end
 ```
 
@@ -1223,11 +1262,11 @@ curl -X POST http://localhost:8080/wh/github \
 
 #### Create a Web Form
 
-1. Define the form in `sn.core-agent/fm/feedback.yaml`:
+1. Define the form in `acme.main/fm/feedback.yaml`:
 
 ```yaml
 name: feedback
-stub: user-feedback
+stub: kf.acme.main.feedback
 fields:
   - name: email
     type: email
@@ -1244,13 +1283,16 @@ fields:
     required: false
 ```
 
-2. Create a flow that handles submissions in `sn.core-agent/fl/feedback-handler.lua`:
+2. Create a flow that handles submissions in `acme.main/fl/feedback-handler.lua`:
 
 ```lua
+function setup()
+end
+
 function main(params)
-    local email = ctx.fm.feedback.email
-    local rating = ctx.fm.feedback.rating
-    local comments = ctx.fm.feedback.comments
+    local email = ctx.fm.kf.acme.main.feedback.email
+    local rating = ctx.fm.kf.acme.main.feedback.rating
+    local comments = ctx.fm.kf.acme.main.feedback.comments
 
     ctx.log("info", "Feedback received from " .. (email or "unknown"))
 
@@ -1262,9 +1304,12 @@ function main(params)
 
     return { ok = true, message = "Thank you for your feedback!" }
 end
+
+function cleanup()
+end
 ```
 
-3. Access the form at `http://localhost:8080/kt/sn/core-agent/fm/feedback`.
+3. Access the form at `http://localhost:8080/kt/acme/main/fm/feedback`.
 
 ---
 
@@ -1278,7 +1323,7 @@ Use this table to select the next guide for your task:
 | Build complex kits with forms, pages, and databases | [Kit Development Guide](/kit-development) |
 | Master workflow patterns (webhooks, events, error handling) | [Workflows and Patterns](/workflows-and-patterns) |
 | Understand all HTTP API endpoints for integration | [HTTP API Reference](/api-reference) |
-| Configure security, TLS, and production deployment | [Configuration Guide](/configuration-guide) |
+| Configure security, TLS, and production deployment | [Configuration Guide](/configuration-guide) and [Security readiness](/security-readiness) |
 | Deploy to production with Cloudflare and Caddy | [Edge Deployment Guide](/edge-deployment) |
 | Learn all CLI commands and flags | [CLI Reference](/cli-reference) |
 | Set up automated testing and probes | [Adversarial Testing](/adversarial-testing) |
@@ -1296,8 +1341,8 @@ Use this table to select the next guide for your task:
                                   v
                   +-------------------------------+
                   |       Dashboard UI            |
-                  |    http://localhost:9090      |
-                  |   (separate process, BFF)     |
+                  |    http://127.0.0.1:9090      |
+                  |   (loopback BFF process)      |
                   +---------------+---------------+
                                   |
                              REST API
@@ -1331,7 +1376,7 @@ Use this table to select the next guide for your task:
                                   |
               +-------------------+-------------------+
               |                   |                   |
-         sn.core-agent/     acme.billing/       acme.blog/
+         acme.main/         acme.billing/       acme.blog/
          kit.yaml            kit.yaml            kit.yaml
          fl/ cn/ md/         fl/ cn/ md/         fl/ md/ pg/
          fm/ pg/ pb/         fm/                 fm/ pb/
@@ -1346,7 +1391,7 @@ Use this table to select the next guide for your task:
 - **Health check** -- `curl http://localhost:8080/hl` returns a structured status of all subsystems.
 - **CLI help** -- `sentinel --help` or `sentinel [command] --help` for any subcommand.
 - **Real-time logs** -- View in the dashboard or stream through `curl http://localhost:8080/ex/{id}/lg`.
-- **System specs** -- Machine-readable YAML files in `system-specs/` define every API, schema, and convention.
+- **System specs** -- Machine-readable YAML files live in the harness repo (`github.com/ndx-au/sentinel`, directory `system-specs/`). They are not in this docs tree.
 - **Troubleshooting** -- See [Troubleshooting and FAQ](/troubleshooting-faq) for common issues and solutions.
 - **Documentation hub** -- Return to the [Documentation Index](/index) for the full list of guides.
 
@@ -1372,7 +1417,7 @@ Sentinel exposes one HTTP API for flows, triggers, logs, source files, secrets, 
 
 The API follows several important design principles that differ from conventional REST APIs:
 
-1. **Always HTTP 200.** Every response returns HTTP status code 200, even errors. The actual success or failure is communicated in the JSON response body. This simplifies client logic for AI agents and automation scripts that consume the API -- they never need to handle HTTP-level error branching. The only exception is WebSocket upgrade requests, which use standard HTTP upgrade semantics.
+1. **JSON errors use HTTP 200.** Authenticated JSON handlers that call `writeError` return HTTP 200 with `{ok: false, err, code, msg, req_id}` in the body. Detect failure with `ok === false` or a present `err` field -- not HTTP status, and not "any `code` field". This is **not** always HTTP 200: preflight `OPTIONS` returns 204 when CORS middleware is wired; WebSocket upgrade when the subsystem is disabled returns 503; form HTML handlers return 4xx/5xx/302; CMS HTML render (`/fcms/render`, `/ct`) returns 4xx/5xx; git handlers return 4xx/5xx.
 
 2. **Brevity Regime.** Paths and query parameters use short names to reduce tokens in agent prompts. Example prefixes include `/fl` for flows and `/ex` for executions. Other examples include `/tr` for triggers and `/lg` for logs. Query parameters include `?lv=` for level and `?h=` for history.
 
@@ -1447,8 +1492,8 @@ All available API routes at a glance. Routes marked with (public) bypass bearer 
 | `POST` | `/git/credentials/generate` | Generate new SSH keypair |
 | `GET` | `/cert/ca.crt` | Download CA certificate (public) |
 | `GET` | `/cert/server.crt` | Download server certificate (public) |
-| `GET` | `/cm` | List CMS content slugs |
-| `GET` | `/cm/{kitName}/{slug}` | Get CMS content by slug |
+| `GET` | `/fcms` | List CMS content slugs (legacy alias `/cm`) |
+| `GET` | `/fcms/{ns}/{name}/*` | Get CMS content by slug (legacy alias `/cm/{ns}/{name}/*`) |
 | `GET` | `/st` | List storage points |
 | `POST` | `/st` | Create storage point |
 | `GET` | `/st/{id}` | Get storage point |
@@ -1510,6 +1555,8 @@ All available API routes at a glance. Routes marked with (public) bypass bearer 
 | `POST` | `/mk/auth/login` | Marketplace login |
 | `POST` | `/mk/auth/poll` | Poll login status |
 | `POST` | `/mk/auth/logout` | Marketplace logout |
+
+Additional prefixes (payloads and keyhole notes: [Harness HTTP route reference](/harness-http-routes)): `GET /hl/runtime`, `/fcms` and `/fcms/render`, `/ccms/*`, `/ai/*`, `/rag/*`, `/fs/pl`, `/fs/test`, `/cfg/ip-filters`, `/st/export`, `/st/import`, `/st/{id}/objects`, `POST /lib/{id}/validate`, `/docker/capability`, `/docker/templates`, `/cm/wp/*`.
 
 ---
 
@@ -1633,21 +1680,25 @@ Successful responses return the JSON body directly. Some endpoints include an `o
 
 #### Error Responses
 
-All errors are returned as HTTP 200 with an error object in the body:
+JSON application errors from `writeError` are returned as HTTP 200 with:
 
 ```json
 {
+  "ok": false,
+  "err": "DOMAIN.ACTION",
   "code": "DOMAIN.ACTION",
   "msg": "Human-readable error message",
   "req_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-- **`code`**: A structured error code such as `AUTH.REQUIRED`, `RESOURCE.NOT_FOUND`, or `CMS.UNAVAILABLE`. Use this for programmatic error handling.
+- **`ok`**: Always `false` on these error bodies.
+- **`err`**: Structured error code such as `AUTH.REQUIRED`, `FLOW.NOT_FOUND`, or `CMS.UNAVAILABLE`. Prefer this field for programmatic handling.
+- **`code`**: Same value as `err` (legacy alias). Do **not** treat any `code` field as failure -- success payloads can include unrelated `code` keys.
 - **`msg`**: A human-readable description of what went wrong. Suitable for logging or displaying to users.
 - **`req_id`**: A UUID v4 generated for every request. This is also returned in the `X-Request-ID` response header. Use it when reporting issues or correlating logs.
 
-**How to detect errors:** If the response contains a `code` field, the request failed. If `code` is absent, the request succeeded.
+**How to detect errors:** `ok === false` or a present `err` field. HTTP status is not a reliable failure signal for JSON API calls. Some surfaces (forms HTML, CMS HTML render, git, disabled WebSocket, CORS preflight) use real 4xx/5xx/204/302 status codes.
 
 ---
 
@@ -1789,7 +1840,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
     "valid": true,
     "grace_period": false,
     "blocked": false
-  }
+  },
+  "vault_initialized": true,
+  "spec_ref": "system-specs/api.yaml"
 }
 ```
 
@@ -1805,6 +1858,8 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
 | `project` | string | SRE project name (derived from the SRE root directory name) |
 | `components` | object | Health status of each internal component |
 | `marketplace` | object | Marketplace license status (present only if marketplace is configured) |
+| `vault_initialized` | boolean | Whether the vault manager is wired |
+| `spec_ref` | string | Machine-readable API spec path (`system-specs/api.yaml`) |
 
 **Component statuses:** Each component reports `"ok"`, `"unavailable"` (not configured), or `"unhealthy"`. If any component is unhealthy, the top-level `status` becomes `"degraded"`.
 
@@ -1816,7 +1871,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/hl
 GET /mcp
 ```
 
-Operator snapshot of the optional MCP sidecar. Always HTTP 200. `enabled` is false when the harness was started without `--mcp`. The catalog is still returned so the dashboard can teach the surface. Never includes tokens, vault values, or occupy license keys.
+Operator snapshot of the optional MCP sidecar. JSON HTTP 200 with `{ok, enabled, ...}`. `enabled` is false when the harness was started without `--mcp`. The catalog is still returned so the dashboard can teach the surface. Never includes tokens, vault values, or occupy license keys.
 
 **When to use:** The Dashboard MCP page uses this endpoint (`GET /mcp`, BFF `GET /api/dashboard/mcp`). Operator scripts can inspect binding, listener, and risk limits without an MCP session.
 
@@ -2071,30 +2126,33 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl
 #### Get Flow Details
 
 ```
-GET /fl/{id}
+GET /fl/{ns}.{name}/{flow}
 ```
 
-Returns details for a single flow.
+Returns details for a single flow. Canonical HTTP path is `/fl/{ns}.{name}/{flow}` (for example `/fl/sn.core-agent/assistant`). Colon IDs (`/fl/{ns}-{name}:{flow}`) are a legacy fallback.
 
 **When to use:** Inspecting a specific flow before executing it, checking its parameters or trigger configuration.
 
 **Path parameters:**
-- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format (for example `sn-core-agent:assistant`).
+- `{ns}.{name}` -- Kit directory (`sn.core-agent`).
+- `{flow}` -- Flow basename without `.lua` (`assistant`).
+
+Internal flow ID remains `{ns}-{name}:{flow}` (for example `sn-core-agent:assistant`). Slash alias `{ns}.{name}/{flow}` is also accepted by the flow manager.
 
 **curl example:**
 ```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl/sn-core-agent:assistant
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fl/sn.core-agent/assistant
 ```
 
 **Response:** Same structure as a single item from the list endpoint above.
 
 **Error conditions:**
-- `RESOURCE.NOT_FOUND`: No flow with that ID exists.
+- `FLOW.NOT_FOUND`: No flow with that ID exists.
 
 #### Execute Flow
 
 ```
-POST /fl/{id}/run
+POST /fl/{ns}.{name}/{flow}/run
 ```
 
 Triggers an execution of the specified flow. The request body is passed to the flow as parameters, accessible inside the Lua `main()` function through the function's parameters or the trigger context. Flow execution is **asynchronous** -- this endpoint returns immediately with an execution ID. Use `/ex/{id}` to poll for completion, or `/ex/{id}/lg` to stream logs in real-time.
@@ -2102,7 +2160,7 @@ Triggers an execution of the specified flow. The request body is passed to the f
 **When to use:** Running a flow on-demand from the CLI, Dashboard, or an external system. This is the "manual trigger" mechanism.
 
 **Path parameters:**
-- `{id}` -- Flow ID in `{ns}-{name}:{flow}` format.
+- `{ns}.{name}/{flow}` -- Canonical kit/flow path (for example `sn.core-agent/assistant`). Colon IDs are a legacy fallback.
 
 **Request body:** Any valid JSON object. All key-value pairs become available as flow parameters.
 
@@ -2111,7 +2169,7 @@ Triggers an execution of the specified flow. The request body is passed to the f
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello", "context": "greeting"}' \
-  http://localhost:8080/fl/sn-core-agent:assistant/run
+  http://localhost:8080/fl/sn.core-agent/assistant/run
 ```
 
 **Response:**
@@ -2132,7 +2190,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | `status` | string | Always `"queued"` on initial response |
 
 **Error conditions:**
-- `RESOURCE.NOT_FOUND`: Flow does not exist.
+- `FLOW.NOT_FOUND`: Flow does not exist.
 - `REQUEST.INVALID`: Request body is not valid JSON.
 
 ---
@@ -3088,7 +3146,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cfg/project
 **Response:**
 ```json
 {
-  "yaml": "name: my-project\nversion: 1.0.0\ndescription: My SRE project\ngit: true\nhotreload: true",
+  "yaml": "name: my-project\nversion: 1.0.0\ndescription: My SRE project\ngit:\n  sync: off\nhotreload:\n  yaml: full",
   "etag": "abc123"
 }
 ```
@@ -3108,7 +3166,7 @@ Updates `sentinel.yaml`. The entire file contents are replaced. Use the `etag` f
 curl -X PUT -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "yaml": "name: my-project\nversion: 1.1.0\ndescription: Updated project\ngit: true\nhotreload: true",
+    "yaml": "name: my-project\nversion: 1.1.0\ndescription: Updated project\ngit:\n  sync: off\nhotreload:\n  yaml: full",
     "etag": "abc123"
   }' \
   http://localhost:8080/cfg/project
@@ -3373,19 +3431,21 @@ The CMS (Content Management System) provides structured access to Markdown conte
 
 CMS endpoints are available only when at least one kit in the SRE has a `ct/` subdirectory. If no kit has content, all CMS endpoints return `CMS.UNAVAILABLE`.
 
+Canonical plane prefix is **`/fcms`**. Kit path in the URL is `{ns}/{name}` (not a dotted kit name). Legacy aliases: `/cm` (JSON) and `/ct` (HTML render). Example: `GET /fcms/acme/blog/hello-world` -- not `/cm/acme.blog/hello-world`.
+
 #### List CMS Content Slugs
 
 ```
-GET /cm
+GET /fcms
 ```
 
-Returns all available content slugs across all kits. Each slug is prefixed with its kit name. Slugs can contain path segments for hierarchically organized content.
+Returns all available content slugs across all kits. Each slug is prefixed with `{ns}/{name}`. Slugs can contain path segments for hierarchically organized content. Legacy alias: `GET /cm`.
 
 **When to use:** Building a content index, discovering available pages, generating a sitemap.
 
 **curl example:**
 ```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cm
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/fcms
 ```
 
 **Response:**
@@ -3393,14 +3453,14 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/cm
 {
   "ok": true,
   "slugs": [
-    "acme.blog/hello-world",
-    "acme.blog/tutorials/getting-started",
-    "sn.docs/api-overview"
+    "acme/blog/hello-world",
+    "acme/blog/tutorials/getting-started",
+    "sn/docs/api-overview"
   ]
 }
 ```
 
-The slug format is `{kitName}/{contentSlug}`. The Markdown frontmatter can define a `slug` field. Otherwise, the content slug is the filename without `.md`. Subdirectories in `ct/` add path segments.
+The slug format is `{ns}/{name}/{contentSlug}`. The Markdown frontmatter can define a `slug` field. Otherwise, the content slug is the filename without `.md`. Subdirectories in `ct/` add path segments.
 
 **Error conditions:**
 - `CMS.UNAVAILABLE`: No kit in the SRE has a `ct/` directory.
@@ -3408,28 +3468,29 @@ The slug format is `{kitName}/{contentSlug}`. The Markdown frontmatter can defin
 #### Get CMS Content
 
 ```
-GET /cm/{kitName}/{contentSlug}
+GET /fcms/{ns}/{name}/{contentSlug}
 ```
 
-Returns the fully parsed content for a specific slug. The response includes frontmatter metadata, a preamble (HTML rendered from content before the first heading), and a recursive section tree.
+Returns the fully parsed content for a specific slug. The response includes frontmatter metadata, a preamble (HTML rendered from content before the first heading), and a recursive section tree. Legacy alias: `GET /cm/{ns}/{name}/{contentSlug}`.
 
 **When to use:** Rendering a blog post, displaying documentation, serving structured content to a frontend.
 
 **Path parameters:**
-- `{kitName}` -- Kit directory name (for example `acme.blog`).
+- `{ns}` -- Kit namespace (for example `acme`).
+- `{name}` -- Kit name (for example `blog`). On-disk kit directory remains `{ns}.{name}`.
 - `{contentSlug}` -- Content slug, which can contain path segments (for example `hello-world` or `tutorials/getting-started`).
 
 **curl example:**
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/cm/acme.blog/hello-world
+  http://localhost:8080/fcms/acme/blog/hello-world
 ```
 
 **Response:**
 ```json
 {
   "ok": true,
-  "kit": "acme.blog",
+  "kit": "acme/blog",
   "slug": "hello-world",
   "frontmatter": {
     "title": "Hello World",
@@ -3498,12 +3559,12 @@ curl -H "Authorization: Bearer $TOKEN" \
 |------|-----------|
 | `CMS.NOT_FOUND` | No content with that slug exists in the specified kit |
 | `CMS.UNAVAILABLE` | CMS cache not initialized (no kit has a `ct/` directory) |
-| `CMS.INVALID_SLUG` | Path does not contain the required `{kitName}/{contentSlug}` format |
+| `CMS.INVALID_SLUG` | Path does not contain the required `{ns}/{name}/{contentSlug}` format |
 
 **curl example (nested slug):**
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/cm/acme.blog/tutorials/getting-started
+  http://localhost:8080/fcms/acme/blog/tutorials/getting-started
 ```
 
 ---
@@ -3675,7 +3736,7 @@ curl -X DELETE -H "Authorization: Bearer $TOKEN" \
 POST /st/{id}/test
 ```
 
-Tests connectivity for a storage point by verifying that vault credentials exist and are accessible. This does not actually connect to the storage provider -- it only checks the local credential setup.
+Tests connectivity for a storage point by calling S3 `ListObjectsV2` (`MaxKeys=1`) against the configured bucket. This is a real probe of the remote store, not a local-credentials-only check.
 
 **curl example:**
 ```bash
@@ -3720,7 +3781,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/pg
 POST /pg
 ```
 
-Adds a new PostgreSQL connection pool. The submitted connection URL is encrypted into the vault, and `.sentinel/data/pg_connections.json` stores only the connection name plus a vault secret reference.
+Adds a new PostgreSQL connection pool. Body is `{name, url}` -- not host/port/database/user/password fields. The submitted connection URL is encrypted into the vault, and `.sentinel/data/pg_connections.json` stores only the connection name plus a vault secret reference.
 
 **curl example:**
 ```bash
@@ -3728,11 +3789,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "main",
-    "host": "localhost",
-    "port": 5432,
-    "database": "myapp",
-    "user": "sentinel",
-    "password": "secret"
+    "url": "postgres://sentinel:secret@localhost:5432/myapp"
   }' \
   http://localhost:8080/pg
 ```
@@ -4186,47 +4243,35 @@ All error codes follow the `DOMAIN.ACTION` format. Here is the complete list:
 | `AUTH.REQUIRED` | Bearer token or signature required | Request to authenticated endpoint without credentials |
 | `AUTH.INVALID` | Invalid or expired token/signature | Bearer token not in valid tokens list, or signature verification failed |
 | `AUTH.IP_DENIED` | IP not in whitelist | Debug mode: request from non-whitelisted IP |
-| `AUTH.RATE_LIMIT` | Rate limit exceeded | Too many requests from the same IP |
+| `AUTH.RATE_LIMIT` | Rate limit exceeded | Too many requests for the same bearer token (100/minute) |
+| `FLOW.NOT_FOUND` | Flow does not exist | `GET`/`POST` on an unknown flow path |
 | `REQUEST.INVALID` | Malformed request | Examples: JSON parse error or missing Content-Type |
 | `REQUEST.MISSING` | Required parameter missing | A required field was not provided |
-| `RESOURCE.NOT_FOUND` | Resource does not exist | Flow, execution, trigger, or secret not found |
+| `RESOURCE.NOT_FOUND` | Resource does not exist | Execution, trigger, or secret not found |
 | `RESOURCE.CONFLICT` | ETag mismatch | Source file was modified since last read (concurrent edit) |
 | `SYSTEM.ERROR` | Internal server error | Examples: unhandled panic or database error |
 | `SYSTEM.TIMEOUT` | Operation timeout | Flow execution or HTTP operation timed out |
 | `CMS.UNAVAILABLE` | CMS cache not initialized | No kit in the SRE has a `ct/` content directory |
 | `CMS.NOT_FOUND` | Content slug not found | Requested CMS slug does not exist in the specified kit |
-| `CMS.INVALID_SLUG` | Invalid slug format | Path is missing the required `{kitName}/{contentSlug}` structure |
+| `CMS.INVALID_SLUG` | Invalid slug format | Path is missing the required `{ns}/{name}/{contentSlug}` structure |
 
 ---
 
 ### Rate Limiting
 
-By default, Sentinel enforces a rate limit of **100 requests per second per IP address**. This is configurable in `.sentinel/config.json`:
+Bearer-token requests are limited to **100 requests per minute per token**. There is no `api.rate_limit` field in `.sentinel/config.json`. The limiter is created in auth middleware (`NewRateLimiter(100, time.Minute)`).
 
-```json
-{
-  "api": {
-    "rate_limit": 200
-  }
-}
-```
+When the rate limit is exceeded, the JSON body contains `{ok: false, err: "AUTH.RATE_LIMIT", code: "AUTH.RATE_LIMIT", msg: "Rate limit exceeded"}`.
 
-When the rate limit is exceeded, the response body contains:
-
-```json
-{
-  "code": "AUTH.RATE_LIMIT",
-  "msg": "Rate limit exceeded"
-}
-```
-
-Rate limiting applies to all endpoints including auth-exempt routes. Each unique client IP gets its own counter.
+Rate limiting is **not** applied in debug mode (IP whitelist only) and **not** on auth-exempt routes (`GET /api/config`, `/wh/*`, kit webhooks, `GET /cert/*`). Webhook endpoints may have their own per-trigger rate limits.
 
 ---
 
 ### CORS (Cross-Origin Resource Sharing)
 
-CORS is configured through the `cors_origins` setting in `.sentinel/config.json`. When configured, the following headers are set on responses:
+`APIConfig` has **no** `cors_origins` key. Harness bootstrap passes `nil` origins into `NewGateway`, so CORS middleware is **unwired** on the live listener. Do not document or set `cors_origins` as a working config field.
+
+If a gateway is constructed with a non-empty origins list (code-level), middleware sets:
 
 - `Access-Control-Allow-Origin`: The matched origin.
 - `Access-Control-Allow-Methods`: `GET, POST, PUT, DELETE, OPTIONS`.
@@ -4234,13 +4279,13 @@ CORS is configured through the `cors_origins` setting in `.sentinel/config.json`
 - `Access-Control-Expose-Headers`: `X-Request-ID`.
 - `Access-Control-Max-Age`: `86400` (24 hours).
 
-Preflight `OPTIONS` requests are handled automatically and return `204 No Content`.
+In that case preflight `OPTIONS` returns `204 No Content`. With the default unwired bootstrap, those headers and the OPTIONS shortcut are not installed.
 
 ---
 
 ### Best Practices
 
-1. **Examine errors in the response body.** A `code` field indicates failure. All responses use HTTP 200, so status codes do not identify application errors.
+1. **Examine errors in the JSON body.** `ok === false` or a present `err` field indicates a JSON application error. Those bodies use HTTP 200. HTTP status still matters for forms HTML, CMS HTML render, git, disabled WebSocket (503), and CORS preflight (204).
 
 2. **Use ETags for source editing.** When updating source files, always include the `etag` from the GET response. This prevents accidental overwrites from concurrent editors.
 
@@ -4310,14 +4355,14 @@ Every flow has access to:
 
 The following Lua standard library functions are removed from the sandbox:
 
-- `io.*` -- No file I/O (use `sn.cn.file.exec()` for controlled file operations).
-- `os.*` -- No system commands (exception: `os.date` is available for time formatting).
+- `io.*` -- No file I/O (use `sn.cn.sn.file.exec()` for controlled file operations).
+- `os.*` -- The `os` library is **not** loaded. There is no `os.date`. Use `sn.time.now()` (ISO8601 UTC) or `sn.time.unix()`.
 - `debug.*` -- No debug introspection.
 - `package.*` -- No `require()` or module loading.
 - `load()`, `loadstring()` -- No dynamic code evaluation.
 - `dofile()` -- No file execution.
 
-If you need file operations, use the built-in file connector (`sn.cn.file.exec()`). If you need to call an external service, use `sn.http`. The sandbox channels all external interaction through auditable, rate-limitable APIs.
+If you need file operations, use the built-in file connector (`sn.cn.sn.file.exec()`). If you need to call an external service, use `sn.http`. The sandbox channels all external interaction through auditable, rate-limitable APIs.
 
 Long-running operational work such as scheduled backups remains harness-owned. Lua flows can observe backup state and react to backup lifecycle events, but they do not become the scheduler or worker for those jobs.
 
@@ -4331,7 +4376,7 @@ Before an AI call, examine `sn.ai.enabled` or handle the disabled error in `pcal
 
 ### Flow Lifecycle
 
-Every Lua flow must define four lifecycle functions: `setup`, `main`, `cleanup`, and `failed`. Missing required hooks fail registration. `timeout` is optional.
+Every Lua flow must define three required hooks (`VerifyHooks`): `setup`, `main`, and `cleanup`. Missing required hooks fail registration. `failed` is optional (auto no-op if omitted). `timeout()` is optional and runs when execution exceeds the context deadline.
 
 ```lua
 function setup()
@@ -4354,9 +4399,14 @@ function cleanup()
 end
 
 function failed(err)
-  -- Called when setup() or main() throws, then cleanup() still runs.
+  -- Called when setup() or main() throws, then cleanup() still runs last.
   -- The err parameter is the error message string.
   -- Use for error-specific cleanup or alerting.
+end
+
+function timeout()
+  -- Optional. Called when setup() or main() hits the execution deadline.
+  -- If timeout() itself errors, failed() runs, then cleanup() still runs last.
 end
 ```
 
@@ -4365,6 +4415,9 @@ end
 1. Success: `setup` → `main` → `cleanup`.
 2. Setup fails: `setup` → `failed` → `cleanup`.
 3. Main fails: `setup` → `main` → `failed` → `cleanup`.
+4. Timeout: `setup` → `main` → `timeout()` [→ `failed` if `timeout()` errors] → `cleanup`.
+
+`cleanup` always runs last after `failed` on error.
 
 #### Important Notes
 
@@ -4378,9 +4431,15 @@ end
 #### Minimal Flow Example
 
 ```lua
+function setup()
+end
+
 function main(params)
   ctx.log("info", "Hello from Sentinel!")
   return {ok = true, msg = "It works"}
+end
+
+function cleanup()
 end
 ```
 
@@ -4449,7 +4508,7 @@ end
 
 ### Context (ctx)
 
-The `ctx` object is a global that provides execution context, logging, state management, and secret access. It is available in all four lifecycle functions (`setup`, `main`, `cleanup`, `failed`).
+The `ctx` object is a global that provides execution context, logging, state management, and secret access. It is available in all lifecycle functions (`setup`, `main`, `cleanup`, `failed`, and `timeout` when defined).
 
 **Important:** During harness dry-run (flow registration at startup), `ctx` is `nil`. If your flow has top-level code outside of the lifecycle functions, always guard `ctx` access:
 
@@ -4514,7 +4573,7 @@ Returns all configured backup plans.
 local plans, err = sn.backup.plans()
 if err == nil then
   for _, plan in ipairs(plans) do
-    ctx.log("info", "backup plan", "name", plan.name, "schedule", plan.schedule)
+    ctx.log("info", "backup plan " .. tostring(plan.name) .. " " .. tostring(plan.schedule))
   end
 end
 ```
@@ -4529,7 +4588,7 @@ Returns recent backup runs. Optional `opts` fields:
 local runs, err = sn.backup.runs({ limit = 10, status = "failed" })
 if err == nil then
   for _, run in ipairs(runs) do
-    ctx.log("warn", "backup issue", "plan", run.plan_name, "error", run.error_message)
+    ctx.log("warn", "backup issue " .. tostring(run.plan_name) .. " " .. tostring(run.error_message))
   end
 end
 ```
@@ -4541,7 +4600,7 @@ Returns the currently active in-process backup jobs known to this harness instan
 ```lua
 local running = sn.backup.running()
 if #running > 0 then
-  ctx.log("info", "backup jobs active", "count", #running)
+  ctx.log("info", "backup jobs active: " .. tostring(#running))
 end
 ```
 
@@ -4556,7 +4615,7 @@ Returns a small backup summary:
 ```lua
 local status, err = sn.backup.status()
 if err == nil and status.running_count > 0 then
-  ctx.log("info", "backup subsystem busy", "running", status.running_count)
+  ctx.log("info", "backup subsystem busy: " .. tostring(status.running_count))
 end
 ```
 
@@ -4575,7 +4634,7 @@ triggers = {
 }
 
 function main(params)
-  ctx.log("error", "backup failed", "plan", params.plan_name, "error", params.error_message)
+  ctx.log("error", "backup failed: " .. tostring(params.plan_name) .. " " .. tostring(params.error_message))
   return {ok = true}
 end
 ```
@@ -4692,9 +4751,38 @@ ctx.fs("delete", "sn.mine/data/tmp.txt")
 
 Kit identity for policy matching uses the same first-hyphen flow-id parse as `sn.db` / `sn.cms` / `sn.ws` (`ops-code-progress:scan` → kit `ops.code-progress`).
 
+##### ctx.keyhole
+
+```lua
+local mode = ctx.keyhole
+-- Returns the runtime keyhole string from `.sentinel/config.json` (may be empty).
+```
+
+**Type:** string
+
+##### ctx.project_config()
+
+Returns the loaded `sentinel.yaml` project config as a Lua table (wired in harness bootstrap). Raises if marshaling fails.
+
+```lua
+local cfg = ctx.project_config()
+ctx.log("info", "project " .. tostring(cfg.name))
+```
+
+##### ctx.cache.invalidate_paths(paths) / ctx.cache.invalidate_all()
+
+Page-cache invalidation for the executing kit (optional extra kit targeting via args).
+
+```lua
+local n = ctx.cache.invalidate_paths({"/", "/about"})
+local ok = ctx.cache.invalidate_all()
+```
+
+`invalidate_paths` returns the number of distinct pages invalidated. `invalidate_all` returns `true` when the kit cache was cleared.
+
 ##### ctx.log(level, message)
 
-Writes a log entry associated with this execution. Logs are stored in the state database and can be streamed in real-time through the SSE API (`GET /ex/{id}/lg`).
+Writes a log entry associated with this execution. Logs are stored in the state database and can be streamed in real-time through the SSE API (`GET /ex/{id}/lg`). Extra arguments after `message` are ignored -- there is no key-value structured logging on this function.
 
 ```lua
 ctx.log("info", "Processing order " .. order_id)
@@ -4908,7 +4996,7 @@ end
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `headers` | table | `{}` | Key-value pairs of HTTP headers. Keys are header names, values are header values. |
-| `timeout_ms` | integer | `30000` | Request timeout in milliseconds. If the server does not respond within this time, the request fails with an error. |
+| `timeout_ms` | integer | `10000` | Request timeout in milliseconds (default 10s). Values `<= 0` or above 30s are clamped to the 30s maximum. |
 
 #### Response Object
 
@@ -4918,9 +5006,9 @@ All HTTP methods return a response object with the following fields:
 {
   status = 200,             -- HTTP status code (integer)
   body = "...",             -- Response body as a string
-  headers = {               -- Response headers (lowercase keys)
-    ["content-type"] = "application/json",
-    ["x-rate-limit"] = "100"
+  headers = {               -- Response headers (Go canonical MIME keys)
+    ["Content-Type"] = "application/json",
+    ["X-Rate-Limit"] = "100"
   }
 }
 ```
@@ -4929,7 +5017,7 @@ All HTTP methods return a response object with the following fields:
 |-------|------|-------------|
 | `status` | integer | HTTP status code (for example 200, 404, and 500) |
 | `body` | string | Response body as a raw string. Parse JSON with `sn.json.dec()`. |
-| `headers` | table | Response headers. Header names are lowercased. |
+| `headers` | table | Response headers. Keys are Go canonical MIME header names (for example `Content-Type`), not lowercased. |
 
 #### Real-World Examples
 
@@ -5257,7 +5345,7 @@ end
 
 ### Database (sn.db)
 
-Every kit gets its own isolated SQLite database. The database file is stored at `.sentinel/data/{kit-name}.db` within the SRE directory. Other kits cannot access it unless explicitly imported in `kit.yaml`.
+Every kit gets its own isolated SQLite database. The database file is stored at `{projectRoot}/.sentinel/data/{ns}.{name}.db` (for example `.sentinel/data/sn.core-agent.db`). Other kits cannot access it unless explicitly imported in `kit.yaml`.
 
 SQLite is a full-featured relational database that supports transactions, indexes, JSON functions, and most SQL operations. It is ideal for storing flow state, caching API responses, tracking processed items, and building simple CRUD applications.
 
@@ -5405,7 +5493,7 @@ end)
 #### Database Isolation
 
 Each kit gets its own database file:
-- **Location:** `.sentinel/data/{kit-name}.db`.
+- **Location:** `{projectRoot}/.sentinel/data/{ns}.{name}.db`.
 - **Access:** By default, only flows within the kit can access its database.
 - **Cross-kit access:** An import in `kit.yaml` can permit a kit to read another kit's database. Avoid this access unless necessary.
 
@@ -5593,11 +5681,15 @@ ctx.log("info", "Current time: " .. ts)
 
 **Returns:** ISO8601 timestamp string in UTC (for example `"2026-02-10T12:00:00Z"`).
 
-**Note:** `os.date` is also available in the sandbox for more flexible time formatting:
+#### sn.time.unix()
+
+Returns the current Unix timestamp as a number.
 
 ```lua
-local formatted = os.date("%Y-%m-%d %H:%M:%S")
+local epoch = sn.time.unix()
 ```
+
+The `os` library is not available. Do not call `os.date`.
 
 ---
 
@@ -5827,7 +5919,7 @@ function main(params)
 end
 ```
 
-Operator setup: enable `sn.ai` on the Agents dashboard, register an AI-capable API Library vendor, and store the API key in Vault. Step-by-step smoke: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator). Architecture: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).
+Operator setup: enable `sn.ai` on the Agents dashboard, register an AI-capable API Library vendor, and store the API key in Vault. Step-by-step smoke: [Agentic AI operator guide](/agentic-ai-operator). Architecture: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).
 
 ---
 
@@ -6003,7 +6095,7 @@ Connectors are pre-built integrations that provide standardized access to extern
 
 #### How Connector Namespacing Works
 
-Connector names are defined by the connector itself. Current starter-kit examples include `sn.cn.http_json` and `sn.cn.rag_ingest`.
+Harness built-in connectors register under `sn.cn.sn.*`. Kit connectors register whatever tables they expose under `sn.cn.*`. `http_json` is a **kit** connector (for example `sn.cn.http_json`), not a harness builtin.
 
 #### Starter-Kit Connector Examples
 
@@ -6021,13 +6113,17 @@ local result, err = sn.cn.rag_ingest.call({
 })
 ```
 
-#### SMTP Connector (sn.cn.smtp)
+#### HTTP Connector (sn.cn.sn.http)
 
-Sends email through SMTP. Useful for notifications and alerts.
+Harness builtin: `sn.cn.sn.http.exec({url=..., method=..., body=..., ...})`. This is separate from `sn.http.get/post/put/del` and from the kit connector `sn.cn.http_json`.
+
+#### SMTP Connector (sn.cn.sn.smtp)
+
+Sends email through SMTP. Useful for notifications and alerts. The host field is `host`, not `server`.
 
 ```lua
-sn.cn.smtp.exec({
-  server = "smtp.gmail.com",
+sn.cn.sn.smtp.exec({
+  host = "smtp.gmail.com",
   port = 587,
   from = "bot@example.com",
   password = ctx.secret("gmail_app_password"),
@@ -6041,7 +6137,7 @@ sn.cn.smtp.exec({
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `server` | string | yes | SMTP server hostname |
+| `host` | string | yes | SMTP server hostname |
 | `port` | integer | yes | SMTP port (587 for TLS, 465 for SSL) |
 | `from` | string | yes | Sender email address |
 | `password` | string | yes | SMTP password or app-specific password |
@@ -6049,20 +6145,20 @@ sn.cn.smtp.exec({
 | `subject` | string | yes | Email subject line |
 | `body` | string | yes | Email body (plain text) |
 
-#### File Connector (sn.cn.file)
+#### File Connector (sn.cn.sn.file)
 
 Performs controlled file operations within the SRE directory. This is the sanctioned way to write files from within the sandbox.
 
 ```lua
 -- Write a file (overwrite mode)
-sn.cn.file.exec({
+sn.cn.sn.file.exec({
   mode = "overwrite",
   path = "sn.log/output/report.jsonl",
   content = sn.json.enc({test = "result"}) .. "\n"
 })
 
 -- Append to a file
-sn.cn.file.exec({
+sn.cn.sn.file.exec({
   mode = "append",
   path = "sn.log/output/report.jsonl",
   content = sn.json.enc({test = "another result"}) .. "\n"
@@ -6193,7 +6289,7 @@ end
 | `date` | string | Publication date (RFC3339 or YYYY-MM-DD) |
 | `description` | string | Short description |
 | `tags` | array | Tag strings |
-| `agent_context` | table | AI agent context block. Available in Lua only -- stripped from `/cm/*` REST API responses. |
+| `agent_context` | table | AI agent context block. Available in Lua only -- stripped from `/fcms/*` REST API responses. |
 | `meta` | table | Any unrecognized frontmatter fields |
 
 **Section structure:** Each section in the `sections` map contains:
@@ -6298,7 +6394,7 @@ function main(params)
 end
 ```
 
-**Cross-reference:** CMS content is also accessible through the REST API. See [HTTP API Reference: Content (CMS)](/api-reference#content-cms) for external endpoint documentation.
+**Cross-reference:** CMS content is also accessible through the REST API (`GET /fcms/{ns}/{name}/*`, legacy `/cm`). See [HTTP API Reference: Content (CMS)](/api-reference#content-cms) for external endpoint documentation.
 
 ---
 
@@ -6306,9 +6402,31 @@ end
 
 Beyond the built-in APIs documented above, Sentinel flows can access more services that implement the Triple-Access Pattern. These services expose Lua APIs alongside their CLI and REST interfaces, ensuring consistent behavior across all access methods.
 
+#### Storage (sn.st)
+
+Harness object-storage bindings (`internal/storage/lua_api.go`):
+
+```lua
+local points, err = sn.st.list()
+local point, err = sn.st.get(id)
+local url, err = sn.st.resolve(ref, path)
+local meta, err = sn.st.head(ref, key)
+local put, err = sn.st.put(ref, key, data)
+```
+
+Also `sn.st.get_by_stub(stub)`. Each call returns `(result, nil)` or `(nil, error_string)`.
+
+#### Kit registry (sn.kit)
+
+```lua
+local kit = sn.kit.get("sn", "core-agent")  -- nil if missing
+local kits = sn.kit.list()
+local form = sn.kit.find_form("contact")
+```
+
 #### API Library Service (sn.lib)
 
-The API library service manages vendor definitions, endpoints, and call templates. It is accessible from Lua flows:
+The API library service is implemented (`internal/library/lua.go`). It manages vendor definitions, endpoints, and call templates:
 
 ```lua
 -- List vendors
@@ -6618,9 +6736,8 @@ For security, the following Lua standard library functions are **NOT available**
 
 | Removed | Reason |
 |---------|--------|
-| `io.*` | File I/O -- use `sn.cn.file.exec()` instead |
-| `os.execute`, `os.remove`, `os.rename`, `os.tmpname`, `os.getenv`, `os.exit` | System commands -- too dangerous |
-| `os.date` | **Available** (exception) -- safe for time formatting |
+| `io.*` | File I/O -- use `sn.cn.sn.file.exec()` instead |
+| `os.*` | Entire `os` library is not loaded (no `os.date`, no system commands) |
 | `debug.*` | Debug introspection can expose harness internals |
 | `package.*` | Module loading -- prevents loading untrusted libraries |
 | `load()`, `loadstring()` | Dynamic code evaluation -- prevents code injection |
@@ -6629,11 +6746,11 @@ For security, the following Lua standard library functions are **NOT available**
 **Why these restrictions exist:** Flows contain user code that runs on the host. Without the sandbox, malicious or faulty code can expose secrets, delete files, or execute commands. The sandbox restricts access to the APIs that the harness provides and audits.
 
 **What to use instead:**
-- Need file I/O? Use `sn.cn.file.exec()`.
+- Need file I/O? Use `sn.cn.sn.file.exec()`.
 - Need to call an external service? Use `sn.http.*`.
 - Need to store data? Use `sn.db.*` or `ctx.pg()`.
 - Need shared logic? Put it in a module (`sn.md.*`).
-- Need time formatting? Use `os.date()` (it is available).
+- Need time? Use `sn.time.now()` or `sn.time.unix()`.
 
 ---
 
@@ -6645,7 +6762,7 @@ For security, the following Lua standard library functions are **NOT available**
 
 3. **Log important operations.** Use `ctx.log()` at appropriate levels. This is your primary debugging tool in production.
 
-4. **Set reasonable HTTP timeouts.** Always specify `timeout_ms` for HTTP requests. The default of 30 seconds is often too long. A timeout of 5-10 seconds is reasonable for most API calls.
+4. **Set reasonable HTTP timeouts.** Always specify `timeout_ms` for HTTP requests. The default is 10 seconds; the maximum is 30 seconds. A timeout of 5-10 seconds is reasonable for most API calls.
 
 5. **Handle errors gracefully with pcall.** If the flow must continue after an error, wrap the operation in `pcall`. Use the same protection to return a meaningful error. Operations include JSON parsing, HTTP requests, database queries, and secret retrieval.
 
@@ -6682,13 +6799,20 @@ The fundamental operating model is:
 
 Every command uses a project directory. If you omit `-p`, the command uses the current directory. Always specify `-p` with an absolute path.
 
+**Command groups:**
+
+- Top-level: `harness`, `dashboard`, `wp-proxy`, `run`, `logs`, `ps`, `db`, `audit`, `backup`, `login`, `logout`, `register`, `license`, `upgrade`, `mcp`, `ccms`, `lib`, `docs`, `approvals`, `version`.
+- Under `sentinel sre`: `init`, `secret`, `config`, `doctor`, `flow`, `connector`, `module`, `storage`, `bundle`, `kit`, `test`.
+
+There is no `sentinel start`. Use `sentinel harness start`.
+
 ---
 
 ### Installation
 
 #### Building from Source
 
-Sentinel is written in Go. You need Go 1.25 or later installed on your system.
+Sentinel is written in Go. You need Go 1.26.10 or later installed on your system.
 
 **Development build** (includes debug mode support):
 
@@ -6722,19 +6846,15 @@ After building, the binary is available as `./sentinel` (or `./sentinel.exe` on 
 
 ```bash
 ./sentinel version
-# Output: sentinel version v0.1.1-dev (or similar)
+# Output: sentinel version v0.1.1-dev
 ```
 
 #### Build Script
 
-The repository includes a convenience build script:
+The repository includes a convenience build script. `./build.sh` calls `scripts/build.py` and builds both binaries: `sndev` (dev tags) and `snprod` (stripped production). There is no `-r` flag.
 
 ```bash
-# Development build
 ./build.sh
-
-# Release build
-./build.sh -r
 ```
 
 ---
@@ -6783,14 +6903,18 @@ Keep secrets out of command arguments. Process listings can expose those argumen
 | `SENTINEL_STATE_PASSPHRASE` | Passphrase for encrypting the state database (SQLCipher). Only used when `state.encrypt_db` is `true` in config. | (none) | If empty and `encrypt_db` is true, the vault passphrase is used as fallback. |
 | `SENTINEL_DATA_DIR` | Override the data directory path. | `.sentinel` | Normally set in `.sentinel/config.json`. The environment variable overrides the file value. |
 | `SENTINEL_PORT` | Override the API listen port. | `8080` | Equivalent to the `api.port` configuration field. |
-| `SENTINEL_DEBUG` | Enable debug mode. Set to `1` or `true`. | (disabled) | Equivalent to `--debug` flag. |
 | `SENTINEL_LOG_LEVEL` | Set the minimum log level: `debug`, `info`, `warn`, or `error`. | `info` | Overrides `log.level` in configuration file. |
 | `SENTINEL_LOG_FORMAT` | Set the log output format: `json` or `text`. | `text` | Overrides `log.format` in configuration file. |
 
+`SENTINEL_DEBUG` is not an allowlisted harness environment variable. Use the `--debug` flag or `SENTINEL_LOG_LEVEL=debug`.
+
 #### CLI and Remote Access Variables
+
+These variables are CLI/client only. The harness process ignores them.
 
 | Variable | Purpose | Default | Notes |
 |----------|---------|---------|-------|
+| `HARNESS_URL` | URL of the harness API for remote CLI commands. | (none) | Preferred client default. Combined with `SENTINEL_HOST` for `--host`. |
 | `SENTINEL_HOST` | URL of the harness API for remote CLI commands. | `http://localhost:8080` | Used by commands like `run`, `logs`, `status` when operating against a remote harness. |
 | `SENTINEL_API_KEY` | Bearer token for authenticating CLI requests to the harness. | (none) | Stored here instead of command-line arguments to avoid exposure in process listings. |
 
@@ -6802,12 +6926,7 @@ Keep secrets out of command arguments. Process listings can expose those argumen
 | `SENTINEL_LICENSE_URL` | Override occupy/register HQ. | `https://license.ndx.au` | ndxHQ |
 | `SENTINEL_LICENSE_KEY` | License key for marketplace access. Alternative to storing it in config. | (none) | Overrides `marketplace.license_key` in configuration file. |
 
-#### Application Variables
-
-| Variable | Purpose | Default | Notes |
-|----------|---------|---------|-------|
-| `SENTINEL_PROJECT_DIR` | Default project root directory. | `.` | Equivalent to the `-p` flag default. |
-| `SENTINEL_SRE_LOCATION` | SRE directory path for dashboard auto-discovery. | (none) | Used by the dashboard to locate harness instances. |
+There is no `SENTINEL_PROJECT_DIR` or `SENTINEL_SRE_LOCATION` variable. Use `-p` / `--project` for the SRE path. Use `dashboard start --sre-location` for dashboard filesystem access.
 
 #### Precedence Rules
 
@@ -6840,11 +6959,13 @@ A Git repository can contain multiple SREs in subfolders. The command creates re
 |------|---------|-------------|
 | `-p`, `--project` | `.` | Path to the SRE directory (relative to cwd). Defaults to current directory, meaning repo root = SRE root (1:1 mode). |
 | `--minimal` | `false` | Skip the interactive wizard but still create the standard scaffold. |
-| `--starter-kits` | `true` | Install the bundled starter kits into the project scaffold. |
-| `--wp-central` | `false` | Add the `sn.wp-central` project profile and install the `sn.wp-central` starter kit. Suppresses default starter kits and skips the interactive wizard. |
+| `--starter-kits` | `false` | Install starter kits from sre-init into the project scaffold. Off by default. |
+| `--wp-central` | `false` | Add the `sn.wp-central` project profile and install `sn.wp-central` and `sn.wp-preview`. Suppresses default starter kits and skips the interactive wizard. |
 | `--wp-edge` | `false` | Add the `sn.wp-edge` project profile and install the `sn.wp-edge` starter kit. Suppresses default starter kits and skips the interactive wizard. |
 | `--with-kit` | none | After scaffold creation, install one or more marketplace kits. Accepts comma-separated values and repeated flags. |
 | `--with-bundle` | none | After scaffold creation, install one or more bundles. Resolves from SKM with local fallback. Accepts comma-separated values and repeated flags. |
+| `--with-local <path>` | none | Use a local sre-init checkout instead of fetching from GitHub. |
+| `--force` | `false` | Overwrite existing scaffold files without prompting. |
 | `--no-input` | `false` | Use all defaults without prompting. In interactive mode, the init command asks for project name, description, and whether to enable vault encryption. |
 
 The wizard **name** field is metadata only -- it populates `sentinel.yaml` but does not affect directory names. The SRE directory is determined solely by the `-p`/`--project` flag.
@@ -6854,7 +6975,8 @@ The wizard **name** field is metadata only -- it populates `sentinel.yaml` but d
 ```
 repo-root/                         # Where init is run (cwd)
   CLAUDE.md                        # AI assistant orientation (repo-level)
-  .claude/skills/                  # SRE guidance skills (repo-level)
+  AGENTS.md                        # Agent orientation (repo-level)
+  .env.example                     # Operator/client env template (repo-level)
   .gitignore                       # Ignores .sentinel/ and _data/ (repo-level)
   .gitattributes                   # Line ending normalization (repo-level)
 
@@ -6863,23 +6985,14 @@ repo-root/                         # Where init is run (cwd)
     sentinel.yaml.md               # Skill twin for AI agent context
     .sentinel/                     # Machine-local data (gitignored)
       config.json                  # Infrastructure configuration
-    tests/                         # Test directory
-    sn.core-agent/                 # Base agent starter kit (if --starter-kits)
-    sn.core-rag/                   # Base RAG starter kit
-    sn.tools-http/                 # Tool connector starter kit
-    sn.supervisor/                 # Supervisor starter kit
-    sn.eg-support/                 # Example support kit
-    sn.eg-itops/                   # Example IT ops kit
-    sn.eg-rag-chat/                # Example retrieval-backed chat kit
-    sn.example-support/            # Legacy example support compatibility kit
-    sn.example-itops/              # Legacy example IT ops compatibility kit
+      harness.env.example          # systemd EnvironmentFile template
 ```
 
-The command skips existing repository files (CLAUDE.md, .gitignore, .gitattributes, .claude/skills/). A second SRE can reuse them without overwriting them.
+Default init does **not** create `tests/` and does **not** install starter kits. Pass `--starter-kits` (or `--with-bundle core`) to install kits from sre-init. Skills under `.claude/skills/` are copied only when kits are installed.
 
-The default starter kits exclude `sn.wp-central/` and `sn.wp-edge/`.
+The command skips existing repository files (CLAUDE.md, AGENTS.md, .gitignore, .gitattributes). A second SRE can reuse them without overwriting them.
 
-For WordPress profiles, use `--wp-central`, `--wp-edge`, or `--with-bundle wp-central|wp-edge`.
+For WordPress profiles, use `--wp-central`, `--wp-edge`, or `--with-bundle wp-central|wp-edge`. `--wp-central` also installs `sn.wp-preview`.
 
 The `--wp-central` and `--wp-edge` flags suppress default starter kits and skip the wizard.
 
@@ -6929,9 +7042,9 @@ The generated `sentinel.yaml` also includes `wp_central.port: 8800`, which is th
 - If vault encryption is enabled during init, you will need to set `SENTINEL_VAULT_PASSPHRASE` before starting the harness.
 - Run `sentinel sre validate` after modifying starter kits or adding new kits.
 
-#### start
+#### harness start
 
-Start the harness API server. The harness discovers all kits in the project directory, loads flows, registers triggers, initializes databases, and begins serving HTTP requests.
+Start the harness API server. The harness discovers all kits in the project directory, loads flows, registers triggers, initializes databases, and begins serving HTTP requests. There is no `sentinel start` command.
 
 ```bash
 ./sentinel harness start [flags]
@@ -6941,16 +7054,17 @@ Start the harness API server. The harness discovers all kits in the project dire
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port <int>` | `8080` | HTTP port for the API server. Ports 8080-8090 are within the dashboard's auto-discovery range. |
+| `--port <int>` | `8080` | HTTP port for the API server. The gateway binds all interfaces (`:PORT`). Ports 8080-8090 are within the dashboard's auto-discovery range. |
+| `--wp-central` | `false` | Enable the wp-central WordPress reverse proxy. |
 | `--wp-port <int>` | (from `sentinel.yaml`, default `8800`) | Dedicated `sn.wp-central` WordPress ingress port. Only applies when `wp_central.enabled` is true. Overrides `wp_central.port` for that run. |
-| `-d`, `--daemon` | `false` | Run the harness as a background process. The parent waits for the child to become healthy (up to 10s) before exiting. PID file: `{SRE}/.sentinel/harness-{port}.pid`. |
+| `-d`, `--daemon` | `false` | Run the harness as a background process. The parent waits for the child to become healthy (up to 30s) before exiting. PID file: `{SRE}/.sentinel/harness-{port}.pid`. |
 | `--drop-web-cache` | `false` | Clear all web caches (CMS content cache, template cache) on startup. Useful for content changes that hot reload did not detect. |
 | `--compose-up <value>` | (none) | Start Docker Compose stacks before the harness. Use `all` to start all stacks, or provide a comma-separated list of stub names. |
 | `--mcp` | `false` | Start an MCP (Model Context Protocol) server alongside the harness for AI agent tooling. |
 | `--mcp-bind <addr>` | `127.0.0.1` | MCP bind address. Use `127.0.0.1` (default) for localhost-only, or `0.0.0.0` / `::` to accept remote clients on trusted networks. |
 | `--mcp-listen <int>` | API port + 100 | MCP HTTP listen port (for example API `8080` → MCP `8180`). |
 | `--mcp-port <int>` | (alias) | Deprecated alias for `--mcp-listen`. |
-| `--mcp-risk <list>` | `read,validate` | Comma-separated risk classes (`read`,`validate`,`execute`,`write`,`admin`) or `all`. Ceiling for every MCP client. |
+| `--mcp-risk <list>` | `""` (effective `read,validate`) | Comma-separated risk classes (`read`,`validate`,`execute`,`write`,`admin`) or `all`. Flag default is empty. Effective ceiling is read+validate unless you override it. |
 | `--mcp-aliases` | `false` | Also register `sentinel_*` tool names (canonical names only by default). |
 
 **MCP server:** When `--mcp` is set, MCP clients attach through streamable HTTP at `http://<mcp-bind>:<mcp-listen>/`. Default risk profile is read+validate only. Pass `--mcp-risk all` for execute/write/admin tools. Canonical tool names only unless `--mcp-aliases` / `mcp.aliases`. `flow_run` waits for completion by default. Production mode requires the same auth as the harness API (Bearer token or Ed25519 signature). See **[MCP Agent Integration](/mcp-agent-integration)** for Cursor/Hermes setup, auth, resources, prompts, and the full tool list.
@@ -6969,7 +7083,7 @@ Press Ctrl+C to stop
 
 **Daemon mode:**
 
-When `--daemon` is set, the process forks into the background. The parent polls the child's health endpoint for up to 10s, then exits with a success/warning message. The PID file at `{SRE}/.sentinel/harness-{port}.pid` is used by `stop`, `restart`, `reload`, and `status` commands to locate the instance. If the PID file already exists and the process is dead, it is auto-cleaned. If the process is alive, the start command will fail unless `--force-reset` is specified.
+When `--daemon` is set, the process forks into the background. The parent polls the child's health endpoint for up to 30s, then exits with a success/warning message. The PID file at `{SRE}/.sentinel/harness-{port}.pid` is used by `stop`, `restart`, `reload`, and `status` commands to locate the instance. If the PID file already exists and the process is dead, it is auto-cleaned. If the process is alive, the start command will fail unless `--force-reset` is specified.
 
 **Examples:**
 
@@ -6984,7 +7098,7 @@ When `--daemon` is set, the process forks into the background. The parent polls 
 ./sentinel harness start -p /home/user/my-project --compose-up all
 
 # Start wp-central with a dedicated WordPress ingress port
-./sentinel harness start -p /home/user/my-central --compose-up wp-central --wp-port 8800
+./sentinel harness start -p /home/user/my-central --wp-central --compose-up wp-central --wp-port 8800
 
 # Start with cache clearing and debug logging
 ./sentinel harness start -p /home/user/my-project --drop-web-cache --debug
@@ -7142,12 +7256,12 @@ Show all running Sentinel services (harness, dashboard, wp-proxy) in a unified t
 ./sentinel ps
 ```
 
-#### doctor
+#### sre doctor
 
 Run pre-flight diagnostics: configuration validation, kit checks, database accessibility, port availability, and running instance health.
 
 ```bash
-./sentinel doctor
+./sentinel sre doctor
 ```
 
 #### ccms (collection CMS)
@@ -7204,7 +7318,7 @@ Start the web dashboard server.
 | `--sre-location <path>` | (none) | Optional local SRE path for dashboard features that need filesystem access. |
 | `--port <int>` | `9090` | HTTP port for the dashboard web server. |
 | `--harness <host:port>` | (none) | Explicit harness address. Overrides the positional argument if both are provided. |
-| `--daemon` | `false` | Run the dashboard in the background. PID is written to `~/.sentinel/dashboard.pid`. |
+| `--daemon` | `false` | Run the dashboard in the background. PID is written to `~/.sentinel/dashboard-{port}.pid` (for example `dashboard-9090.pid`). The dashboard binds loopback only (`127.0.0.1`). |
 
 **Discovery behavior:**
 
@@ -7240,6 +7354,24 @@ Display the dashboard status. The output includes whether it runs, its listen po
 
 ```bash
 ./sentinel dashboard status
+```
+
+#### dashboard restart
+
+Stop the dashboard and start a fresh process (new PID) on the same port.
+
+```bash
+./sentinel dashboard restart [--port <int>]
+```
+
+PID file: `~/.sentinel/dashboard-{port}.pid`.
+
+#### dashboard reload
+
+Send SIGUSR1 to the dashboard. It re-reads configuration and reconnects to the harness without a new PID.
+
+```bash
+./sentinel dashboard reload [--port <int>]
 ```
 
 #### dashboard attach
@@ -7393,15 +7525,10 @@ If the harness is offline, lists all kits with "unknown" status.
 List all kits discovered in the project directory. The harness scans the project root for directories matching the `{namespace}.{name}` pattern that contain a `kit.yaml` manifest file.
 
 ```bash
-./sentinel sre kit list [flags]
+./sentinel sre kit list
 ```
 
-**Flags:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--json` | `false` | Output the list as JSON instead of a formatted table. |
-| `--filter <prefix>` | (none) | Filter kits by namespace prefix. Example: `--filter sn` shows only kits in the `sn` namespace. |
+`--json` is a global flag. `kit list` has no `--filter` flag.
 
 **Example output:**
 
@@ -7526,10 +7653,10 @@ Flows are the core executable units in Sentinel -- Lua scripts that perform busi
 
 #### flow run
 
-Execute a flow manually. This is an alias for the top-level `sentinel run` command, placed under `flow` for discoverability.
+Execute a flow manually. This is an alias for the top-level `sentinel run` command, placed under `sre flow` for discoverability.
 
 ```bash
-./sentinel flow run <flow-id> [flags]
+./sentinel sre flow run <flow-id> [flags]
 ```
 
 | Flag | Description |
@@ -7542,8 +7669,8 @@ Execute a flow manually. This is an alias for the top-level `sentinel run` comma
 **Examples:**
 
 ```bash
-./sentinel flow run sn.core/assistant --param user=test
-./sentinel run sn.core/assistant --params-json '{"message":"hello"}'
+./sentinel sre flow run sn.core-agent/hello --param user=test
+./sentinel run sn.core-agent/hello --params-json '{"message":"hello"}'
 ```
 
 #### flow list
@@ -7551,7 +7678,7 @@ Execute a flow manually. This is an alias for the top-level `sentinel run` comma
 List all flows discovered within a specific kit. Flows are auto-discovered from the `fl/` directory inside each kit.
 
 ```bash
-./sentinel flow list --kit <kit-id>
+./sentinel sre flow list --kit <kit-id>
 ```
 
 **Example output:**
@@ -7575,8 +7702,8 @@ Related presets:
 
 ```bash
 ./sentinel sre flow new assistant --kit sn.my-kit --preset agent
-./sentinel connector new lookup --kit sn.my-kit --preset tool
-./sentinel module new knowledge --kit sn.my-kit --preset rag
+./sentinel sre connector new lookup --kit sn.my-kit --preset tool
+./sentinel sre module new knowledge --kit sn.my-kit --preset rag
 ```
 
 #### run
@@ -7591,7 +7718,7 @@ Execute a flow immediately. This triggers the flow's `main()` function and retur
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `flow-id` | Yes | The fully-qualified flow identifier in `{namespace}-{name}:{flow}` format. Example: `sn-core-agent:assistant`. |
+| `flow-id` | Yes | HTTP path is `/fl/{ns}.{name}/{flow}` (for example `/fl/sn.core-agent/hello`). CLI also accepts the colon form `sn-core-agent:hello`. |
 
 **Flags:**
 
@@ -7604,13 +7731,16 @@ Execute a flow immediately. This triggers the flow's `main()` function and retur
 
 ```bash
 # Run a flow synchronously
-./sentinel run sn-core-agent:assistant
+./sentinel run sn.core-agent/hello
 
 # Run with parameters
-./sentinel run sn-core-agent:assistant --params-json '{"message": "Hello, world!"}'
+./sentinel run sn.core-agent/hello --params-json '{"message": "Hello, world!"}'
 
 # Run asynchronously (returns execution ID)
-./sentinel run sn-core-agent:assistant --async
+./sentinel run sn.core-agent/hello --async
+
+# Colon form is also accepted
+./sentinel run sn-core-agent:hello
 ```
 
 ---
@@ -7624,7 +7754,7 @@ Sentinel includes a built-in encrypted vault for storing sensitive values like A
 List all secrets stored in the vault. By default, only metadata (name, creation date, last updated date) is shown -- values are not displayed.
 
 ```bash
-./sentinel secret ls [flags]
+./sentinel sre secret ls [flags]
 ```
 
 **Flags:**
@@ -7646,7 +7776,7 @@ github_token      2026-02-08T00:00:00Z     2026-02-08T00:00:00Z
 Create a new secret or update an existing one.
 
 ```bash
-./sentinel secret set <name> [value] [flags]
+./sentinel sre secret set <name> [value] [flags]
 ```
 
 **Arguments:**
@@ -7654,32 +7784,31 @@ Create a new secret or update an existing one.
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `name` | Yes | The secret name. Used to retrieve the value in Lua through `ctx.secret("name")`. |
-| `value` | No | The secret value. If omitted, the command enters interactive mode (prompting for the value with masked input) or reads from stdin with `--stdin`. |
+| `value` | No | The secret value. If omitted, the command prompts with masked input, or reads from stdin with `--stdin`. There is no `--interactive` flag. |
 
 **Flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--stdin` | `false` | Read the secret value from standard input. Useful for piping from files or other commands. |
-| `--interactive` | `false` | Prompt for the value with masked input (dots instead of characters). |
-| `--description <string>` | (none) | Optional description of the secret's purpose. |
-| `--tags <string>` | (none) | Comma-separated tags for organizing secrets (for example `prod,api,stripe`). |
+| `-d`, `--description <string>` | (none) | Optional description of the secret's purpose. |
+| `-t`, `--tags <string>` | (none) | Comma-separated tags for organizing secrets (for example `prod,api,stripe`). |
 
 **Examples:**
 
 ```bash
 # Set directly (value visible in process listing -- avoid in production)
-./sentinel secret set slack_token xoxb-1234567890
+./sentinel sre secret set slack_token xoxb-1234567890
 
-# Interactive mode (value is masked)
-./sentinel secret set api_key --interactive
+# Prompted mode (value is masked when the value argument is omitted)
+./sentinel sre secret set api_key
 # Enter value for api_key: ••••••••••••••
 
 # From file
-./sentinel secret set api_key --stdin < /path/to/secret.txt
+./sentinel sre secret set api_key --stdin < /path/to/secret.txt
 
 # With metadata
-./sentinel secret set stripe_key --description "Stripe live API key" --tags "prod,payments"
+./sentinel sre secret set stripe_key -d "Stripe live API key" -t "prod,payments"
 ```
 
 #### secret rm
@@ -7687,7 +7816,7 @@ Create a new secret or update an existing one.
 Delete a secret from the vault.
 
 ```bash
-./sentinel secret rm <name> [flags]
+./sentinel sre secret rm <name> [flags]
 ```
 
 **Flags:**
@@ -7700,10 +7829,10 @@ Delete a secret from the vault.
 
 ```bash
 # With confirmation prompt
-./sentinel secret rm slack_token
+./sentinel sre secret rm slack_token
 
 # Skip confirmation (for scripts)
-./sentinel secret rm slack_token --yes
+./sentinel sre secret rm slack_token --yes
 ```
 
 ---
@@ -7839,6 +7968,19 @@ Shows a summary of total plans, enabled plans, running jobs, and recent failures
 - `sentinel db backup` is kit-scoped SQLite backup tooling.
 - `sentinel backup` is the harness-managed subsystem for scheduled PostgreSQL and folder backups.
 
+#### sre storage
+
+Export and import storage-point registrations and credentials.
+
+```bash
+./sentinel sre storage export [output-file]
+./sentinel sre storage export --id <id>
+./sentinel sre storage export --stub <stub>
+./sentinel sre storage import <json-file>
+```
+
+`--id` and `--stub` are mutually exclusive on export. Export writes secrets into the JSON bundle. Restrict the file permissions.
+
 ---
 
 ### Testing Commands
@@ -7946,7 +8088,7 @@ Authenticate with the SKM using the OAuth 2.0 Device Code Flow. This is the same
 2. A verification URL and a user code are displayed.
 3. Your default browser opens to the verification URL automatically.
 4. You enter the code in the browser and approve the authorization.
-5. The CLI polls for completion and stores the resulting tokens at `~/.sentinel/auth.json`.
+5. The CLI polls for completion and stores the resulting tokens at `{SRE}/.sentinel/auth.json` (project-scoped, not `~/.sentinel/auth.json`).
 
 **Example output:**
 
@@ -7959,7 +8101,7 @@ Login successful!
 
 #### logout
 
-Remove stored marketplace authentication tokens from `~/.sentinel/auth.json`.
+Remove stored marketplace authentication tokens from `{SRE}/.sentinel/auth.json`.
 
 ```bash
 ./sentinel logout
@@ -7977,8 +8119,20 @@ The command parses and verifies the Ed25519 signature on the key, then stores it
 
 **License key formats:**
 
-- `sk_free_...` -- Community tier (free).
+- `sk_ce_...` -- Community Edition.
+- `sk_free_...` -- Legacy community / CE prefix.
 - `sk_ent_...` -- Enterprise tier.
+
+#### register
+
+Occupy this harness with Sentinel HQ (`license.ndx.au`). Community Edition and Enterprise both occupy. Requires prior `sentinel login`. This is the occupy path.
+
+```bash
+./sentinel register
+./sentinel register --migrate
+```
+
+Online registration can be disabled with `marketplace.registration_enabled=false` in `.sentinel/config.json`.
 
 **Example output:**
 
@@ -8008,19 +8162,33 @@ Remove the stored license key from the configuration. This does not revoke the l
 
 ---
 
+### Approvals
+
+Issue or revoke local exact-action approvals. Requires local operator access (not `--host` remote mode) and an initialized harness `state.db`.
+
+```bash
+./sentinel approvals runtime
+./sentinel approvals grant --actor <actor> --flow <sre-relative.lua> --execution <id> --action-file <file>
+./sentinel approvals revoke <approval-id>
+```
+
+`grant` requires `--actor`, `--flow` (canonical SRE-relative Lua source path), `--execution`, and `--action-file`. `--ttl` defaults to 2 minutes (maximum 10 minutes).
+
+---
+
 ### Configuration Commands
 
-Read and write `.sentinel/config.json` (per-machine infrastructure configuration).
+Read and write `.sentinel/config.json` (per-machine infrastructure configuration). These commands live under `sentinel sre`.
 
 #### config get
 
 Retrieve a configuration value by its dot-notation key path.
 
 ```bash
-./sentinel config get <key>
-./sentinel config get api.port        # prints: 8080
-./sentinel config get log.level       # prints: info
-./sentinel config get tls --json      # prints: {"enabled": false, ...}
+./sentinel sre config get <key>
+./sentinel sre config get api.port        # prints: 8080
+./sentinel sre config get log.level       # prints: info
+./sentinel sre config get tls --json      # prints: {"enabled": false, ...}
 ```
 
 #### config set
@@ -8028,15 +8196,15 @@ Retrieve a configuration value by its dot-notation key path.
 Set a configuration value. Auto-coerces the value to int, bool, or string. Validates the resulting configuration after write.
 
 ```bash
-./sentinel config set <key> <value>
+./sentinel sre config set <key> <value>
 ```
 
 **Examples:**
 
 ```bash
-./sentinel config set api.port 9000
-./sentinel config set log.level debug
-./sentinel config set tls.enabled true
+./sentinel sre config set api.port 9000
+./sentinel sre config set log.level debug
+./sentinel sre config set tls.enabled true
 ```
 
 #### config list
@@ -8044,7 +8212,7 @@ Set a configuration value. Auto-coerces the value to int, bool, or string. Valid
 Show the full configuration as formatted JSON.
 
 ```bash
-./sentinel config list
+./sentinel sre config list
 ```
 
 #### config path
@@ -8052,7 +8220,7 @@ Show the full configuration as formatted JSON.
 Print the resolved path to `.sentinel/config.json`.
 
 ```bash
-./sentinel config path
+./sentinel sre config path
 ```
 
 ---
@@ -8183,7 +8351,7 @@ Display help information for any command. Every command and subcommand supports 
 
 #### version
 
-Display the Sentinel version string and build information.
+Display the Sentinel version string. The unreleased development value is `v0.1.1-dev`. Output is `sentinel version %s` only.
 
 ```bash
 ./sentinel version
@@ -8249,17 +8417,17 @@ This walkthrough covers creating a new project, adding a kit with a flow, and ru
 # Step 1: Build the binary (if not already done)
 go build -tags dev -o sentinel ./cmd/sentinel
 
-# Step 2: Initialize a new project
+# Step 2: Initialize a new project (no starter kits unless you pass --starter-kits)
 ./sentinel sre init my-project
 # Follow the interactive prompts or use --no-input for defaults
 
-# Step 3: Start the harness and dashboard together
+# Step 3: Start the harness (dashboard is a separate process)
 ./sentinel harness start -p my-project
-# Harness: http://localhost:8080
-# Dashboard: http://localhost:9090
+# Harness: http://localhost:8080 (listens on all interfaces; firewall it)
+# Dashboard (loopback only): ./sentinel dashboard start --port 9090
 
 # Step 4: Open the dashboard in your browser
-# Navigate to http://localhost:9090 to see the UI
+# Navigate to http://127.0.0.1:9090 to see the UI (loopback only)
 
 # Step 5: Create a new kit
 ./sentinel sre kit new acme.hello --desc "Hello world example" -p my-project
@@ -8270,6 +8438,7 @@ go build -tags dev -o sentinel ./cmd/sentinel
 # Step 7: The harness hot-reloads automatically when files change.
 # Run the flow:
 ./sentinel run acme.hello/greet -p my-project
+# HTTP equivalent: POST /fl/acme.hello/greet/run
 ```
 
 #### Adding and Using Secrets
@@ -8277,12 +8446,12 @@ go build -tags dev -o sentinel ./cmd/sentinel
 Secrets allow your flows to access sensitive values like API keys without hardcoding them.
 
 ```bash
-# Step 1: Set a secret (interactive mode for safety)
-./sentinel secret set stripe_api_key --interactive -p my-project
+# Step 1: Set a secret (omit the value to prompt with masked input)
+./sentinel sre secret set stripe_api_key -p my-project
 # Enter value for stripe_api_key: ••••••••••••••
 
 # Step 2: Verify the secret was stored
-./sentinel secret ls -p my-project
+./sentinel sre secret ls -p my-project
 
 # Step 3: Use in a Lua flow
 # In your .lua file:
@@ -8371,8 +8540,8 @@ curl -H "Authorization: Bearer <your-token>" https://localhost:8443/hl
 | `project not found` | The `-p` path does not point to a valid SRE directory. | Make sure that the directory exists and contains `sentinel.yaml`. |
 | `vault locked` | The vault is encrypted but `SENTINEL_VAULT_PASSPHRASE` is not set. | Set the environment variable before starting the harness. |
 | `port already in use` | Another process is listening on the requested port. | Use a different `--port` value, or use `--force-reset` to kill the conflicting Sentinel process. |
-| `invalid flow ID` | The flow identifier does not match `{namespace}-{name}:{flow}` format. | Use the correct format, for example `acme-billing:process-payment`. |
-| `secret not found` | The requested secret does not exist in the vault. | Create it with `sentinel secret set`. |
+| `invalid flow ID` | The flow identifier does not match `{ns}.{name}/{flow}` or `{ns}-{name}:{flow}`. | Use the HTTP form `/fl/acme.billing/process-payment` or the colon form `acme-billing:process-payment`. |
+| `secret not found` | The requested secret does not exist in the vault. | Create it with `sentinel sre secret set`. |
 | `flow timeout` | The flow's `main()` function exceeded the execution timeout. | Increase `lua.execution_timeout` in `.sentinel/config.json` (default: 30 seconds). |
 | `debug mode is disabled in production builds` | A release build has `api.debug_mode: true` in config. | Set `api.debug_mode` to `false` and configure `api.tokens` with at least one authentication token. |
 | `api.tokens cannot be empty in production mode` | `api.debug_mode` is `false` but no tokens are configured. | Add at least one token to `api.tokens` in `.sentinel/config.json`, or set `api.debug_mode` to `true` for development. |
@@ -8452,6 +8621,13 @@ description: My Sentinel automation project
 # Optional. A brief description of what this project does.
 # Displayed in the dashboard overview and health endpoint.
 
+public_url: https://harness.example.com
+# Optional. Browser-facing harness origin. Used by the dashboard for kit
+# catalog images and kit UI launch links.
+
+default_kit: sn.docs
+# Optional. Kit that owns GET /* page routes when keyhole is blocked.
+
 # ── Editor Extensions ───────────────────────────────────────────────
 # Maps file extensions to syntax highlighting modes for editors and IDEs.
 # This is advisory metadata used by tools that integrate with Sentinel.
@@ -8499,11 +8675,37 @@ git:
 hotreload:
   yaml: full
   # How YAML file changes (kit.yaml, form definitions, page definitions)
-  # are handled. Options:
+  # are handled. This is an object, not `hotreload: true`. Options:
   #   full - Reload everything: re-parse manifests, re-register forms,
   #          re-discover pages, rebuild navigation (may briefly interrupt)
   #   safe - Only reload files that can be safely updated without
   #          affecting running executions (conservative approach)
+
+# ── Request limits ──────────────────────────────────────────────────
+# Optional webhook and manual trigger body/file limits
+# (max_body_size, max_file_size, max_file_count).
+# Omit the block to use parser defaults. There is no
+# limits.rate_limit_rps or limits.max_concurrent_flows field.
+
+# ── WordPress / content-plane profiles ──────────────────────────────
+# Present when the SRE uses those profiles. Omit otherwise.
+
+wp_central:
+  enabled: false
+  port: 8800
+  # Dedicated WordPress ingress port (default 8800).
+
+wp_preview:
+  enabled: false
+
+wp_edge:
+  enabled: false
+
+data_plane:
+  enabled: false
+  graphile_port: 1880
+  # Graphile/ccms host port (default 1880), separate from harness 8080
+  # and wpcms ingress.
 ```
 
 #### What Does NOT Belong in sentinel.yaml
@@ -8628,8 +8830,29 @@ The following is the complete configuration schema with every field documented, 
     "url": "https://kits.ndx.au",
     "license_url": "https://license.ndx.au",
     "license_key": "",
+    "registration_enabled": true,
     "telemetry_enabled": true,
     "next_check": ""
+  },
+  "smtp": {
+    "enabled": false,
+    "host": "",
+    "port": 0,
+    "username": "",
+    "password": "",
+    "from": "",
+    "to": [],
+    "license_notices": false
+  },
+  "ip_filters": {
+    "rules": []
+  },
+  "mcp": {
+    "risk_classes": [],
+    "disabled": [],
+    "max_log_chars": 0,
+    "aliases": false,
+    "clients": []
   }
 }
 ```
@@ -8700,7 +8923,7 @@ Controls the Lua virtual machine pool that executes flows.
 |-------|------|---------|-------------|
 | `lua.pool_size` | int | `10` | Maximum number of Lua VM instances (LStates) in the pool. Each concurrent flow execution requires one VM instance. If all instances are in use, new execution requests queue until one becomes available. Increase this for projects with many concurrent flows. Minimum: 1. |
 | `lua.registry_size` | int | `256` | Initial registry size for new Lua VM instances. The registry is where Lua stores references to tables, functions, and userdata. Larger values use more memory per VM. They can improve performance for flows with many Lua objects. Minimum: 1. |
-| `lua.execution_timeout` | int | `30` | Default execution timeout in seconds. If a flow's `main()` function does not return within this time, the execution is terminated and the `failed(err)` callback is invoked. Individual flows can override this. Minimum: 1. |
+| `lua.execution_timeout` | int | `30` | Default execution timeout in seconds. If a flow's `main()` function does not return within this time, the execution is terminated and the `failed(err)` callback is invoked. There is no `flows.overrides.timeout_ms` in `sentinel.yaml`. Minimum: 1. |
 
 ##### ws -- WebSocket Bus
 
@@ -8743,9 +8966,37 @@ Controls integration with the Sentinel Kit Marketplace (SKM) for installing, upd
 |-------|------|---------|-------------|
 | `marketplace.url` | string | `"https://kits.ndx.au"` | Kit catalog / device login (SKM). |
 | `marketplace.license_url` | string | `"https://license.ndx.au"` | Occupy/register HQ ([ndxHQ](https://github.com/ndx-au/ndxHQ)). |
-| `marketplace.license_key` | string | `""` | Activated license key (for example `sk_free_...` or `sk_ent_...`). Set automatically by `sentinel license activate`. Can also be set through `SENTINEL_LICENSE_KEY` environment variable. |
-| `marketplace.telemetry_enabled` | bool | `true` | Allow sending anonymized system information (OS, architecture, Sentinel version) with phone-home requests. No project data or secrets are ever included. |
-| `marketplace.next_check` | string | `""` | ISO 8601 timestamp for an optional check-in schedule. Occupy uses an in-memory heartbeat and does not write this field. |
+| `marketplace.license_key` | string | `""` | Activated license key (`sk_ce_...`, `sk_free_...`, or `sk_ent_...`). Set automatically by `sentinel license activate`. Can also be set through `SENTINEL_LICENSE_KEY` environment variable. |
+| `marketplace.registration_enabled` | bool | `true` | Allow `sentinel register` occupy against license HQ. |
+| `marketplace.telemetry_enabled` | bool | `true` | Allow sending anonymized system information (OS, architecture, Sentinel version) with occupy requests. No project data or secrets are ever included. |
+| `marketplace.next_check` | string | `""` | ISO 8601 timestamp for an optional check-in schedule. Occupy uses an in-memory heartbeat (~15s retry) and does not write this field. |
+
+##### smtp -- Native harness mailer
+
+Harness mailer for license and ops notices. This is not Lua `sn.cn.smtp`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `smtp.enabled` | bool | `false` | Enable the native harness mailer. |
+| `smtp.host` | string | `""` | SMTP host. |
+| `smtp.port` | int | `0` | SMTP port. |
+| `smtp.username` | string | `""` | SMTP username. |
+| `smtp.password` | string | `""` | SMTP password. Prefer environment or vault over the file. |
+| `smtp.from` | string | `""` | From address. |
+| `smtp.to` | string[] | `[]` | Recipient list. |
+| `smtp.license_notices` | bool | `false` | Send license/occupy notices through this mailer. |
+
+##### mcp -- Harness MCP sidecar
+
+Used when `sentinel harness start --mcp` is set. Empty `risk_classes` means the CLI default (`read,validate`) unless `--mcp-risk` overrides it.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mcp.risk_classes` | string[] | `[]` | Ceiling risk classes: `read`, `validate`, `execute`, `write`, `admin`. |
+| `mcp.disabled` | string[] | `[]` | Tool names to skip even when their risk class is enabled. |
+| `mcp.max_log_chars` | int | `0` | Cap on text payloads from logs/diffs/source reads (`0` = MCP default). |
+| `mcp.aliases` | bool | `false` | Also register `sentinel_*` tool names. |
+| `mcp.clients` | object[] | `[]` | Per-identity overlays (`name`, `match`, `risk_classes`, allow/deny lists). |
 
 ---
 
@@ -8775,17 +9026,17 @@ Allowlisted mappings:
 | `SENTINEL_STATE_PASSPHRASE` | `state.state_passphrase` | `another_passphrase_32_chars_min` |
 | `SENTINEL_DATA_DIR` | `data_dir` | `.sentinel` |
 | `SENTINEL_PORT` | `api.port` | `9000` |
-| `SENTINEL_DEBUG` | (flag override) | `1` |
 | `SENTINEL_LOG_LEVEL` | `log.level` | `debug` |
 | `SENTINEL_LOG_FORMAT` | `log.format` | `json` |
 | `SENTINEL_MARKETPLACE_URL` | `marketplace.url` | `https://custom-marketplace.example.com` |
-| `SENTINEL_LICENSE_KEY` | `marketplace.license_key` | `sk_free_abc123...` |
+| `SENTINEL_LICENSE_URL` | `marketplace.license_url` | `https://license.ndx.au` |
+| `SENTINEL_LICENSE_KEY` | `marketplace.license_key` | `sk_ce_abc123...` |
 | `HARNESS_URL` | (CLI `--host` default, with `SENTINEL_HOST`) | `http://127.0.0.1:8080` |
 | `SENTINEL_HOST` | (CLI `--host` default) | `http://prod-harness:8080` |
 | `SENTINEL_API_KEY` | (CLI `--token` default) | `token_abc123...` |
 | `SENTINEL_API_TOKEN` | (CLI `--token` alias) | same as API key |
 
-**Not loaded into harness configuration:** `SENTINEL_API`, `HARNESS_URL`, `SENTINEL_API_KEY`, `SENTINEL_API_TOKEN`, and any other non-allowlisted `SENTINEL_*` vars.
+**Not loaded into harness configuration:** `SENTINEL_API`, `HARNESS_URL`, `SENTINEL_HOST`, `SENTINEL_API_KEY`, `SENTINEL_API_TOKEN`, `SENTINEL_DEBUG`, and any other non-allowlisted `SENTINEL_*` vars. There is no `SENTINEL_PROJECT_DIR` or `SENTINEL_SRE_LOCATION`.
 
 **Blocked (startup error):** `SENTINEL_API`
 
@@ -9124,16 +9375,17 @@ The Sentinel Kit Marketplace (SKM) is the distribution platform for published ki
 **Initial setup:**
 
 1. Authenticate: `sentinel login`.
-2. Activate a license: `sentinel license activate sk_free_<key>`.
-3. Install kits: `sentinel sre kit install <kit-id>`.
+2. Activate a license: `sentinel license activate sk_ce_<key>` (also `sk_free_` / `sk_ent_`).
+3. Occupy: `sentinel register`.
+4. Install kits: `sentinel sre kit install <kit-id>`.
 
 **Telemetry:**
 
-When `telemetry_enabled` is `true`, the harness includes basic system information (OS, architecture, Sentinel version, kit count) with phone-home verification requests. No project data, secrets, flow content, or personally identifiable information is ever sent. Set to `false` to disable.
+When `telemetry_enabled` is `true`, the harness includes basic system information (OS, architecture, Sentinel version, kit count) with occupy requests. No project data, secrets, flow content, or personally identifiable information is ever sent. Set to `false` to disable.
 
-**Optional check-in:**
+**Occupy:**
 
-Occupy heartbeats stay in memory (~60s). `marketplace.next_check` is reserved for a real optional check-in schedule and is not written by occupy. Leave it empty unless you are configuring optional check-in separately.
+There is no 7-day phone-home or 48-hour grace window. Occupy retries about every 15 seconds. Production executions are gated by a live occupy lease. `sentinel register` is the occupy path. `marketplace.next_check` is reserved for an optional check-in schedule and is not written by occupy.
 
 **Private marketplace:**
 
@@ -9341,7 +9593,7 @@ curl --cacert .sentinel/certs/ca.crt \
 # 5. Verify auth rejection
 curl -H "Authorization: Bearer invalid_token" \
   https://localhost:8443/hl
-# Should return: {"ok":false,"err":"UNAUTHORIZED","msg":"..."}
+# Returns: {"ok":false,"err":"AUTH.REQUIRED","msg":"..."}
 ```
 
 #### Post-Deployment
@@ -9419,7 +9671,7 @@ If the harness takes a long time to start, investigate with debug logging:
 Common causes:
 - Many kits with large CMS content directories (many .md files to parse).
 - Database migrations running on first start after an upgrade.
-- Network connectivity issues when phone-home is enabled.
+- Network connectivity issues when occupy cannot reach license HQ.
 - Large flow files that take time to parse and register.
 
 ---
@@ -9461,25 +9713,26 @@ The kit philosophy is built on three principles:
 
 Every Sentinel project is ultimately a collection of kits. Even a project with a single automation flow has that flow inside a kit. The harness discovers kits automatically at startup by scanning the project root for directories that match the naming pattern and contain a `kit.yaml` manifest.
 
-Starter content for `sentinel sre init` provides working references. Core kits include `sn.core-agent`, `sn.core-rag`, `sn.tools-http`, and `sn.supervisor`. Examples include `sn.eg-support`, `sn.eg-itops`, and `sn.eg-rag-chat`. Legacy compatibility examples include `sn.example-support` and `sn.example-itops`.
+Starter content is opt-in. `sentinel sre init` installs no kits by default. Pass `--starter-kits` or `--with-bundle core` to pull kits from [ndx-au/sre-init](https://github.com/ndx-au/sre-init). The core bundle includes kits such as `sn.core-agent`. Example bundles add `sn.eg-support`, `sn.eg-itops`, and `sn.eg-rag-chat`.
 
 ---
 
 ### Kit Discovery
 
-When the harness starts, it scans the project root directory for kit directories. A directory is recognized as a kit if:
+When the harness starts, it scans the project root directory for kit directories. `DiscoverKits` recognizes a directory as a kit if:
 
-1. Its name follows the `{namespace}.{name}` pattern (for example `acme.billing`, `sn.core-agent`, `my.utils`).
+1. Its name **contains a `.`** (for example `acme.billing`, `sn.core-agent`, `my.utils`).
 2. It contains a `kit.yaml` file at its root.
 
-Both conditions must be met. A directory called `acme.billing` without a `kit.yaml` is ignored. A directory called `utilities` with a `kit.yaml` is also ignored because it does not match the naming pattern.
+Both conditions must be met. A directory called `acme.billing` without a `kit.yaml` is ignored. A directory called `utilities` with a `kit.yaml` is also ignored because the name has no `.`.
+
+Discovery does **not** enforce a charset beyond the required `.`. `sentinel sre kit new` (and other scaffold commands) use a **separate** charset: lowercase alphanumeric and `_` (scaffold names must start with a letter).
 
 **Naming rules:**
 
 - The **namespace** is a short identifier for the organization or author. Examples: `sn` (Sentinel built-in), `acme` (a company), `jd` (a developer's initials).
 - The **name** is a short identifier for the kit's purpose. Examples: `core`, `billing`, `diag`, `blog`.
-- Both parts must be lowercase alphanumeric. Hyphens are allowed within each part but not as the first or last character.
-- The dot (`.`) is the separator and must appear exactly once.
+- The dot (`.`) separates namespace from kit name. Discovery only requires that a `.` is present.
 
 **Discovery is flat**: Kits must be direct children of the project root. Nested kits (a kit inside another kit) are not supported. The harness does not recurse into subdirectories.
 
@@ -9548,12 +9801,12 @@ acme.billing/
 | Directory | Purpose | Content Types |
 |-----------|---------|---------------|
 | `fl/` | Flows | `.lua` files (auto-discovered, each becomes a runnable flow) |
-| `cn/` | Connectors | `.lua` files (registered in the `sn.cn.{ns}.{name}` namespace) |
-| `md/` | Modules | `.lua` files (registered in the `sn.md.*` namespace) |
-| `ct/` | CMS content | `.md` files (parsed and exposed through `sn.cms.*` and `/cm`) |
+| `cn/` | Connectors | `.lua` files loaded from flows with `require("cn/...")` |
+| `md/` | Modules | `.lua` files loaded from flows with `require("md/...")` |
+| `ct/` | CMS content | `.md` files (parsed and exposed through `sn.cms.*` and `/fcms`) |
 | `pg/` | Pages | `.yaml` files (page definitions referencing templates) |
 | `fm/` | Forms | `.yaml` files (form definitions with fields and events) |
-| `tp/` | Templates | `.gohtml` files (Go HTML templates for rendering pages) |
+| `tp/` | Templates | `.gohtml` files (Go HTML templates for rendering pages). **Not** trigger YAML — triggers live in Lua `triggers = {}` |
 | `pb/` | Public assets | Any file type (served publicly through HTTP) |
 | `dd/` | Data definitions / migrations | **ccms:** ordered `.sql` migrations (`sentinel ccms migrate`). Legacy kit SQLite helpers can still use `.yaml` schemas — do not confuse with ccms SQL migrations. |
 
@@ -9574,9 +9827,9 @@ This creates the directory with a `kit.yaml` and the standard subdirectories (`f
 For common workflows, use scaffold presets instead of starting from empty files:
 
 ```bash
-./sentinel sre flow new assistant --kit acme.billing --preset agent
-./sentinel connector new stripe_lookup --kit acme.billing --preset tool
-./sentinel module new knowledge --kit acme.billing --preset rag
+sentinel sre flow new assistant --kit acme.billing --preset agent
+sentinel sre connector new stripe_lookup --kit acme.billing --preset tool
+sentinel sre module new knowledge --kit acme.billing --preset rag
 ```
 
 #### Manual Creation
@@ -9739,9 +9992,8 @@ pages:
 
 forms:
   - name: payment
-    stub: billing-payment
-    # The stub is a unique identifier for this form, used in event names
-    # and form data access. Event: kf.{namespace}.{name}.{form-name}
+    # Omit stub to default to kf.{ns}.{name}.{filename} (here: kf.acme.billing.payment).
+    # Dots in the stub become nested tables on ctx.fm — e.g. ctx.fm.kf.acme.billing.payment.
 
     fields:
       - name: invoice_id
@@ -9762,17 +10014,27 @@ database:
   tables:
     - name: invoices
       columns:
-        - id TEXT PRIMARY KEY
-        - amount REAL
-        - status TEXT
-        - created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        - name: id
+          type: text
+          primary_key: true
+        - name: amount
+          type: real
+        - name: status
+          type: text
+        - name: created_at
+          type: datetime
 
     - name: payments
       columns:
-        - id TEXT PRIMARY KEY
-        - invoice_id TEXT
-        - amount REAL
-        - created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        - name: id
+          type: text
+          primary_key: true
+        - name: invoice_id
+          type: text
+        - name: amount
+          type: real
+        - name: created_at
+          type: datetime
 
   imports:
     - shared
@@ -9867,12 +10129,12 @@ Flows are the core business logic of a kit. Each `.lua` file in the `fl/` direct
 
 #### Flow Lifecycle
 
-Every flow follows a strict lifecycle with four callback functions:
+Every flow follows a strict lifecycle. Registration requires `setup`, `main`, and `cleanup`. `failed` and `timeout` are optional:
 
 ```lua
 function setup()
   -- Called before main(). Use for initialization, resource allocation,
-  -- or pre-flight checks. Optional.
+  -- or pre-flight checks. Required.
 end
 
 function main(params)
@@ -9885,16 +10147,19 @@ function main(params)
 end
 
 function cleanup()
-  -- Called after main() completes (whether success or failure).
+  -- Called last after main() (whether success or failure).
   -- Use for releasing resources, closing connections, or final logging.
-  -- Optional.
+  -- Required.
 end
 
 function failed(err)
-  -- Called when main() throws an error or exceeds the execution timeout.
+  -- Called when setup() or main() throws. Optional (auto no-op if omitted).
   -- The err parameter contains the error message.
   -- Use for error reporting, alerting, or rollback logic.
-  -- Optional.
+end
+
+function timeout()
+  -- Optional. Called when execution hits the deadline.
 end
 ```
 
@@ -9907,7 +10172,8 @@ end
 
 - The `main(params)` function receives a params table containing trigger data. More context is available through the `ctx` global.
 - There is no `flow = {}` metadata table. Flow metadata is auto-discovered from the file's triggers and the kit manifest.
-- The `ctx` global is available in all four functions.
+- The `ctx` global is available in `setup`, `main`, `cleanup`, `failed`, and `timeout`.
+- Snippets later in this guide may omit `setup()` / `cleanup()` for brevity. Registration still requires those three hooks.
 
 #### The ctx Global
 
@@ -9941,8 +10207,9 @@ function main(params)
   -- Access secrets from the vault
   local stripe_key = ctx.secret("stripe_api_key")
 
-  -- Make an HTTP request via a connector
-  local resp = sn.cn.acme.billing.exec({
+  -- Load a kit connector with require("cn/...")
+  local stripe = require("cn/stripe")
+  local resp = stripe.exec({
     method = "POST",
     path = "/charges",
     data = { amount = 1000, source = "tok_visa" }
@@ -9955,7 +10222,7 @@ function main(params)
   )
 
   -- Emit an event for other flows to react to
-  sn.event.emit("payment.completed", {
+  sentinel.emit("payment.completed", {
     invoice_id = invoice_id,
     amount = 1000
   })
@@ -10029,7 +10296,7 @@ function main(params)
 end
 ```
 
-Events are emitted from Lua flows through `sn.event.emit("event.name", data)`. A flow can listen for multiple events by declaring multiple `event()` entries in its triggers table.
+Events are emitted from Lua flows through `sentinel.emit("event.name", data)`. A flow can listen for multiple events by declaring multiple `event()` entries in its triggers table.
 
 **Form trigger** -- Execute when a form is submitted:
 
@@ -10039,16 +10306,15 @@ triggers = {
 }
 
 function main(params)
-  -- Form data is accessible via ctx.fm
-  -- The key is the form's stub name
-  local invoice_id = ctx.fm["billing-payment"].invoice_id
-  local amount = ctx.fm["billing-payment"].amount
+  -- Form data is nested on dots in the stub (default kf.{ns}.{name}.{filename})
+  local invoice_id = ctx.fm.kf.acme.billing.payment.invoice_id
+  local amount = ctx.fm.kf.acme.billing.payment.amount
 
   ctx.log("info", "Processing form submission for invoice " .. invoice_id)
 end
 ```
 
-Form submission events follow the pattern `kf.{namespace}.{name}.{form-name}`. The form data is stored in `ctx.fm` keyed by the form's `stub` value.
+Form submission events follow the pattern `kf.{namespace}.{name}.{filename}` when `stub` is omitted. Dots in the stub become nested tables on `ctx.fm` (for example `ctx.fm.kf.acme.billing.payment`).
 
 ---
 
@@ -10058,7 +10324,13 @@ Connectors are Lua scripts that encapsulate integration with an external service
 
 #### How Connectors Work
 
-When the harness loads a kit, it scans the `cn/` directory for `.lua` files. Each connector registers whichever public table/functions it chooses under `sn.cn.*`. For example, the shipped `sn.tools-http/cn/http_json.lua` connector registers `sn.cn.http_json`.
+When a flow runs, kit connectors in `cn/` are loaded with `require("cn/...")` relative to the kit directory. For example `require("cn/stripe")` loads `acme.billing/cn/stripe.lua`. Kit connectors are not auto-registered on `sn.cn` from the kit path.
+
+Built-in harness connectors live under `sn.cn.sn.*`:
+
+- `sn.cn.sn.http.exec`
+- `sn.cn.sn.smtp.exec`
+- `sn.cn.sn.file.exec`
 
 #### Example Connector
 
@@ -10095,12 +10367,13 @@ return connector
 
 #### Using Connectors in Flows
 
-Connectors are called through the `sn.cn` namespace:
+Kit connectors are called after `require("cn/...")`. Built-ins use `sn.cn.sn.*`:
 
 ```lua
 -- In a flow
 function main(params)
-  local resp = sn.cn.acme.billing.exec({
+  local stripe = require("cn/stripe")
+  local resp = stripe.exec({
     method = "POST",
     path = "/charges",
     data = { amount = 1000, currency = "usd", source = "tok_visa" }
@@ -10131,7 +10404,12 @@ Modules are reusable Lua code libraries that provide shared functionality across
 
 #### How Modules Work
 
-Modules in the `md/` directory are registered in the `sn.md.{namespace}.{name}` namespace. A module must return a table containing its public functions.
+Kit modules in `md/` are loaded with `require("md/...")` relative to the kit directory. For example `require("md/invoice")` loads `acme.billing/md/invoice.lua`. Kit modules are not auto-registered on `sn.md` from the kit path. A module must return a table containing its public functions.
+
+Built-in harness modules live under `sn.md.sn.*`:
+
+- `sn.md.sn.transform`
+- `sn.md.sn.validate`
 
 #### Example Module
 
@@ -10158,7 +10436,7 @@ function invoice_module.finalize(invoice_id)
     { "finalized", invoice_id }
   )
 
-  sn.event.emit("invoice.finalized", { invoice_id = invoice_id })
+  sentinel.emit("invoice.finalized", { invoice_id = invoice_id })
 end
 
 function invoice_module.get(invoice_id)
@@ -10173,12 +10451,12 @@ return invoice_module
 
 #### Using Modules in Flows
 
-Modules are accessed through the `sn.md` namespace:
+Kit modules are accessed after `require("md/...")`. Built-ins use `sn.md.sn.*`:
 
 ```lua
 -- In a flow
 function main(params)
-  local invoice = sn.md.acme.billing
+  local invoice = require("md/invoice")
 
   local inv_id = invoice.create(9999, "cust_123")
   invoice.finalize(inv_id)
@@ -10200,18 +10478,15 @@ Forms capture user input through a web interface and trigger flows when submitte
 name: Payment Form
 # Required. Human-readable name displayed at the top of the form.
 
-stub: billing-payment
-# Required. Unique identifier for this form. Used in:
-#   - Event name: kf.{namespace}.{name}.{form-name}
-#   - Form data access: ctx.fm["{stub}"]
-#   - URL path: /kt/{ns}/{name}/fm/{stub}
+# stub: omit to default to kf.{ns}.{name}.{filename} (payment.yaml → kf.acme.billing.payment).
+# Dots nest on ctx.fm: ctx.fm.kf.acme.billing.payment
+# Event name and URL path use that stub.
 
 description: Submit payment for an invoice
 # Optional. Explanatory text displayed below the form title.
 
-password: null
-# Optional. If set, the form requires this password before displaying.
-# Set to null or omit for no password protection.
+# password: "$2a$10$..."  # bcrypt hash only. Omit the field for no password.
+# Never store plaintext. Do not leave an empty password field.
 
 fields:
   - name: invoice_id
@@ -10316,10 +10591,10 @@ on_submit: confirmation.gohtml
 
 When a form is submitted, the harness automatically emits an event:
 
-- Event name pattern: `kf.{namespace}.{name}.{form-name}`.
-- Example: Submitting the `payment` form in `acme.billing` emits `kf.acme.billing.payment`.
+- Event name: the form stub. Empty stub becomes `kf.{namespace}.{name}.{filename}`.
+- Example: Submitting `fm/payment.yaml` in `acme.billing` emits `kf.acme.billing.payment`.
 
-Any flow that listens for this event is triggered with the form data available in `ctx.fm`:
+Any flow that listens for this event is triggered with the form data nested on `ctx.fm`:
 
 ```lua
 triggers = {
@@ -10327,7 +10602,7 @@ triggers = {
 }
 
 function main(params)
-  local data = ctx.fm["billing-payment"]  -- Keyed by the form's stub
+  local data = ctx.fm.kf.acme.billing.payment
   local invoice_id = data.invoice_id
   local amount = data.amount
   local email = data.email
@@ -10459,46 +10734,47 @@ Define your database schema in `dd/schema.yaml`. The harness creates tables on s
 
 ```yaml
 tables:
-  invoices:
-    id:
-      type: TEXT PRIMARY KEY
-    customer_id:
-      type: TEXT
-    amount:
-      type: REAL
-    status:
-      type: TEXT DEFAULT 'draft'
-    created_at:
-      type: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    updated_at:
-      type: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  - name: invoices
+    columns:
+      - name: id
+        type: text
+        primary_key: true
+      - name: customer_id
+        type: text
+      - name: amount
+        type: real
+      - name: status
+        type: text
+        default: draft
+      - name: created_at
+        type: datetime
+      - name: updated_at
+        type: datetime
+    indexes:
+      - [customer_id]
 
-  payments:
-    id:
-      type: TEXT PRIMARY KEY
-    invoice_id:
-      type: TEXT
-    amount:
-      type: REAL
-    status:
-      type: TEXT
-    created_at:
-      type: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-
-  indexes:
-    - name: idx_invoices_customer
-      table: invoices
-      columns: [customer_id]
-    - name: idx_payments_invoice
-      table: payments
-      columns: [invoice_id]
+  - name: payments
+    columns:
+      - name: id
+        type: text
+        primary_key: true
+      - name: invoice_id
+        type: text
+      - name: amount
+        type: real
+      - name: status
+        type: text
+      - name: created_at
+        type: datetime
+    indexes:
+      - [invoice_id]
 ```
 
 #### Database Access in Lua
 
 ```lua
 -- Create tables (alternative to dd/schema.yaml)
-sn.db.exec("CREATE TABLE IF NOT EXISTS invoices (id TEXT PRIMARY KEY, amount REAL, status TEXT)")
+sn.db.exec("CREATE TABLE IF NOT EXISTS invoices (id TEXT, amount REAL, status TEXT)")
 
 -- Insert
 sn.db.exec(
@@ -10543,7 +10819,7 @@ end)
 
 #### Schema Design Patterns
 
-**Use TEXT for IDs**: SQLite is typeless internally, but TEXT PRIMARY KEY with generated IDs (for example `inv_` prefix + random bytes) provides human-readable, unique identifiers.
+**Use `text` for IDs**: In `kit.yaml` / `dd/` column types, use `type: text` with `primary_key: true`. Generated IDs (for example `inv_` prefix + random bytes) provide human-readable, unique identifiers. Valid types include `text`, `integer`, `real`, `datetime`, `json`, `uuid`, `boolean`, and `blob`.
 
 **Use TIMESTAMP DEFAULT CURRENT_TIMESTAMP**: For audit trails and chronological queries.
 
@@ -10599,7 +10875,7 @@ Assets are served with appropriate Content-Type headers based on file extension.
 
 Place branding files under `{namespace}.{name}/pb/` using **fixed basenames**. The harness picks the first existing extension per slot: **`.svg` → `.png` → `.jpg`**. No manifest or dashboard configuration entry is required — drop files on disk and reload the kit/SRE.
 
-Authoritative dimensions and basenames: `system-specs/kits.yaml` → `branding.images`.
+Authoritative dimensions and basenames live in the harness repo (`github.com/ndx-au/sentinel`, `system-specs/kits.yaml` → `branding.images`), not in this docs tree.
 
 The harness does **not** validate pixel size. The dashboard (`/kits`, `/kitview`) uses `object-fit: fill` in fixed aspect slots. Wrong dimensions look **warped** on purpose.
 
@@ -10644,7 +10920,7 @@ For kits with a web UI (`pg/`), `kit.yaml` `branding.favicon` points at **`/pb/f
 
 ##### Optional design spec
 
-`dc/DESIGN.md` (see `branding.design-spec` in `system-specs/kits.yaml`) can document colors, typography, and art direction for humans and agents authoring kit assets.
+`dc/DESIGN.md` (see `branding.design-spec` in the harness `system-specs/kits.yaml`) can document colors, typography, and art direction for humans and agents authoring kit assets.
 
 ---
 
@@ -10726,7 +11002,7 @@ Content starts here in Markdown format...
 | `date` | string | No | Publication date in RFC3339 or YYYY-MM-DD format. |
 | `description` | string | No | Short summary for listings and SEO. |
 | `tags` | string[] | No | Tag list for categorization and filtering. |
-| `agent_context` | object | No | AI agent metadata. **Never exposed through the REST API.** Available to Lua flows through `sn.cms.get()` but stripped from `/cm/*` API responses. Use for AI-specific context like tone instructions, content briefs, or editorial notes. |
+| `agent_context` | object | No | AI agent metadata. **Never exposed through the REST API.** Available to Lua flows through `sn.cms.get()` but stripped from `/fcms/*` API responses. Use for AI-specific context like tone instructions, content briefs, or editorial notes. |
 | *(other fields)* | any | No | Any unknown fields are stored in a `meta{}` map. |
 
 #### cms_full_html Flag
@@ -10787,8 +11063,9 @@ end
 
 Content is also available through HTTP:
 
-- `GET /cm` -- List all slugs across all CMS kits.
-- `GET /cm/{kitName}/{slug}` -- Get parsed content for a specific slug (agent_context is stripped).
+- `GET /fcms` -- List all slugs across all CMS kits.
+- `GET /fcms/{ns}/{name}/{slug}` -- Get parsed content for a specific slug (agent_context is stripped).
+- Writes: `POST` / `PUT` `/fcms/{ns}/{name}/...` (Lua `sn.cms` is get+list only).
 
 #### Complete CMS Template Example
 
@@ -11075,7 +11352,7 @@ If your kit needs to expose functionality through multiple interfaces (CLI, REST
 
 ### Best Practices Summary
 
-1. **Name kits consistently**: Always use `{namespace}.{name}` pattern with lowercase alphanumeric characters.
+1. **Name kits consistently**: Discovery needs a `.` in the directory name plus `kit.yaml`. Scaffold charset is lowercase alphanumeric and `_`.
 2. **Document everything with skill twins**: Keep an up-to-date `.md` skill twin for each code file.
 3. **Version semantically**: Follow semver in `kit.yaml` and bump versions on every meaningful change.
 4. **Isolate databases**: Use kit-scoped databases. Import explicitly when cross-kit access is needed.
@@ -11098,7 +11375,7 @@ This guide gives patterns for Sentinel automation. The examples cover external s
 
 The guide groups patterns by category. Each pattern explains its purpose and includes code examples. A flow can combine webhooks, retries with exponential backoff, and structured logs.
 
-All code examples use the current Sentinel Lua flow style with `function setup()`, `function main(params)`, `function cleanup()`, and `function failed(err)` as top-level functions. All trigger types pass data to `main(params)` as a Lua table argument. The `ctx` global is available for logging, secrets, and form data, but `ctx.get()` and `ctx.set()` are stubs (always return nil / do nothing). Use `params.*` or local variables instead.
+All code examples use the current Sentinel Lua flow style with a top-level `triggers = {}` table. `webhook()`, `cron()`, and `event()` **only** work in that table — not inside `setup()`. Registration requires `setup()`, `main()`, and `cleanup()`. Pattern snippets below often show only `main()` for brevity. All trigger types pass data to `main(params)` as a Lua table argument. The `ctx` global is available for logging, secrets, and form data, but `ctx.get()` and `ctx.set()` are stubs (always return nil / do nothing). Use `params.*` or local variables instead. Cron expressions are **5-field** (`Minute Hour Dom Month Dow`) or `@every` / descriptors — not 6-field seconds.
 
 ---
 
@@ -11117,18 +11394,15 @@ Webhook services retry failed deliveries. Signature verification protects agains
 **How it works:** The external service hashes the request body with a shared secret, typically with SHA-256. It sends the hash in a request header. Sentinel can test the signature before the flow runs. Requests with missing or invalid signatures are rejected.
 
 ```lua
-function setup()
-  -- Register a webhook trigger with HMAC authentication.
-  -- The 'key' parameter references a secret stored in the Sentinel vault.
-  -- The 'sig_hdr' parameter tells Sentinel which HTTP header contains the signature.
-  -- The 'alg' parameter specifies the HMAC algorithm to use for verification.
+triggers = {
+  -- HMAC webhook. `key` is a vault secret name. `sig_hdr` is the signature header.
   webhook("/stripe", {
     auth = "hmac",
     key = "stripe_webhook_secret",
     alg = "sha256",
     sig_hdr = "Stripe-Signature"
   })
-end
+}
 
 function main(params)
   -- By the time main() runs, signature verification has already succeeded.
@@ -11162,13 +11436,13 @@ end
 **When to use:** Use this pattern for Telegram Bot API `setWebhook` (`X-Telegram-Bot-Api-Secret-Token`). It also supports providers with static secrets in named headers instead of body HMACs.
 
 ```lua
-function setup()
+triggers = {
   webhook("/telegram", {
     auth = "header",
     key = "telegram_webhook_secret",
     hdr = "X-Telegram-Bot-Api-Secret-Token",
   })
-end
+}
 ```
 
 `auth = "bearer"` is the same check against `Authorization: Bearer <secret>`.
@@ -11179,20 +11453,20 @@ end
 
 **Why this matters:** Webhook floods can exhaust database connections and fill the execution queue. Legitimate requests can then time out. Rate limits restrict request volume. IP whitelists restrict requests to known sources.
 
-**How it works:** You configure rate limits and allowed IP ranges in `sentinel.yaml`. Sentinel enforces these limits at the router level before your flow code runs.
+**How it works:** Put `rps` and `cidrs` on the Lua `webhook()` opts in `triggers = {}`. The harness enforces those limits before your flow code runs. Do not put a `webhooks:` map in `sentinel.yaml` for this.
 
-```yaml
-# sentinel.yaml
-webhooks:
-  /api/webhook:
-    auth: hmac
-    key: webhook_secret
-    rps: 100              # Maximum 100 requests per second. Requests exceeding
-                          # this rate receive an error response. The external
-                          # service will typically retry later.
-    cidrs:                # IP whitelist using CIDR notation. Only requests from
-      - 35.184.0.0/16    # these IP ranges will be accepted. All other source
-      - 35.185.0.0/16    # IPs receive an immediate rejection.
+```lua
+triggers = {
+  webhook("/api/webhook", {
+    auth = "hmac",
+    key = "webhook_secret",
+    rps = 100,                    -- max requests per second for this path
+    cidrs = {                     -- source IP allowlist
+      "35.184.0.0/16",
+      "35.185.0.0/16",
+    }
+  })
+}
 ```
 
 Set `rps` (requests per second) above the expected peak traffic. If the service documents a maximum rate, start with that rate and add a 50% buffer. Use the service's documented webhook source IP ranges for `cidrs`.
@@ -11206,9 +11480,9 @@ Set `rps` (requests per second) above the expected peak traffic. If the service 
 **How it works:** The database stores processed event IDs. Before it processes an event, the flow searches for its ID. If the ID exists, the flow returns success without repeating the work. This pattern is called "at-least-once delivery with deduplication."
 
 ```lua
-function setup()
+triggers = {
   webhook("/stripe")
-end
+}
 
 function main(params)
   -- params contains all parsed request fields as strings.
@@ -11252,7 +11526,7 @@ Create the `processed_events` table with a UNIQUE constraint on `event_id`. This
 
 ### Cron Patterns
 
-Cron triggers run flows on a schedule. Tasks include reports, data cleanup, service health tests, synchronization, and notifications. Sentinel uses standard cron expressions with optional timezones.
+Cron triggers run flows on a schedule. Tasks include reports, data cleanup, service health tests, synchronization, and notifications. Sentinel uses **5-field** cron (`Minute Hour Dom Month Dow`) or descriptors such as `@every 5m`. There is no 6-field seconds field. Optional `tz` sets the timezone.
 
 Cron jobs run within the harness process. If the harness is stopped, scheduled jobs do not run and are not retroactively executed when the harness restarts. For critical scheduled tasks, consider adding monitoring to detect missed executions.
 
@@ -11263,12 +11537,10 @@ Cron jobs run within the harness process. If the harness is stopped, scheduled j
 **Why this matters:** Digest emails reduce alert fatigue by consolidating many individual events into a single actionable summary. They are also useful for stakeholders who need regular updates but do not monitor dashboards in real time.
 
 ```lua
-function setup()
-  -- Schedule for 9 AM Eastern every day. The timezone parameter ensures
-  -- the job runs at the correct local time regardless of the server's
-  -- system timezone, and correctly handles daylight saving time transitions.
+triggers = {
+  -- 9 AM Eastern every day. `tz` handles DST independently of the server clock.
   cron("0 9 * * *", {tz = "America/New_York"})
-end
+}
 
 function main(params)
   ctx.log("info", "Generating daily digest...")
@@ -11329,12 +11601,10 @@ end
 **Why this matters:** Regular health tests detect unavailable dependencies before users report errors. An alerting system can notify your team about those failures.
 
 ```lua
-function setup()
-  -- Run every 5 minutes. This frequency balances timely detection with
-  -- reasonable resource usage. For critical services, you might check
-  -- every minute; for less critical ones, every 15 minutes may suffice.
+triggers = {
+  -- Every 5 minutes. For critical services, every minute; otherwise every 15.
   cron("*/5 * * * *")
-end
+}
 
 function main(params)
   -- Set a 5-second timeout to distinguish between "slow" and "down".
@@ -11368,11 +11638,10 @@ end
 **Why this matters:** Without periodic cleanup, your database grows unboundedly. SQLite performance degrades as tables get very large, disk space fills up, and backups take longer. Regular cleanup keeps your system healthy and performant. Running cleanup during off-peak hours (like 3 AM on a Sunday) minimizes the impact on live traffic.
 
 ```lua
-function setup()
-  -- Run at 3 AM UTC every Sunday. This schedule avoids peak usage hours
-  -- and gives the database a full week of data before each cleanup.
+triggers = {
+  -- 3 AM UTC every Sunday — off-peak, one week of data between cleanups.
   cron("0 3 * * 0", {tz = "UTC"})
-end
+}
 
 function main(params)
   ctx.log("info", "Starting periodic cleanup...")
@@ -11418,9 +11687,9 @@ Webhooks come from external HTTP requests. Events come from flows or form submis
 -- Flow 1: process-order.lua
 -- This is the entry point that receives the external webhook.
 -- It processes the order and then emits events for downstream flows.
-function setup()
+triggers = {
   webhook("/orders")
-end
+}
 
 function main(params)
   -- params contains all parsed webhook request fields as strings.
@@ -11448,9 +11717,9 @@ function failed(err) end
 -- Flow 2: on-order-created.lua
 -- Handles post-order tasks like email confirmation and statistics.
 -- This flow is completely independent of the order processing flow.
-function setup()
+triggers = {
   event("order.created")
-end
+}
 
 function main(params)
   -- Event data is available through the params argument to main().
@@ -11477,9 +11746,9 @@ function failed(err) end
 -- Flow 3: check-inventory.lua
 -- Handles inventory verification independently from order processing.
 -- If stock is low, it emits another event for alerting.
-function setup()
+triggers = {
   event("inventory.check_needed")
-end
+}
 
 function main(params)
   local payload = params.event_payload
@@ -11511,9 +11780,9 @@ function failed(err) end
 -- Kit: acme.billing / fl/payment-failed.lua
 -- This flow lives in the billing kit. It processes payment failures
 -- and emits a generic event that any other kit can listen for.
-function setup()
+triggers = {
   webhook("/payment-failed")
-end
+}
 
 function main(params)
   -- params contains all parsed webhook request fields as strings.
@@ -11543,9 +11812,9 @@ function failed(err) end
 -- Kit: acme.notify / fl/on-payment-failed.lua
 -- This flow lives in a completely separate notifications kit.
 -- It listens for billing events and sends alerts.
-function setup()
+triggers = {
   event("billing.payment_failed")
-end
+}
 
 function main(params)
   local payload = params.event_payload
@@ -11570,9 +11839,9 @@ function failed(err) end
 ```lua
 -- Kit: acme.analytics / fl/track-payment-failure.lua
 -- A third kit that also listens for the same event, tracking metrics.
-function setup()
+triggers = {
   event("billing.payment_failed")
-end
+}
 
 function main(params)
   local payload = params.event_payload
@@ -11608,15 +11877,14 @@ Forms are particularly useful for building approval workflows, data entry interf
 -- Step 1: Initial form submission (e.g., checkout form)
 -- This flow triggers when the checkout form is submitted.
 -- The form event name follows the pattern: kf.{namespace}.{kit}.{form-stub}
-function setup()
+triggers = {
   event("kf.acme.shop.checkout")
-end
+}
 
 function main(params)
-  -- Form field values are available through ctx.fm.{form_stub}.{field}.
-  -- The field names match what is defined in the form YAML.
-  local items = ctx.fm.checkout.items
-  local email = ctx.fm.checkout.email
+  -- Form field values nest on the stub: ctx.fm.kf.{ns}.{kit}.{filename}.{field}
+  local items = ctx.fm.kf.acme.shop.checkout.items
+  local email = ctx.fm.kf.acme.shop.checkout.email
 
   -- Validate items against the inventory database
   local total = 0
@@ -11654,15 +11922,15 @@ function failed(err) end
 -- Step 2: Payment form submission
 -- This flow triggers when the payment form is submitted.
 -- The payment form includes the cart_id from step 1 as a hidden field.
-function setup()
+triggers = {
   event("kf.acme.shop.payment")
-end
+}
 
 function main(params)
-  -- Form field values are available through ctx.fm.{form_stub}.{field}.
-  local cart_id = ctx.fm.payment.cart_id
-  local card = ctx.fm.payment.card_token
-  local total = ctx.fm.payment.total
+  -- Form field values nest on the stub: ctx.fm.kf.{ns}.{kit}.{filename}.{field}
+  local cart_id = ctx.fm.kf.acme.shop.payment.cart_id
+  local card = ctx.fm.kf.acme.shop.payment.card_token
+  local total = ctx.fm.kf.acme.shop.payment.total
 
   -- Process payment through Stripe
   local stripe_key = ctx.secret("stripe_api_key")
@@ -11710,9 +11978,9 @@ WebSockets are ideal for scenarios where you need to push data to clients in rea
 -- This flow runs on a schedule and pushes system metrics to all
 -- connected WebSocket clients. The dashboard listens for these
 -- messages and updates its display in real time.
-function setup()
-  cron("*/10 * * * * *")  -- Every 10 seconds
-end
+triggers = {
+  cron("@every 10s")
+}
 
 function main(params)
   -- Gather current system metrics
@@ -11745,9 +12013,9 @@ function failed(err) end
 -- fl/event-broadcaster.lua
 -- Listens for all events matching a pattern and forwards them
 -- to WebSocket clients for real-time observation.
-function setup()
+triggers = {
   event("order.*")  -- Listen for all order-related events
-end
+}
 
 function main(params)
   -- Event trigger params include event metadata fields.
@@ -11774,7 +12042,7 @@ function failed(err) end
 
 ### fcms content workflow patterns
 
-**fcms** (file CMS) stores content as markdown files in the `ct/` directory of a kit, managed through the `/fcms` API (legacy alias `/cm`). Workflows handle publishing, versioning, and rendering for technical writing and agent-authored docs. For Postgres collections use **ccms** ([Content planes](/content-planes)) — do not treat `ct/` files as collection rows.
+**fcms** (file CMS) stores content as markdown files in the `ct/` directory of a kit, managed through the `/fcms` API. Workflows handle publishing, versioning, and rendering for technical writing and agent-authored docs. For Postgres collections use **ccms** ([Content planes](/content-planes)) — do not treat `ct/` files as collection rows. Lua `sn.cms` is **get and list only**; writes use HTTP `POST`/`PUT` `/fcms`.
 
 #### Pattern: Content Publishing Pipeline
 
@@ -11786,28 +12054,37 @@ function failed(err) end
 -- fl/publish-content.lua
 -- Triggered when an editor marks content as "ready for publish"
 -- via a form submission in the dashboard.
-function setup()
+triggers = {
   event("kf.acme.cms.publish-request")
-end
+}
 
 function main(params)
-  -- Form field values are available through ctx.fm.{form_stub}.{field}.
-  local slug = ctx.fm["publish-request"].slug
-  local reviewer = ctx.fm["publish-request"].reviewer_email
+  local form = ctx.fm.kf.acme.cms["publish-request"]
+  local slug = form.slug
+  local reviewer = form.reviewer_email
 
-  -- Fetch the content entry from CMS
+  -- Fetch the content entry from CMS (get/list only)
   local entry = sn.cms.get(slug)
   if not entry then
     return {ok = false, error = "Content not found: " .. slug}
   end
 
-  -- Update the content metadata to mark it as published.
-  -- The CMS stores metadata in the frontmatter of markdown files.
-  sn.cms.update(slug, {
-    status = "published",
-    published_at = sn.time.now(),
-    published_by = reviewer
-  })
+  -- Writes go through HTTP, not a Lua update helper.
+  local token = ctx.secret("harness_token")
+  local resp = sn.http.put(
+    "http://127.0.0.1:8080/fcms/acme/cms/" .. slug,
+    sn.json.enc({
+      frontmatter = {
+        status = "published",
+        published_at = sn.time.now(),
+        published_by = reviewer
+      },
+      markdown = form.markdown
+    }),
+    {headers = {Authorization = "Bearer " .. token}})
+  if resp.status ~= 200 then
+    return {ok = false, error = "fcms write failed"}
+  end
 
   -- Emit an event so other flows can react to the publication.
   -- For example, a flow that purges the CDN cache, updates a sitemap,
@@ -11830,46 +12107,39 @@ function failed(err) end
 
 ### Docker Stack Integration Patterns
 
-Sentinel can manage Docker containers through the `/docker` API endpoints, enabling flows to start, stop, and monitor containers as part of automated workflows. This is particularly useful for managing development environments, running batch processing jobs in containers, or orchestrating microservice deployments.
+Sentinel orchestrates **Compose stacks** through the `/docker` HTTP API (`GET /docker`, `POST /docker/{stubs}/up`, `POST /docker/{stubs}/down`, logs). There is no Lua helper for starting ad-hoc containers. Use `/docker` for wp-central, Graphile dataplane, and other project compose files.
 
-#### Pattern: Container Lifecycle Management
+#### Pattern: Compose stack up / down
 
-**When to use:** Use this pattern to start a task container, wait for completion, and remove it. Examples include data pipelines, builds, and temporary services.
+**When to use:** Bring a named stack up on a schedule or event, then stop it when the work is done. Examples include a dataplane stack, a WordPress origin, or a batch worker compose file registered with the harness.
 
-**Why this matters:** Containers give tasks isolated environments with specific dependencies. Flows can manage these containers for operational tasks. This reduces manual work and the need for separate orchestration tools.
+**Why this matters:** Stacks stay declared in compose YAML. The harness starts and stops them as a unit. Operators can also use the dashboard Docker controls.
 
 ```lua
--- fl/run-data-pipeline.lua
--- Triggered on a schedule to run a data processing pipeline
--- inside a Docker container.
-function setup()
-  cron("0 2 * * *", {tz = "UTC"})  -- 2 AM UTC daily
-end
+-- fl/start-dataplane.lua
+-- Starts the registered compose stack through the harness /docker API.
+triggers = {
+  cron("0 2 * * *", {tz = "UTC"})
+}
 
 function main(params)
-  ctx.log("info", "Starting data pipeline container...")
+  ctx.log("info", "Bringing dataplane stack up...")
 
-  -- Start a container from a pre-built image
-  local result = sn.docker.run({
-    image = "myorg/data-pipeline:latest",
-    env = {
-      DATABASE_URL = ctx.secret("pipeline_db_url"),
-      OUTPUT_BUCKET = "s3://my-bucket/output/"
-    },
-    volumes = {"/data/input:/input:ro"},
-    timeout_ms = 300000  -- 5-minute timeout
-  })
+  local token = ctx.secret("harness_token")
+  local resp = sn.http.post(
+    "http://127.0.0.1:8080/docker/dataplane/up",
+    "",
+    {headers = {Authorization = "Bearer " .. token}})
 
-  if not result.ok then
-    ctx.log("error", "Pipeline container failed: " .. result.error)
-    sentinel.emit("pipeline.failed", {error = result.error})
-    return {ok = false, error = result.error}
+  if resp.status ~= 200 then
+    ctx.log("error", "Stack up failed")
+    sentinel.emit("pipeline.failed", {status = resp.status})
+    return {ok = false, status = resp.status}
   end
 
-  ctx.log("info", "Pipeline completed successfully, exit code: " .. result.exit_code)
-  sentinel.emit("pipeline.completed", {duration_ms = result.duration_ms})
-
-  return {ok = true, exit_code = result.exit_code}
+  ctx.log("info", "Dataplane stack started")
+  sentinel.emit("pipeline.started", {})
+  return {ok = true}
 end
 
 function cleanup() end
@@ -12205,9 +12475,9 @@ end
 
 ```lua
 -- Flow 1: Start session
-function setup()
+triggers = {
   event("user.login")
-end
+}
 
 function main(params)
   local session_id = sn.crypto.random_bytes(16)
@@ -12227,9 +12497,9 @@ function failed(err) end
 
 ```lua
 -- Flow 2: Use session
-function setup()
+triggers = {
   event("user.action")
-end
+}
 
 function main(params)
   -- Look up the session from the database using the user_id
@@ -12267,10 +12537,8 @@ Testing your flows before deploying them to production is essential for reliabil
 **Why this matters:** Tests that depend on external services are slow, unreliable, and often expensive. By pointing your flows at a mock server during testing, you get fast, deterministic tests that you can run anywhere. You can also simulate error conditions (timeouts, 500 errors, rate limits) that are difficult to trigger with real services.
 
 ```lua
--- The API_URL is configurable via environment variable, defaulting to
--- the production URL. During testing, set the MOCK_API environment
--- variable to point at a local mock server.
-local API_URL = os.getenv("MOCK_API") or "https://api.example.com"
+-- Point this at a mock in a test SRE. The Lua sandbox cannot read process environment.
+local API_URL = "https://api.example.com"
 
 function setup() end
 
@@ -12283,12 +12551,7 @@ function cleanup() end
 function failed(err) end
 ```
 
-**Running tests with a mock:**
-```bash
-# Start a mock server (e.g., using a tool like mockoon, wiremock, or a simple HTTP server)
-# Then run Sentinel with the MOCK_API variable set:
-MOCK_API="http://localhost:8081" ./sentinel harness start -p ./test-sre
-```
+**Running tests with a mock:** keep a test SRE whose flows call `http://127.0.0.1:8081`. Start the mock server, then `sentinel harness start -p ./test-sre`. Do not inject mock URLs through process environment variables.
 
 #### Pattern: Database Fixtures
 
@@ -12491,7 +12754,7 @@ curl -N http://localhost:8080/lg/live
 ```
 
 **Dashboard approach:**
-The dashboard at `http://localhost:9090` provides a graphical log viewer with:
+The dashboard at `http://127.0.0.1:9090` (loopback only) provides a graphical log viewer with:
 - Real-time log streaming through WebSocket.
 - Filtering by flow, level, and text search.
 - Execution detail views with timing and parameter data.
@@ -12659,13 +12922,13 @@ error: execution timeout after 30000ms
 
 **Solutions:**
 
-1. **Increase the timeout for specific flows that legitimately need more time:**
-   ```yaml
-   # sentinel.yaml
-   flows:
-     overrides:
-       sn-core-agent:my-flow:
-         timeout_ms: 60000  # 1 minute
+1. **Increase the default Lua execution timeout** in `.sentinel/config.json`. There is no `flows.overrides.timeout_ms` in `sentinel.yaml`.
+   ```json
+   {
+     "lua": {
+       "execution_timeout": 60
+     }
+   }
    ```
    Increase a timeout only for a flow with known work that needs more time. Review the cause before you increase it.
 
@@ -12725,13 +12988,13 @@ secret 'api_key' not found
 
 1. **List existing secrets and examine their names for typos:**
    ```bash
-   ./sentinel secret list
+   ./sentinel sre secret ls
    ```
    Secret names are case-sensitive. `api_key` and `API_KEY` are different secrets.
 
 2. **Create the missing secret:**
    ```bash
-   ./sentinel secret set api_key "your_secret_value_here"
+   ./sentinel sre secret set api_key "your_secret_value_here"
    ```
 
 3. **Make sure that the vault is accessible and unlocked:**
@@ -12850,10 +13113,10 @@ error: database is locked
    ```
    The default usually supports normal operation. If you need a higher value, examine whether flows hold write locks too long. Optimize those flows.
 
-2. **Check database health:**
+2. **Check database health.** There is no `sentinel db shell` command. Query through `sentinel db query` or open the file with `sqlite3`:
    ```bash
-   ./sentinel db shell
-   sqlite> PRAGMA integrity_check;
+   ./sentinel db query "PRAGMA integrity_check;" --kit <kit-id>
+   sqlite3 .sentinel/state.db "PRAGMA integrity_check;"
    ```
    The expected result is `ok`. If the command reports errors, corruption is possible. The next section explains recovery.
 
@@ -12966,16 +13229,7 @@ The dashboard proxies API requests to the harness through its BFF (Backend-for-F
 
 **Understanding the cause:** The harness limits API requests to protect resources. Automated scripts can exceed this limit with rapid requests.
 
-**Solution:** Increase the rate limit in `.sentinel/config.json`:
-```json
-{
-  "limits": {
-    "rate_limit_rps": 1000
-  }
-}
-```
-
-If normal operation reaches rate limits, examine unnecessary requests. WebSocket streams can replace frequent polling.
+**Solution:** `AUTH.RATE_LIMIT` is an internal per-token limiter. There is no `limits.rate_limit_rps` configuration key. Slow down request loops. WebSocket streams can replace frequent polling. Webhook triggers use their own `WEBHOOK.RATE_LIMIT` settings.
 
 ---
 
@@ -13045,7 +13299,8 @@ Use the direct internal harness address for the dashboard connection.
 1. **Make sure that hot reload is enabled:**
    ```yaml
    # sentinel.yaml
-   hotreload: true
+   hotreload:
+     yaml: full
    ```
 
 2. **Force a manual reload:**
@@ -13087,7 +13342,7 @@ Use the direct internal harness address for the dashboard connection.
 
 **Solutions:**
 
-1. **Verify the license key format.** Valid keys start with `sk_free_` or `sk_ent_` followed by a base64url payload and an Ed25519 signature separated by a period.
+1. **Verify the license key format.** Valid keys start with `sk_ce_`, `sk_free_`, or `sk_ent_` followed by a base64url payload and an Ed25519 signature separated by a period.
 
 2. **Check network connectivity to the marketplace:**
    ```bash
@@ -13104,28 +13359,26 @@ Use the direct internal harness address for the dashboard connection.
    "
    ```
 
-#### Phone-home failures
+#### Occupy failures
 
-**Symptom:** Dashboard shows license as invalid or marketplace features are blocked.
+**Symptom:** Dashboard shows license as invalid or executions are blocked.
 
-**Understanding the cause:** The phone-home system verifies the license periodically (default every 7 days). If verification fails for 48 hours (the grace period), marketplace features are blocked. This can happen due to network issues, DNS problems, or the marketplace server being unavailable.
+**Understanding the cause:** The 7-day phone-home window and 48-hour grace period are removed. Occupy retries about every 15 seconds. Production executions are gated by a live occupy lease. Network issues, DNS problems, or an unreachable license HQ (`license.ndx.au`) prevent a lease.
 
 **Solutions:**
 
-1. **Check when the next verification is scheduled:**
+1. **Register (occupy) the harness:**
    ```bash
-   cat .sentinel/config.json | python3 -c "
-   import sys, json
-   config = json.load(sys.stdin)
-   print('Next check:', config.get('marketplace', {}).get('next_check', 'NOT SET'))
-   "
+   ./sentinel login
+   ./sentinel register
    ```
 
-2. **Test network connectivity to the marketplace server.**
+2. **Test network connectivity to license HQ:**
+   ```bash
+   curl -s https://license.ndx.au/
+   ```
 
-3. **Check if you are within the grace period.** Marketplace features continue to work for 48 hours after the first phone-home failure. If you resolve the network issue within this window, everything returns to normal automatically.
-
-4. **Restart the harness** to force an immediate phone-home attempt.
+3. **Restart the harness** so occupy retries immediately. A successful lease is required before production executions run.
 
 ---
 
@@ -13182,7 +13435,7 @@ error: could not decrypt vault
    export SENTINEL_VAULT_PASSPHRASE="new_passphrase"
    ./sentinel harness start -p ./project
    # Then re-add all secrets:
-   ./sentinel secret set api_key "value"
+   ./sentinel sre secret set api_key "value"
    ```
 
 ---
@@ -13224,11 +13477,11 @@ error: could not decrypt vault
 
 **Solutions:**
 
-1. **Limit concurrent flow executions:**
+1. **Limit concurrent flow executions** with the Lua VM pool. There is no `limits.max_concurrent_flows` key.
    ```json
    {
-     "limits": {
-       "max_concurrent_flows": 5
+     "lua": {
+       "pool_size": 5
      }
    }
    ```
@@ -13462,9 +13715,8 @@ Or use the Refresh links on individual dashboard pages to fetch fresh data from 
 #### Enable Debug Logging
 
 ```bash
-export SENTINEL_DEBUG=1
 export SENTINEL_LOG_LEVEL=debug
-./sentinel harness start -p ./project
+./sentinel harness start -p ./project --debug
 ```
 
 Debug logging produces verbose output from every harness component, including:
@@ -13483,26 +13735,25 @@ curl http://localhost:8080/hl
 # Component health (kits, triggers, database, vault)
 curl http://localhost:8080/hl/kt
 
-# List all registered components
-./sentinel components list
+# List kits in the SRE
+./sentinel sre kit list
 ```
 
 #### Review Audit Logs
 
-```bash
-# Recent audit entries
-./sentinel audit list --limit 100
+There is no `sentinel audit list` command. `sentinel audit [path]` validates SRE structure. Harness security events go to process logs:
 
-# Filter by type
-./sentinel audit list --filter type=ERROR
+```bash
+./sentinel audit /path/to/project
+./sentinel logs --level warn
 ```
 
 #### Check Configuration
 
 ```bash
-# Check specific config values
-./sentinel config get api.port
-./sentinel config get logging.level
+# Check specific config values (key is log.level, not logging.level)
+./sentinel sre config get api.port
+./sentinel sre config get log.level
 
 # Dump the full configuration (be careful -- may contain sensitive values)
 cat .sentinel/config.json | python3 -m json.tool
@@ -13510,16 +13761,15 @@ cat .sentinel/config.json | python3 -m json.tool
 
 #### Database Inspection
 
-```bash
-# Open an interactive SQLite shell on the state database
-./sentinel db shell
+There is no `sentinel db shell` command.
 
-# Useful queries:
-sqlite> .tables                                    -- List all tables
-sqlite> SELECT * FROM executions ORDER BY started_at DESC LIMIT 5;  -- Recent executions
-sqlite> SELECT * FROM triggers;                    -- All registered triggers
-sqlite> SELECT COUNT(*) FROM executions WHERE status = 'failed';    -- Count failures
-sqlite> PRAGMA integrity_check;                    -- Verify database health
+```bash
+# Read-only SQL against a kit database
+./sentinel db query "PRAGMA integrity_check;" --kit <kit-id>
+
+# Inspect the harness state database with sqlite3
+sqlite3 .sentinel/state.db ".tables"
+sqlite3 .sentinel/state.db "PRAGMA integrity_check;"
 ```
 
 ---
@@ -13540,7 +13790,7 @@ The Triple-Access Pattern is an internal Sentinel architecture. A shared service
 
 In a system like Sentinel, the same operation (for example "list all vendors" or "create a trigger") needs to be available in multiple contexts:
 
-1. **REST API** -- External clients, the dashboard, AI agents, and automation tools interact with Sentinel through HTTP endpoints. The API must be consistent, follow the brevity regime, and always return HTTP 200 with structured error bodies.
+1. **REST API** -- External clients, the dashboard, AI agents, and automation tools interact with Sentinel through HTTP endpoints. The API must be consistent, follow the brevity regime, and return JSON application errors as HTTP 200 with `{ok: false, err, code, msg, req_id}`. Detect failure with `ok === false` / `err`. Some surfaces (forms HTML, CMS HTML render, git, disabled WebSocket, CORS preflight) use real non-200 status codes.
 
 2. **CLI** -- Operators and administrators manage Sentinel from the command line. CLI commands must provide human-readable output (tables, formatted text) while also supporting machine-readable JSON output for scripting and agent consumption.
 
@@ -13801,7 +14051,7 @@ var queryCmd = &cobra.Command{
 
 **Implementation guidelines:**
 
-- **Always return HTTP 200.** Sentinel communicates errors in the body as `{ok: false, err: "CODE", msg: "..."}`. Some HTTP clients and proxies retry or open a circuit after a non-200 response. This behavior is unsuitable for application errors.
+- **JSON `writeError` returns HTTP 200.** Sentinel communicates JSON application errors in the body as `{ok: false, err: "CODE", code: "CODE", msg: "...", req_id: "..."}`. Some HTTP clients and proxies retry or open a circuit after a non-200 response. This behavior is unsuitable for JSON application errors. Do not treat that contract as "always HTTP 200" for HTML, git, or WebSocket upgrade.
 - **Use the brevity regime for query parameters.** Short parameter names (`?n=`, `?lv=`, `?cp=`) reduce URL length and token count for AI agent consumers. Document the full name alongside the abbreviation.
 - **Delegate all logic to the service.** The handler parses the request, calls the service, and writes the response. Keep `if` statements for business rules in the service.
 - **Map service errors to response body error codes.** The service returns typed errors. The handler maps these to the appropriate error code strings.
@@ -13827,7 +14077,7 @@ func (h *APIHandler) ListVendors(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Write the JSON response. Always HTTP 200.
+    // Write the JSON response. Application errors use writeError (HTTP 200 + ok:false).
     h.writeJSON(w, 200, vendors)
 }
 
@@ -13980,7 +14230,7 @@ Create these files:
 
 - Define handler methods on an API handler struct.
 - Register routes in the router setup (follow the brevity regime for route prefixes).
-- Remember: always HTTP 200, errors in body.
+- Remember: JSON `writeError` is HTTP 200 with errors in the body (`ok`, `err`, `code`, `msg`, `req_id`).
 
 **Step 4: Wire it all together in the DI container**
 
@@ -14021,7 +14271,7 @@ Each layer handles errors differently, but they all originate from the same serv
 - **Repository** -- Returns wrapped errors: `fmt.Errorf("query vendors: %w", err)`. The wrapping preserves the original error for `errors.Is()` while adding context.
 - **Service** -- Maps repository errors to service-level errors. For example, if the repository returns `sql.ErrNoRows`, the service returns `ErrNotFound`. The service also logs errors at this point.
 - **CLI** -- Uses the error code to format a user-friendly message. For example, `ErrNotFound` becomes "Resource not found: {id}".
-- **API** -- Returns HTTP 200 with `{ok: false, err: "RESOURCE_NOT_FOUND", msg: "Vendor xyz not found"}`. The error code string comes directly from the error variable's message.
+- **API** -- Returns HTTP 200 with `{ok: false, err: "RESOURCE_NOT_FOUND", code: "RESOURCE_NOT_FOUND", msg: "Vendor xyz not found"}`. The error code string comes directly from the error variable's message.
 - **Lua** -- Returns `(nil, "RESOURCE_NOT_FOUND: Vendor xyz not found")`. The flow author can then examine the error string or simply handle any non-nil error.
 
 ---
@@ -14110,7 +14360,7 @@ The `library` service in this codebase implements the full Triple-Access Pattern
 - Service layer: `internal/library/service.go`.
 - CLI commands: `cmd/sentinel/commands/lib.go`.
 - API handlers: `internal/api/apilib_handlers.go`.
-- Lua bindings: `internal/library/lua.go` (planned).
+- Lua bindings: `internal/library/lua.go` (implemented).
 
 When adding a new service, model it after the library service. Copy its structure, adapt the types, and follow the same patterns.
 
@@ -14146,8 +14396,9 @@ Production deployment of Sentinel requires careful attention to security, perfor
 
 ```
 Internet -> Cloudflare Edge (CDN + DDoS + SSL) -> Caddy Origin Server -> Sentinel Harness
-              (Full Strict SSL, caching)            (TLS termination,    (localhost:8080)
-                                                     reverse proxy)
+              (Full Strict SSL, caching)            (TLS termination,    (:8080 all interfaces;
+                                                     reverse proxy)       firewall it. Caddy
+                                                                          proxies to localhost:8080)
 ```
 
 **Why this three-layer architecture:**
@@ -14156,9 +14407,9 @@ Internet -> Cloudflare Edge (CDN + DDoS + SSL) -> Caddy Origin Server -> Sentine
 
 - **Caddy** (middle layer) handles TLS between Cloudflare and your origin server using a Cloudflare origin certificate. This is required for Cloudflare's Full (Strict) SSL mode, which validates the origin certificate to prevent man-in-the-middle attacks between Cloudflare and your server. Caddy also acts as a reverse proxy, forwarding HTTP requests to Sentinel.
 
-- **Sentinel** (inner layer) stays bound to `localhost:8080` and is never directly exposed to the internet. All external traffic is routed through Caddy. Sentinel handles the application logic: running flows, serving API responses, managing CMS content, and processing webhooks.
+- **Sentinel** (inner layer) is the harness gateway. It binds all interfaces on `:PORT` (default 8080). Caddy proxies to `localhost:8080`. Firewall port 8080 from the public internet. The dashboard binds loopback only (`127.0.0.1:9090`). Sentinel handles the application logic: running flows, serving API responses, managing CMS content, and processing webhooks.
 
-This dual-layer TLS architecture gives you edge performance and security without exposing Sentinel directly to the internet. Even if an attacker discovers your server's IP address, Sentinel is not accessible on any public port -- only Caddy listens on ports 80/443.
+This dual-layer TLS architecture gives you edge performance and security without exposing the harness on 80/443. Firewall the harness port. Only Caddy should listen on ports 80/443.
 
 ---
 
@@ -14200,13 +14451,13 @@ This produces a 64-character hexadecimal string. Use this as the value in the `t
 
 **Configuration details:**
 
-- `api.port` -- The port Sentinel listens on. In this architecture, Sentinel only accepts connections from localhost (Caddy), so 8080 is fine. Do not expose this port in your firewall.
+- `api.port` -- The port the harness gateway listens on. The process binds all interfaces (`:8080`). Caddy proxies to `localhost:8080`. Do not expose 8080 in the host firewall. The dashboard is separate and binds `127.0.0.1:9090` only.
 - **Content-plane ports (dedicated, not path-merged):** Graphile/ccms defaults to host **1880**. wpcms ingress stays on its own port (**8800** legacy default, target **1800**). If you expose Graphile publicly, add a separate reverse_proxy upstream — do not multiplex Graphile under the harness path for MVP. See [Content planes](/content-planes).
 - `api.tokens` -- An array of bearer tokens that clients must provide in the `Authorization: Bearer <token>` header. In production, always configure at least one token. When tokens are configured, the harness runs in production mode and rejects unauthenticated requests.
 - `api.debug_mode` -- Set this to `false` in production. Debug mode disables token authentication and enables more diagnostic endpoints. Keep these endpoints private.
 - `state.encrypt_db` -- Encrypts the SQLite state database using SQLCipher (AES-256). Requires the `SENTINEL_STATE_PASSPHRASE` environment variable to be set.
 
-**Important security note:** Sentinel listens on `localhost:8080` only in this architecture. Caddy proxies external HTTPS traffic to it. Do NOT enable Sentinel's built-in TLS (`tls.*` configuration options) when running behind Caddy -- Caddy owns TLS termination. Enabling both creates unnecessary complexity and can cause certificate conflicts.
+**Important security note:** The harness gateway binds all interfaces. Rely on the host firewall so only Caddy (and local operators) can reach port 8080. Do NOT enable Sentinel's built-in TLS (`tls.*` configuration options) when running behind Caddy -- Caddy owns TLS termination. Enabling both creates unnecessary complexity and can cause certificate conflicts. The dashboard remains loopback-only.
 
 ---
 
@@ -14438,7 +14689,7 @@ sudo journalctl -u sentinel -f
 
 **Understanding the service configuration:**
 
-- `Type=simple` -- systemd expects the process to stay in the foreground. Sentinel's `start` command does this by default.
+- `Type=simple` -- systemd expects the process to stay in the foreground. `sentinel harness start` does this by default.
 - `User=sentinel` -- Runs the harness as a non-root, dedicated user. This limits the blast radius of any security vulnerability.
 - `Restart=on-failure` -- If the harness crashes (non-zero exit), systemd automatically restarts it after 5 seconds.
 - `LimitNOFILE=65535` -- Increases the file descriptor limit, which is necessary if the harness handles many concurrent connections.
@@ -14570,14 +14821,7 @@ Add to crontab:
 
 #### Systemd Watchdog
 
-Add a watchdog timeout to the systemd service to detect hangs:
-
-```ini
-# Add to [Service] section of sentinel.service
-WatchdogSec=30
-```
-
-This tells systemd to expect a watchdog notification every 30 seconds. If the harness becomes unresponsive, systemd automatically restarts it.
+Do not set `WatchdogSec` for the harness. The process does not send `sd_notify` watchdog pings. systemd then treats a healthy harness as hung and restarts it.
 
 #### External Monitoring
 
@@ -14743,7 +14987,7 @@ Use this checklist before going live:
 - [ ] Caddyfile configured with origin cert and `reverse_proxy localhost:8080`.
 - [ ] Caddy reloaded and healthy: `systemctl status caddy`.
 - [ ] Systemd service for Sentinel configured with auto-restart.
-- [ ] Firewall: only ports 80 and 443 public (Caddy). Port 8080 localhost-only.
+- [ ] Firewall: only ports 80 and 443 public (Caddy). Deny public access to harness `:8080` (it binds all interfaces). Dashboard stays on `127.0.0.1:9090`.
 - [ ] Health monitoring configured (cron, external service, or both).
 - [ ] Log aggregation configured (journald, file, or remote).
 - [ ] Backup script scheduled and tested.
@@ -14803,7 +15047,7 @@ There are two ways to use adversarial testing in Sentinel:
 
 2. **Agent Skill** (`/sn-go-adversarial`) -- An AI-driven approach where an agent autonomously discovers the API surface, generates probes, executes them, diagnoses failures, fixes bugs, and re-verifies. This is used during development when you want an AI assistant to find and fix bugs in a test-debug-fix cycle.
 
-Both approaches work by sending HTTP requests against a running harness and evaluating responses against the API contract. The API contract states that every response must be HTTP 200 with a JSON body. Errors are communicated in the body as `{ok: false, err: "CODE", msg: "..."}`. A probe "passes" when the response conforms to this contract (even if the response indicates an error -- a well-formatted error response is correct behavior).
+Both approaches work by sending HTTP requests against a running harness and evaluating responses against the API contract. For **harness JSON APIs**, that contract is HTTP 200 with a JSON body. Errors are communicated in the body as `{ok: false, err: "CODE", msg: "..."}`. HTML surfaces such as `/fcms/render` and form HTML are outside this contract. A JSON probe "passes" when the response conforms to this contract (even if the response indicates an error -- a well-formatted error response is correct behavior).
 
 ---
 
@@ -14859,7 +15103,7 @@ TOTAL              5     5     0     0
 All 8 probes passed.
 ```
 
-A "PASS" means that the response meets the API contract. A "FAIL" means that it violates the contract. Violations include non-200 status codes, invalid JSON, and restricted file contents from traversal requests.
+A "PASS" means that the JSON API response meets the contract. A "FAIL" means that it violates the contract. Violations include non-200 status codes on JSON APIs, invalid JSON, and restricted file contents from traversal requests. Do not apply the 200+JSON rule to HTML `/fcms/render` or form HTML.
 
 ---
 
@@ -14899,12 +15143,14 @@ Each feature corresponds to a group of API endpoints and generates probes across
 | `secrets` | `/sc` CRUD, upsert, malformed input | 8 | Vault operations: creating, reading, updating, and deleting secrets. Tests for SQL injection in secret names, oversized values, and idempotent upsert behavior. |
 | `triggers` | `/tr` CRUD, invalid types, empty fields | 7 | Trigger management: creating cron and event triggers, listing, deletion. Tests invalid cron expressions, empty trigger names, and nonexistent trigger IDs. |
 | `forms` | `/fm` list, render, submissions, stats | 5 | Form system: listing forms, rendering form HTML, submitting form data, and querying submission statistics. |
-| `cms` | `/cm` list, get, traversal attempts | 4 | CMS content: listing entries, fetching by slug, and path traversal attacks attempting to read files outside the CMS directory. |
+| `cms` | `/cm` list, get, traversal attempts | 4 | File CMS JSON: listing entries, fetching by slug, and path traversal. Probes still hit legacy `/cm`. Canonical plane routes are `/fcms` and `/fcms/render`. |
 | `source` | `/src/*` read, write, traversal | 4 | Source file management: reading and writing SRE source files, with traversal probes attempting to escape the SRE directory. |
 | `config` | `/cfg/project` read/write | 2 | Project configuration: reading and writing sentinel.yaml configuration. |
 | `kits` | `/kt/{ns}/{name}` pages, assets, traversal | 3 | Kit serving: fetching kit pages, static assets, and traversal probes attempting to leak kit.yaml or escape the kit directory. |
 | `webhooks` | `/wh/*` unknown hooks, traversal, large payload | 4 | Webhook handling: posting to nonexistent webhook paths, path traversal through webhook URLs, and oversized payload handling. |
-| `all` | Everything above | ~55 | Runs all probe sets. This is the recommended option for full regression testing. |
+| `all` | Everything above | ~55 | Runs all JSON probe sets. Dashboard, MCP, approvals, and FS Control are **not** in this set. |
+
+The request gate caps bodies at **32 MiB** (`internal/security/request_limits.go`: 32 active handlers, 4 body-bearing, 32 MiB read). Some JSON parsers still apply a **10 MB** limit (`internal/requestparams` `DefaultMaxBodySize`). Do not describe 10 MB as the harness-wide body cap.
 
 ---
 
@@ -15121,12 +15367,12 @@ TR-002: GET /tr/nonexistent_trigger_id        -> should return clean error
 
 **What it tests:** Response schema validation. Does every response conform to the API contract? Are required fields present? Is the JSON well-formed?
 
-**Why it matters:** API consumers (especially AI agents) depend on consistent response formats. A response that is missing the `ok` field, returns non-JSON content, or uses a non-200 status code breaks the API contract.
+**Why it matters:** API consumers (especially AI agents) depend on consistent JSON response formats. On harness JSON APIs, a response that is missing the `ok` field, returns non-JSON content, or uses a non-200 status code breaks the JSON contract. HTML `/fcms/render` and form HTML are not in that contract.
 
 **Examples:**
 ```
 HL-004: GET /hl -> verify status, mode, ver fields exist
-All probes implicitly check: HTTP 200, valid JSON, ok field present
+JSON probes typically check: HTTP 200, valid JSON, ok field present
 ```
 
 ---
@@ -15259,7 +15505,7 @@ Mode: debug
 | **Total**    | **17** |**16**|  **1**|  **1**|
 
 ### Failures Found & Fixed
-1. PROBE-WH-007: 50MB payload caused OOM -> Added 10MB body limit in webhook router -> fixed
+1. PROBE-WH-007: 50 MiB payload caused OOM -> request gate 32 MiB body cap in `internal/security/request_limits.go` -> fixed
 
 ### Observations
 - Webhook HMAC verification correctly rejects invalid signatures
@@ -15430,25 +15676,25 @@ Probes test API correctness. The simulator shows activity, and live logs show ha
 
 ### Extending the Probe Runner
 
-The probe runner is designed to be extended when new endpoints are added to the harness. To add probes for a new feature area, edit `cmd/simulator/main.go`:
+The probe runner is designed to be extended when new endpoints are added to the harness. `cmd/simulator/main.go` only parses flags and calls `internal/probes`. Add new JSON probes in `internal/probes/*.go`:
 
-1. **Add a new probe generation method** to the `ProbeRunner` struct:
+1. **Add a probe table** in a new or existing file under `internal/probes/`:
    ```go
-   func (r *ProbeRunner) fooProbes() []Probe {
+   func FooProbes() []Probe {
        // Return a slice of probes for the "foo" feature
    }
    ```
 
-2. **Register it in the `generateProbes()` switch statement** so it is included when `-feature foo` or `-feature all` is specified.
+2. **Register it in `Runner.GenerateProbes()`** (`internal/probes/runner.go`) so it is included when `-feature foo` or `-feature all` is specified.
 
-3. **Use the assertion helpers** to test responses:
+3. **Use the assertion helpers** to test JSON responses:
 
 ```go
-func (r *ProbeRunner) fooProbes() []Probe {
+func FooProbes() []Probe {
     return []Probe{
         {
             ID: "FOO-001", Category: "happy", Method: "GET", Path: "/foo",
-            Assert: assertOKResponse(),
+            Assert: AssertOKResponse(),
         },
         {
             ID: "FOO-002", Category: "traversal", Method: "GET", Path: "/foo/../../etc/passwd",
@@ -15462,20 +15708,22 @@ func (r *ProbeRunner) fooProbes() []Probe {
         {
             ID: "FOO-003", Category: "malformed", Method: "POST", Path: "/foo",
             Body: "not valid json",
-            Assert: assertErrorResponse(),
+            Assert: AssertErrorResponse(),
         },
     }
 }
 ```
 
+Dashboard, MCP, approvals, and FS Control have no entries in the ~55 JSON probes. Do not add those surfaces here unless you also extend the runner.
+
 #### Assertion Helpers
 
 | Helper | What It Checks | When to Use |
 |--------|---------------|-------------|
-| `assertHTTP200JSON()` | HTTP 200 + valid JSON (object or array) | For endpoints that return data without an `ok` field |
-| `assertOKResponse()` | HTTP 200 + `{ok: true}` | For endpoints with an expected success result |
-| `assertErrorResponse()` | HTTP 200 + `{ok: false}` | For probes with an expected error (malformed input, nonexistent resource) |
-| `assertOKWithField(f)` | HTTP 200 + `{ok: true, f: ...}` | For endpoints with a required response field |
+| `AssertHTTP200JSON()` | HTTP 200 + valid JSON (object or array) | For JSON endpoints that return data without an `ok` field |
+| `AssertOKResponse()` | HTTP 200 + `{ok: true}` | For JSON endpoints with an expected success result |
+| `AssertErrorResponse()` | HTTP 200 + `{ok: false}` | For JSON probes with an expected error (malformed input, nonexistent resource) |
+| `AssertOKWithField(f)` | HTTP 200 + `{ok: true, f: ...}` | For JSON endpoints with a required response field |
 | Custom function | Any custom validation logic | For traversal checks, specific error code validation, response body content checks |
 
 ---
@@ -15597,19 +15845,20 @@ Storage points serve two primary purposes:
 
 1. **CMS URL Expansion** -- Each storage point has a stub (for example `img`, `vid`) that the CMS template renderer recognizes. At render time, a path like `/img/photo.jpg` is automatically expanded to the full public URL: `https://cdn.example.com/media/photo.jpg`. This means content authors write simple, portable paths in their markdown, and the system handles URL resolution.
 
-2. **Storage Metadata Management** -- A shared registry provides bucket metadata to the dashboard and Lua flows through `sn.st.*`. You can manage separate storage backends for images, video, and downloads. The vault stores credentials.
+2. **Object access** -- Lua `sn.st.*` can list points, get a point, `put` objects, `head` objects, and `resolve` public URLs. The vault stores credentials. You can manage separate backends for images, video, and downloads.
 
 3. **Backup Upload Destinations** -- The backup subsystem writes folder archives and PostgreSQL dumps under `.sentinel/backups`. It can then upload them to a configured storage point.
 
 #### Supported Providers
 
-All three supported providers use the S3 API protocol, which means the same client code works with any of them. The differences are in how you configure the endpoint URL and credentials.
+All four supported providers use the S3 API protocol, which means the same client code works with any of them. The differences are in how you configure the endpoint URL and credentials.
 
 | Provider | Description | Endpoint Configuration | Typical Use Case |
 |----------|-------------|----------------------|------------------|
 | **AWS S3** (`s3`) | Amazon Simple Storage Service, the original S3 implementation | Leave the endpoint field blank -- the S3 client uses AWS defaults based on the region | Production workloads, CloudFront CDN integration, wide ecosystem support |
 | **Backblaze B2** (`b2`) | Backblaze's S3-compatible API, significantly cheaper than AWS S3 for storage | Set endpoint to `s3.{region}.backblazeb2.com` (for example `s3.us-west-004.backblazeb2.com`) | Cost-effective storage for large media files, video archives |
 | **Garage** (`garage`) | Self-hosted S3-compatible storage ([Garage project](https://git.deuxfleurs.fr/Deuxfleurs/garage)) | Set endpoint to your Garage server's address | Self-hosted environments, data sovereignty requirements, air-gapped deployments |
+| **Cloudflare R2** (`r2`) | Cloudflare's S3-compatible object storage | Set endpoint to your R2 S3 API URL (`https://<accountid>.r2.cloudflarestorage.com`) | Zero-egress public assets, Cloudflare CDN |
 
 ---
 
@@ -15683,7 +15932,7 @@ When you create a storage point, both credentials are written to the vault atomi
 
 ### Dashboard User Guide
 
-The Storage page is available at `http://localhost:9090/storage` in the Sentinel dashboard. It appears in the left sidebar between "Databases" and "Docker", identified by a `cloud_upload` icon.
+The Storage page is available at `http://127.0.0.1:9090/storage` in the Sentinel dashboard (loopback only). It appears in the left sidebar between "Databases" and "Docker", identified by a `cloud_upload` icon.
 
 The Backups page can use any storage point listed here as an optional upload target for:
 - PostgreSQL `pg_dump` artifacts.
@@ -15719,6 +15968,7 @@ The table columns are:
    - **AWS S3** (selected by default) -- The endpoint field shows a hint: "Leave blank for default AWS S3". The region placeholder shows `us-east-1`.
    - **Backblaze B2** -- The endpoint field shows: "Backblaze S3-compatible endpoint" with placeholder `s3.us-west-004.backblazeb2.com`. The region placeholder shows `us-west-004`.
    - **Garage** -- The endpoint field shows: "Your Garage S3 endpoint (e.g. garage.example.com)". The region placeholder shows `garage`.
+   - **Cloudflare R2** -- The endpoint field shows your R2 S3 API URL. The region is often `auto`.
 
    Switching between providers updates the hints and placeholders to guide you toward the correct values for each provider.
 
@@ -15769,7 +16019,7 @@ The table columns are:
 3. **On success:** A green toast shows "Connection test passed" with details about the provider, endpoint, and bucket.
 4. **On failure:** A red toast shows the error message (for example "access key not found in vault").
 
-**Note about the current test scope:** The connectivity test examines local vault credentials and storage point configuration. It does not call S3 `ListBucket`. It does not establish whether the remote provider accepts the credentials. Full S3 connectivity tests are planned for a future release with an S3 SDK.
+The test calls `POST /st/{id}/test`, which runs S3 **ListObjectsV2** (`MaxKeys=1`) against the configured bucket using vault credentials. Success means the remote provider accepted the credentials and the list probe returned.
 
 #### Deleting a Storage Point
 
@@ -15837,7 +16087,7 @@ The helper startup scripts `start-dev.sh` and `start-dev.ps1` automatically impo
 
 ### Lua API
 
-Storage point metadata is available to Lua flows through the `sn.st.*` namespace.
+Lua flows use `sn.st.list`, `sn.st.get`, `sn.st.put`, `sn.st.head`, and `sn.st.resolve` (plus `sn.st.get_by_stub` for lookup by stub).
 
 #### Available Functions
 
@@ -15846,7 +16096,9 @@ Storage point metadata is available to Lua flows through the `sn.st.*` namespace
 | `sn.st.list()` | Returns all registered storage points |
 | `sn.st.get(id)` | Returns a single storage point by UUID |
 | `sn.st.get_by_stub(stub)` | Returns a storage point by stub |
-| `sn.st.resolve(stub, path)` | Resolves a stub plus object path to a full public URL |
+| `sn.st.resolve(ref, path)` | Resolves a stub or id plus object path to a full public URL |
+| `sn.st.head(ref, key)` | Returns object metadata (size, etag, url) for a key |
+| `sn.st.put(ref, key, data, opts?)` | Uploads object bytes. Optional `opts`: `content_type`, `cache_control`, `if_absent`, `metadata` |
 
 #### Example Usage
 
@@ -15867,13 +16119,14 @@ local url, err = sn.st.resolve("img", "hero-banner.jpg")
 if not err then
   print(url)
 end
+
+local info, put_err = sn.st.put("img", "hero-banner.jpg", bytes, {
+  content_type = "image/jpeg",
+  if_absent = true
+})
 ```
 
-#### Important Scope Note
-
-The current Lua API is intentionally limited to storage point metadata lookup and URL resolution. It does not currently upload, download, list, or delete objects in the configured bucket.
-
-The backup subsystem can upload completed artifacts to a storage point after it creates local copies. The harness owns this operation. The Lua storage API does not provide uploads.
+The backup subsystem can also upload completed artifacts to a storage point after it creates local copies.
 
 ---
 
@@ -16100,7 +16353,7 @@ Creates a new storage point. Credentials are required on creation and are stored
 |-------|----------|-------------|
 | `name` | Yes | Unique human-readable label |
 | `stub` | Yes | URL stub for CMS expansion (must be unique, follow stub validation rules) |
-| `provider` | Yes | `s3`, `b2`, or `garage` |
+| `provider` | Yes | `s3`, `b2`, `garage`, or `r2` |
 | `endpoint` | No | Custom S3 endpoint URL. Leave blank for AWS S3. Required for B2 and Garage. |
 | `region` | No | AWS region or equivalent. Used by the S3 client for request signing. |
 | `bucket` | Yes | S3 bucket name |
@@ -16159,17 +16412,24 @@ Deletes a storage point and removes its vault credentials. Credential deletion i
 POST /st/{id}/test
 ```
 
-Tests a storage point by verifying that credentials exist in the vault and returning the configured provider metadata.
+Tests a storage point by running **ListObjectsV2** against the bucket (vault credentials required).
 
 **Success response:**
 ```json
 {
   "ok": true,
-  "msg": "credentials found, S3 connectivity test not yet implemented",
+  "msg": "remote list probe succeeded",
+  "checks": {
+    "vault_credentials_present": true,
+    "remote_list_probe": true
+  },
   "provider": "s3",
   "endpoint": "",
   "bucket": "my-media-bucket",
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "latency_ms": 42,
+  "key_count": 1,
+  "sample_keys": ["media/photo.jpg"]
 }
 ```
 
@@ -16216,7 +16476,7 @@ Storage point metadata is stored in the SRE state database in the `storage_point
 | `id` | TEXT PK | UUID, auto-generated on creation |
 | `name` | TEXT UNIQUE | User-chosen label, must be unique |
 | `stub` | TEXT UNIQUE | URL stub for CMS expansion, must be unique |
-| `provider` | TEXT | One of: `s3`, `b2`, `garage` |
+| `provider` | TEXT | One of: `s3`, `b2`, `garage`, `r2` |
 | `endpoint` | TEXT | S3 endpoint URL (empty for AWS defaults) |
 | `region` | TEXT | Region identifier |
 | `bucket` | TEXT | Bucket name |
@@ -16229,11 +16489,11 @@ Storage point metadata is stored in the SRE state database in the `storage_point
 
 ### Limitations
 
-- **No file upload/browse** -- Storage points are metadata registrations only. File management (upload, list, delete objects in the bucket) is not yet available through the dashboard or API. You must use provider-specific tools (AWS CLI, B2 CLI, Garage CLI) or third-party S3 clients to manage files.
+- **Dashboard has no object browser** -- Register and test points in the dashboard. Upload and inspect objects from Lua (`sn.st.put` / `sn.st.head`) or provider CLIs.
 
-- **Connectivity test is partial** -- The test endpoint verifies that vault credentials exist but does not perform an actual S3 `ListBucket` call. Full S3 connectivity testing requires adding an S3 SDK dependency, which is planned for a future release.
+- **Connectivity test runs ListObjectsV2** -- `POST /st/{id}/test` probes the remote bucket with vault credentials.
 
-- **Lua API is metadata-only** -- `sn.st.*` lists points, finds points by ID or stub, and resolves public URLs. It does not provide object I/O.
+- **Lua I/O** -- `sn.st` supports list, get, put, head, and resolve. It does not list bucket keys or delete objects from Lua.
 
 - **Single-region only** -- Each storage point maps to one bucket in one region. Cross-region replication must be configured at the provider level (for example AWS S3 Cross-Region Replication, B2 replication).
 
@@ -16296,7 +16556,7 @@ Stored in `.sentinel/config.json` as `marketplace.license_key`.
 
 ```bash
 sentinel login          # device code against kits.ndx.au
-sentinel register       # org profile + instance bind against license.ndx.au
+sentinel register       # occupy/CE path: org profile + instance bind against license.ndx.au
 sentinel harness start -p ./my-sre
 ```
 
@@ -16309,8 +16569,12 @@ Manual: `sentinel license activate sk_ent_...`
 | Unregistered (prod) | Blocked |
 | Registered, live occupy lease | Run |
 | Expired credential | Blocked |
-| Occupy denied / lease lapsed | Blocked |
+| Occupy denied / lease lapsed | Blocked (`ErrNoSlot` on flow **start**) |
 | SMTP configured | License deny/lapse emails |
+
+Flow **start** is gated. `/hl` still serves occupy fields (`slot_held`, `occupy_reason`, `lease_until`, `occupy_healthy`). Other HTTP endpoints may still answer.
+
+`sentinel register` is the occupy/CE registration path (instance bind against `license.ndx.au`).
 
 Dev builds (`-tags dev`) are not gated. Public `snprod` binaries set `PrereleaseRegistrationBypass=false`.
 
@@ -16530,7 +16794,7 @@ services:
       - "8085:8080"
     volumes:
       - ./sre:/app/sre
-    command: ["./sentinel", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
+      command: ["./sentinel", "harness", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
 ```
 
 In this mode:
@@ -16553,7 +16817,7 @@ services:
     volumes:
       - ./sre:/app/sre
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["./sentinel", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
+      command: ["./sentinel", "harness", "start", "-p", "/app/sre", "--port", "8080", "--no-input"]
 ```
 
 More requirements:
@@ -16669,11 +16933,13 @@ The following sections cover the local-development bootstrap path for a managed 
 
 - Docker Desktop or a working Docker Engine on the local machine.
 - A Sentinel build with dev features enabled for local work.
-- An SRE initialized with `--wp-central`.
+- An SRE initialized with `--wp-central` (kits come from **sre-init**, not from the harness source tree).
 - A vault passphrase configured if the local project encrypts the vault.
 - An S3-compatible bucket storage point configured for WordPress media publication.
 
-Example dev build:
+The WordPress kits are installed by `sentinel sre init --wp-central` / `--wp-edge` from **sre-init**. Do not copy kit directories out of a harness checkout.
+
+Example harness binary build (optional, local-dev):
 
 ```bash
 go build -tags dev -o sentinel ./cmd/sentinel
@@ -16687,10 +16953,11 @@ Create a new SRE with the `wp-central` project profile:
 sentinel sre init ./my-central --wp-central
 ```
 
-This currently scaffolds:
+This currently scaffolds (from **sre-init**, not the harness tree):
 
 - `sentinel.yaml` with a `wp_central` block.
 - `sn.wp-central/`.
+- `sn.wp-preview/` (`--wp-central` also installs the preview kit).
 - `docker-compose.wp-central.yaml`.
 
 The generated compose file is for development. It currently uses floating `wordpress:latest` and `mariadb:latest` images.
@@ -16706,7 +16973,7 @@ sentinel harness start -p ./my-central --force-reset --wp-port 8800
 Default ports:
 
 - Harness: `http://127.0.0.1:8080`.
-- Dashboard: `http://127.0.0.1:9090`.
+- Dashboard: `http://127.0.0.1:9090` (loopback only).
 - WordPress ingress: `http://127.0.0.1:8800`.
 
 The dedicated WordPress ingress port can be set in either place:
@@ -16771,29 +17038,29 @@ Use the Application Password for Sentinel automation.
 
 Store the WordPress integration credentials in the Sentinel vault so flows can retrieve them through `ctx.secret(...)`.
 
-Recommended secret names:
+Harness WordPress REST vault keys:
 
-- `wp_central_username`.
-- `wp_central_app_password`.
+- `wp:sn.wp-central:user`
+- `wp:sn.wp-central:pass`
 
 Example:
 
 ```bash
-sentinel secret set wp_central_username sentinel-sync -p ./my-central
-sentinel secret set wp_central_app_password --interactive -p ./my-central
+sentinel sre secret set wp:sn.wp-central:user sentinel-sync -p ./my-central
+sentinel sre secret set wp:sn.wp-central:pass -p ./my-central
 ```
 
 If you prefer stdin:
 
 ```bash
-printf '%s' 'your application password here' | sentinel secret set wp_central_app_password --stdin -p ./my-central
+printf '%s' 'your application password here' | sentinel sre secret set wp:sn.wp-central:pass --stdin -p ./my-central
 ```
 
 Lua flows can then retrieve them with:
 
 ```lua
-local user = ctx.secret("wp_central_username")
-local pass = ctx.secret("wp_central_app_password")
+local user = ctx.secret("wp:sn.wp-central:user")
+local pass = ctx.secret("wp:sn.wp-central:pass")
 ```
 
 Do not hardcode these values into `sentinel.yaml`, flow source, or git-tracked configuration files.
@@ -16842,7 +17109,7 @@ If that succeeds, Sentinel has the credential shape it needs for local integrati
 
 ### Operator Checklist
 
-- Initialize the SRE with `sentinel sre init --wp-central`.
+- Initialize the SRE with `sentinel sre init --wp-central` (installs `sn.wp-central` and `sn.wp-preview` from sre-init).
 - Start the harness and dashboard.
 - Bring up the `wp-central` compose stack.
 - Complete the first-run install at `/wp-admin/install.php`.
@@ -16920,7 +17187,7 @@ The webhook HMAC secret must be configured in two places:
 2. **Edge side**: Store the same secret in each edge node's Sentinel vault:
 
    ```bash
-   sentinel secret set wp_webhook_secret 'your-shared-secret' -p ./my-edge
+   sentinel sre secret set wp_webhook_secret 'your-shared-secret' -p ./my-edge
    ```
 
 The edge `webhook_ingest` flow verifies every incoming payload by computing `HMAC-SHA256(body, wp_webhook_secret)` and comparing it to the `X-SN-Signature` header. Mismatched signatures are rejected.
@@ -16968,10 +17235,10 @@ To bring up a new edge node:
 2. **Configure secrets** in the edge vault:
 
    ```bash
-   sentinel secret set wp_central_origin http://your-central:8800 -p ./my-edge
-   sentinel secret set wp_central_username sentinel-sync -p ./my-edge
-   sentinel secret set wp_central_app_password --interactive -p ./my-edge
-   sentinel secret set wp_webhook_secret --interactive -p ./my-edge
+   sentinel sre secret set wp_central_origin http://your-central:8800 -p ./my-edge
+   sentinel sre secret set wp:sn.wp-central:user sentinel-sync -p ./my-edge
+   sentinel sre secret set wp:sn.wp-central:pass -p ./my-edge
+   sentinel sre secret set wp_webhook_secret -p ./my-edge
    ```
 
 3. **Sync templates** from the central dispatch folder to the edge kit's `tp/`, `pb/`, and `pg/` directories.
@@ -17183,7 +17450,7 @@ This document lists HTTP paths on `api.port` (default `8080`). [HTTP API Referen
 
 ### Conventions
 
-- Responses use the harness shape: HTTP **200** with errors in the JSON body (`ok`, `err`, `msg`) unless noted.
+- JSON `writeError` responses use HTTP **200** with `{ok: false, err, code, msg, req_id}`. Detect failure with `ok === false` / `err`. Not always HTTP 200: OPTIONS 204 (only if CORS is wired), WS disabled 503, form HTML 4xx/5xx/302, CMS HTML render 4xx/5xx, git 4xx/5xx.
 - Short prefixes follow the brevity regime for **core automation** (`/fl`, `/ex`, `/hl`, `/tr`, …).
 - **Content planes** use clear multi-character names: `/fcms`, `/ccms` (see [Content planes](/content-planes)).
 - Auth: in production mode, Bearer token or dashboard signing (`X-Sn-Sig`) applies except for explicitly public routes (see `system-specs/api.yaml`).
@@ -17273,7 +17540,7 @@ Git-native Markdown content in kit `ct/` directories (**fcms** plane). Slash kit
 | DELETE | `/fcms/{ns}/{name}/*` | Delete content |
 | GET | `/fcms/render/{ns}/{name}/{template}/*` (alias `/ct/...`) | Render HTML through `tp/{template}.gohtml` (no Lua VM) |
 
-Full operator guide: [17-SENTINEL-CMS.md](/sentinel-cms). Content planes: [24-CONTENT-PLANES.md](/content-planes).
+Full operator guide: [fcms operator guide](/sentinel-cms). Content planes: [Content planes](/content-planes).
 
 ### ccms — collection CMS (`/ccms`)
 
@@ -17295,7 +17562,7 @@ CLI: `sentinel ccms migrate|validate|status|install-refkit`.
 
 This endpoint returns a read-only snapshot of the optional MCP sidecar (`sentinel harness start --mcp`). It returns HTTP 200 with `{ok: true, ...}`. The tool, resource, and prompt catalog remains visible when `enabled` is false. Operators can inspect the risk ceiling. The response excludes bearer tokens, vault values, and occupy license keys.
 
-The dashboard page `GET /mcp` and BFF `GET /api/dashboard/mcp` proxy this payload. Details: [MCP Agent Integration](/mcp-agent-integration).
+The dashboard page `GET /mcp` and BFF handler `GET /api/dashboard/mcp` (not a path rewrite) fetch this payload. Details: [MCP Agent Integration](/mcp-agent-integration).
 
 ---
 
@@ -17311,8 +17578,12 @@ The dashboard page `GET /mcp` and BFF `GET /api/dashboard/mcp` proxy this payloa
 | `/bk/*` | Backups |
 | `/src/*` | Source file API |
 | `/schema/*` | Schema helpers |
-| `/cfg/*` | Configuration API |
+| `/cfg/*` | Configuration API (`/cfg/project`, `/cfg/ip-filters`) |
 | `/fs/pl`, `/fs/test` | Filesystem access policies (FS Control) |
+| `/st/export`, `/st/import`, `/st/{id}/objects` | Storage bundle export/import and object listing |
+| `/lib/{id}/validate` | `POST` vendor credential validation |
+| `/docker/capability`, `/docker/templates` | Docker host capability and templates |
+| `/cm/wp/*` | WordPress content plane (when WP-central is enabled) |
 | `/mk/*` | Marketplace (SKM) |
 | `/cert/*` | TLS CA / server cert distribution |
 | `/panic/recent` | Recovered panic events |
@@ -17328,7 +17599,8 @@ The standalone dashboard rewrites friendly paths to harness brevity paths (see `
 - `/api/executions` → `/ex`.
 - `/api/health` → `/hl`.
 - `/api/kt` or `/api/k` → `/hl/kt`.
-- `/api/dashboard/mcp` → `/mcp`.
+- `/api/kt/{ns}/{name}/pb/...` → `/kt/{ns}/{name}/pb/...` (public bundle; not `/hl/kt`).
+- `/api/dashboard/mcp` is a **BFF handler** (`handleAPIMCP`), not a `translatePath` rewrite.
 - `/api/fs/*` → `/fs/*`.
 
 ---
@@ -17351,7 +17623,7 @@ Machine-local harness state for one SRE. **Gitignored** (see repo `.gitignore`).
 
 Paths below assume default `data_dir: ".sentinel"` in configuration (see `system-specs/config.yaml`). Override with `SENTINEL_DATA_DIR` or `data_dir` in `.sentinel/config.json` — all `{data_dir}/…` paths move with it.
 
-**Separate from SRE `.sentinel/`:** the dashboard CLI also uses `~/.sentinel/dashboard.db` (and related keys) for operator-console metadata when not scoped to a project attach path.
+**Separate from SRE `.sentinel/`:** the dashboard CLI uses `~/.sentinel/dashboard.db` and `~/.sentinel/dashboard-{port}.pid` (loopback bind `127.0.0.1:9090`) for operator-console metadata. Marketplace login tokens live in the SRE path `{sre-root}/.sentinel/auth.json`.
 
 ---
 
@@ -17360,6 +17632,7 @@ Paths below assume default `data_dir: ".sentinel"` in configuration (see `system
 ```
 {sre-root}/.sentinel/
   config.json              # Harness infra config (required)
+  auth.json                # Project-scoped SKM tokens (not ~/.sentinel/auth.json)
   state.db                 # Harness state SQLite (+ optional SQLCipher)
   vault.db                 # Secrets SQLite (created when vault passphrase set)
   cms.db                   # Markdown parse cache (bbolt) — rename to md-cache.db proposed
@@ -17371,7 +17644,7 @@ Paths below assume default `data_dir: ".sentinel"` in configuration (see `system
   git-deploy-key           # Optional deploy key material
   git-keys/                # Additional git SSH keys
   docker-templates/        # Seeded compose templates (from embedded assets)
-  archive/                 # Rotated DB archives (logging.retention)
+  archive/                 # Rotated DB archives (logging.rotation.archive_path)
   backups/                 # Backup manager artifact retention
   data/
     {ns}.{name}.db         # Per-kit SQLite (sn.db)
@@ -17389,19 +17662,20 @@ The repository root can also contain **`storage-points.local.json`** (gitignored
 
 | Path | Engine / format | Created by | Purpose | Depends on | Restore / notes |
 |------|-----------------|------------|---------|------------|-----------------|
-| **config.json** | JSON | `sentinel sre init`, first harness start | `api.port`, tokens, TLS, logging, marketplace, `data_dir`, websocket, rate limits | Harness, dashboard (read/write some keys) | Back up manually. No auto-rebuild. Wrong edit can block startup. |
+| **config.json** | JSON | `sentinel sre init`, first harness start | `api.port`, tokens, TLS, `log`, `logging.rotation`, marketplace, smtp, ip_filters, mcp, `data_dir`, websocket | Harness, dashboard (read/write some keys) | Back up manually. No auto-rebuild. Wrong edit can block startup. |
+| **auth.json** | JSON | `sentinel login` | Project-scoped marketplace tokens | `sentinel login` / `logout` / `register` | Gitignored. Not `~/.sentinel/auth.json`. |
 | **state.db** | SQLite + WAL. Optional **SQLCipher** | `init`, harness start | Executions, logs index, triggers metadata, backup plans/runs, RAG tables (`sentinel_rag_*`), storage point registry rows, and other state | Core harness, backup manager, RAG | `/bk` file backup. `encrypt_db` needs passphrase. **Do not Litestream** (sn2 policy). |
 | **vault.db** | SQLite + WAL. **AES-256-GCM values** | `init` (if passphrase), first secret write | Encrypted secrets, including flow secrets and Postgres URLs | Vault API `/sc`, `ctx.secret`, pgmanager | File backup. Wrong passphrase = empty DB appearance. Not SQLCipher file encryption. |
 | **cms.db** | **bbolt** | `init`, harness start (`OpenContentCache`) | Parsed markdown cache for kits’ `md/` / CMS API — **not** a full CMS product | `internal/cms` builder, watcher, `/cm` handlers, forms/pages using CMS vars | Safe to delete → cold rebuild from `md/` on next start. Misnamed. **proposed: `md-cache.db`**. |
 | **harness-{port}.pid** | text | `sentinel harness start --daemon` | CLI/service discovery (`sentinel ps`, stop) | Process management only | Regenerated. Safe to remove if process dead. |
-| **marketplace-instance.json** | JSON | First marketplace / phone-home use | Stable Ed25519 instance identity for SKM | `internal/marketplace` | Do not delete casually if licensed instance bound to ID. |
+| **marketplace-instance.json** | JSON | First occupy / marketplace use | Stable Ed25519 instance identity for SKM | `internal/marketplace` | Do not delete casually if licensed instance bound to ID. |
 | **crash/** | files | Safety subsystem on panic | Last-known crash context for debugging | `internal/safety` | Optional retention cleanup. |
 | **certs/** | PEM | TLS enable / `sentinel` PKI helpers | CA + server certs for HTTPS harness | TLS listeners | Regenerable. Protect private keys. |
 | **pub-keys/** | PEM/text | Dashboard key registration | Verify dashboard `X-Sn-Sig` to harness | Dashboard attach | Re-register from dashboard if lost. |
 | **git-deploy-key** | SSH private key | Git sync setup | Deploy key for `sentinel.yaml` git configuration | `internal/git` | Regenerate through git tooling. Permissions 0600. |
 | **git-keys/** | SSH keys | Optional multi-key git | Extra git remotes | Git subsystem | Same as deploy key. |
 | **docker-templates/** | YAML/files | Dashboard seed on attach | Local copies of embedded Docker stacks | Docker handlers | Safe to re-seed from harness. |
-| **archive/** | `.db` snapshots | Log retention / rotation configuration | Archived DB copies per `logging.retention` | Configuration `archive_path` | Optional git sync if `include_backups` in sentinel.yaml git configuration. |
+| **archive/** | `.db` snapshots | Log rotation configuration | Archived DB copies per `logging.rotation.archive_path` | Configuration `logging.rotation.archive_path` | Optional git sync if `include_backups` in sentinel.yaml git configuration. |
 | **backups/** | Archives and dumps, including tar.gz | Backup manager runs | Local retention before optional upload to storage points | `/bk` API, cron plans | Can re-download from object storage if uploaded. |
 | **data/{ns}.{name}.db** | SQLite + WAL | Kit first DB use / schema apply | Kit-isolated `sn.db.*` data | Kit flows, `KitDatabaseManager` | Kit backup through `/bk` or care plans. **Litestream candidate (sn2, edge only)**. |
 | **data/pg_connections.json** | JSON | Dashboard / API add connection | Names + vault secret refs for Postgres pools | `ctx.pg`, pgmanager | Recreate from dashboard. Secrets in vault. |
@@ -17467,7 +17741,7 @@ When adding a new file under `.sentinel/`, update this document and `system-spec
 > See [Content planes](/content-planes) for the full model.  
 > **Canonical routes:** `/fcms`, `/fcms/render`. **Legacy aliases:** `/cm`, `/ct` (deprecation window).
 
-Markdown files in a kit’s `ct/` directory are the source of truth. The harness parses them into a local cache. **`/fcms`** (alias `/cm`) serves structured JSON. **`/fcms/render`** (alias `/ct`) renders public HTML. Kit pages and Lua flows can access the same content.
+Markdown files in a kit’s `ct/` directory are the source of truth. The harness parses them into a local cache. **`/fcms`** serves structured JSON. **`/fcms/render`** renders public HTML. Kit pages and Lua flows can access the same content.
 
 **Audience:** operators, SRE maintainers, and integrators who run or proxy **fcms**-backed sites — not harness contributors.
 
@@ -17475,14 +17749,14 @@ Markdown files in a kit’s `ct/` directory are the source of truth. The harness
 
 | Document | Focus |
 |----------|--------|
-| [Kit Development — CMS Kits](/kit-development#cms-kits) | Authoring kits, frontmatter, templates, `sn.cms.*` in Lua |
+| [Kit Development — CMS Kits](/kit-development#fcms-kits-file-cms) | Authoring kits, frontmatter, templates, `sn.cms.*` in Lua |
 | [Lua API — CMS](/lua-api) | Flow-level `sn.cms.get` / `sn.cms.list` |
 | [HTTP API Reference](/api-reference) | Full API payloads and error codes |
 | [Harness HTTP routes](/harness-http-routes) | Prefix catalog and keyhole behavior |
 | [The `.sentinel/` directory](/sentinel-directory) | `cms.db` location, backup, rebuild |
-| `system-specs/api.yaml` | Machine-readable route definitions |
+| Harness `system-specs/api.yaml` | Machine-readable route definitions in [ndx-au/sentinel](https://github.com/ndx-au/sentinel) |
 
-**Reference kit:** `sn.cms` in the integration test SRE (`../SRE/test/sn.cms` or `$SENTINEL_TEST_SRE/sn.cms`).
+**Reference kit:** any kit with Markdown in `ct/` (create one with `sentinel sre init`, or add `ct/` to an existing kit).
 
 ---
 
@@ -17494,10 +17768,10 @@ Markdown files in a kit’s `ct/` directory are the source of truth. The harness
 
   {ns}.{name}/ct/**/*.md  ──watch──►  cms.db  (bbolt)
          │                              ├─ bucket "cms"   → parsed CacheEntry per slug
-         │                              └─ bucket "render" → pre-rendered HTML (/ct only)
+         │                              └─ bucket "render" → pre-rendered HTML (/fcms/render only)
          │
-         ├──► GET /cm/{ns}/{name}/…     JSON for editors & agents
-         ├──► GET /ct/{ns}/{name}/{template}/…   HTML (Go templates, no Lua VM)
+         ├──► GET /fcms/{ns}/{name}/…     JSON for editors & agents
+         ├──► GET /fcms/render/{ns}/{name}/{template}/…   HTML (Go templates, no Lua VM)
          └──► GET /kt/{ns}/{name}/…     Kit UI pages (Lua variables + tp/*.gohtml)
 ```
 
@@ -17505,7 +17779,7 @@ Three ways to publish HTML from the same content:
 
 | Path | When to use | Lua at render? |
 |------|-------------|----------------|
-| **`/ct/...`** | Production site pages, reverse-proxied URLs, CDN-friendly static-ish HTML | **No** — fastest |
+| **`/fcms/render/...`** | Production site pages, reverse-proxied URLs, CDN-friendly static-ish HTML | **No** — fastest |
 | **`/kt/...`** | Kit UI with dynamic variables, auth, sidebars, forms | **Yes** — page `variables:` and optional `pg/*.lua` merge |
 | **Flow + template** | Custom logic, APIs, non-page responses | **Yes** — full flow sandbox |
 
@@ -17595,7 +17869,7 @@ sn.cms/                          # kit directory on disk: {namespace}.{kit_name}
   pg/                            # Kit page definitions (optional UI routes)
     home.yaml                    # YAML only, or YAML + home.lua merge
     render.yaml
-  tp/                            # Go html/template for pages and /ct
+  tp/                            # Go html/template for pages and /fcms/render
     home.html
     render.html
   fl/                            # Optional flows (e.g. legacy render helpers)
@@ -17616,8 +17890,8 @@ Internal cache keys use the on-disk kit directory name (`sn.cms`). HTTP APIs exp
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
 | `cms_full_html` | bool | `false` | Populate `full_html` on parsed entries (needed for `{{ safeHTML .post.full_html }}` in templates). Rebuilt on cold start. See [Hot reload](#hot-reload). |
-| `cms_render_cache_ttl_sec` | int | `0` (= harness default **300s**) | TTL for `/ct` HTML render cache entries. |
-| `cms_metadata` | map | — | Maps content folder → form name for metadata editors (`GET /cm/{ns}/{name}/_meta`). |
+| `cms_render_cache_ttl_sec` | int | `0` (= harness default **300s**) | TTL for `/fcms/render` HTML render cache entries. |
+| `cms_metadata` | map | — | Maps content folder → form name for metadata editors (`GET /fcms/{ns}/{name}/_meta`). |
 
 Example:
 
@@ -17643,13 +17917,13 @@ CMS HTTP routes use **slash-separated kit paths**, aligned with kit UI URLs:
 |---------|---------|------------|--------|
 | Kit | `sn.cms/` | `sn/cms` | `/kt/sn/cms/...` |
 
-The top-level prefix **`/ct`** is both the on-disk folder name (`ct/`) and the public HTML API — intentional symmetry for operators and reverse proxies.
+On disk the Markdown lives in `ct/`. The public HTML API is **`/fcms/render`**.
 
 Examples (harness on `http://127.0.0.1:8080`):
 
 ```http
-GET /cm/sn/cms/guides/getting-started
-GET /ct/sn/cms/render/guides/getting-started
+GET /fcms/sn/cms/guides/getting-started
+GET /fcms/render/sn/cms/render/guides/getting-started
 GET /kt/sn/cms/render?slug=guides/getting-started
 ```
 
@@ -17657,12 +17931,12 @@ GET /kt/sn/cms/render?slug=guides/getting-started
 
 ### Parse cache (`cms.db`)
 
-Location: `{data_dir}/cms.db` (default `.sentinel/cms.db`). See [16-SENTINEL-DIRECTORY.md](/sentinel-directory).
+Location: `{data_dir}/cms.db` (default `.sentinel/cms.db`). See [The `.sentinel/` directory](/sentinel-directory).
 
 | Bucket | Key | Value | Purpose |
 |--------|-----|-------|---------|
 | `cms` | `{kitDir}` → `{slug}` | JSON `CacheEntry` | Parsed frontmatter, preamble HTML, section tree, source path, content hash |
-| `render` | `{kitDir}\|{template}\|{slug}` | JSON `{ html, made_ts }` | Cached output of `GET /ct/...` only |
+| `render` | `{kitDir}\|{template}\|{slug}` | JSON `{ html, made_ts }` | Cached output of `GET /fcms/render/...` only |
 
 **Source of truth remains git-tracked files in `ct/`.** Deleting `cms.db` is safe: the harness rebuilds the parse cache on next start from `ct/`. The render bucket is also rebuilt on demand after expiry or invalidation.
 
@@ -17678,7 +17952,7 @@ At startup, the CMS builder scans all kit `ct/` trees and fills the `cms` bucket
 
 Each `ct/**/*.md` file can start with YAML frontmatter (`---` delimiters). Known fields map to structured types. Any other keys are preserved under `meta`.
 
-| Field | Required | Exposed through `/cm` | In Lua `sn.cms.get` |
+| Field | Required | Exposed through `/fcms` | In Lua `sn.cms.get` |
 |-------|----------|-------------------|---------------------|
 | `title` | Recommended | Yes | Yes |
 | `slug` | No (filename is canonical) | Yes | Yes |
@@ -17715,9 +17989,9 @@ Editors and automation can mutate files on disk through the harness (still subje
 
 | Method | Path | Body / notes |
 |--------|------|----------------|
-| `POST` | `/cm/{ns}/{name}` | `{ "slug", "frontmatter", "markdown" }` — creates `ct/{slug}.md` |
-| `PUT` | `/cm/{ns}/{name}/{slug…}` | `{ "frontmatter", "markdown", "hash?" }` — optimistic concurrency through `hash` |
-| `DELETE` | `/cm/{ns}/{name}/{slug…}` | Removes `ct/{slug}.md` (path-confined) |
+| `POST` | `/fcms/{ns}/{name}` | `{ "slug", "frontmatter", "markdown" }` — creates `ct/{slug}.md` |
+| `PUT` | `/fcms/{ns}/{name}/{slug…}` | `{ "frontmatter", "markdown", "hash?" }` — optimistic concurrency through `hash` |
+| `DELETE` | `/fcms/{ns}/{name}/{slug…}` | Removes `ct/{slug}.md` (path-confined) |
 
 All CMS JSON endpoints return HTTP **200** with `{ "ok": true, ... }` or `{ "ok": false, "err": "CODE", "msg": "..." }`.
 
@@ -17725,12 +17999,12 @@ Common error codes: `CMS.UNAVAILABLE`, `CMS.NOT_FOUND`, `CMS.INVALID_SLUG`, `CMS
 
 ---
 
-### `/cm` — structured content API
+### `/fcms` — structured content API
 
 #### List everything
 
 ```http
-GET /cm
+GET /fcms
 ```
 
 ```json
@@ -17746,7 +18020,7 @@ GET /cm
 #### Get one document (parsed)
 
 ```http
-GET /cm/sn/cms/guides/getting-started
+GET /fcms/sn/cms/guides/getting-started
 ```
 
 ```json
@@ -17765,7 +18039,7 @@ GET /cm/sn/cms/guides/getting-started
 #### Raw editor mode
 
 ```http
-GET /cm/sn/cms/guides/getting-started?raw=1
+GET /fcms/sn/cms/guides/getting-started?raw=1
 ```
 
 Returns `{ frontmatter, markdown, hash }` for round-trip editing. `agent_context` is **included** in raw mode.
@@ -17773,7 +18047,7 @@ Returns `{ frontmatter, markdown, hash }` for round-trip editing. `agent_context
 #### Content tree
 
 ```http
-GET /cm/sn/cms/_tree
+GET /fcms/sn/cms/_tree
 ```
 
 Returns a hierarchical tree of slugs for one kit (for file-tree UIs).
@@ -17781,7 +18055,7 @@ Returns a hierarchical tree of slugs for one kit (for file-tree UIs).
 #### Folder → form mapping
 
 ```http
-GET /cm/sn/cms/_meta?folder=guides
+GET /fcms/sn/cms/_meta?folder=guides
 ```
 
 Uses `cms_metadata` in `kit.yaml`. Falls back to `_default`. Response: `{ "ok": true, "form": "cms-guide" }` (empty string if unmapped).
@@ -17790,14 +18064,14 @@ Form field definitions for editors: `GET /fm/{kitDirName}/_def/{formName}` (stil
 
 ---
 
-### `/ct` — fast HTML rendering
+### `/fcms/render` — fast HTML rendering
 
 Renders cached Markdown through a named kit template **without starting the Lua VM**. Frontmatter is converted to Go template data. The primary variable is `.post` (same shape as `sn.cms.get` in Lua).
 
 #### Route pattern
 
 ```http
-GET /ct/{namespace}/{kit_name}/{template}/{slug…}
+GET /fcms/render/{namespace}/{kit_name}/{template}/{slug…}
 ```
 
 | Segment | Required | Notes |
@@ -17838,14 +18112,14 @@ Expose a clean public URL while keeping the harness path explicit internally:
 
 ```text
 Public:     https://my-site.com/guides/getting-started
-Proxy to:   http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
+Proxy to:   http://127.0.0.1:8080/fcms/render/sn/cms/render/guides/getting-started
 ```
 
 Caddy example:
 
 ```caddyfile
 handle /guides/* {
-  rewrite * /ct/sn/cms/render{path}
+  rewrite * /fcms/render/sn/cms/render{path}
   reverse_proxy 127.0.0.1:8080
 }
 ```
@@ -17919,14 +18193,14 @@ variables:
     return sn.cms.get(slug)
 ```
 
-Prefer **`/ct/...`** for public post pages when you do not need Lua. Keep `/kt/...` for authenticated or highly dynamic views.
+Prefer **`/fcms/render/...`** for public post pages when you do not need Lua. Keep `/kt/...` for authenticated or highly dynamic views.
 
 ---
 
 ### Authentication and production
 
-- CMS JSON routes follow the same harness auth model as the rest of the API (Bearer token in production). See [Configuration Guide](/configuration-guide).
-- `/ct` HTML responses are typically **public** when mounted behind a site reverse proxy — restrict at the edge if content is non-public.
+- **JSON (`/fcms`)** uses the harness API auth model: **Bearer token** and **Ed25519 `X-Sn-Sig`**. Either is accepted. See [Configuration Guide](/configuration-guide).
+- **HTML (`/fcms/render`)** is typically **unauthenticated** so public sites and reverse proxies can serve it. Restrict at the edge if the content is not public.
 - `agent_context` is for AI/editor tooling in Lua and raw mode only. Do not rely on its absence in Lua if untrusted code can run in flows.
 
 ---
@@ -17936,7 +18210,7 @@ Prefer **`/ct/...`** for public post pages when you do not need Lua. Keep `/kt/.
 #### Enable CMS for a kit
 
 1. Add `ct/` with at least one `.md` file.
-2. Add `tp/` templates if you use `/ct` or kit pages.
+2. Add `tp/` templates if you use `/fcms/render` or kit pages.
 3. Optionally set `cms_full_html: true` if templates need full-document HTML.
 4. Restart harness or rely on file watcher for parse cache updates.
 
@@ -17947,17 +18221,17 @@ Prefer **`/ct/...`** for public post pages when you do not need Lua. Keep `/kt/.
 curl -s http://127.0.0.1:8080/hl | jq .
 
 # Content visible
-curl -s http://127.0.0.1:8080/cm/sn/cms/hello-world | jq .
+curl -s http://127.0.0.1:8080/fcms/sn/cms/hello-world | jq .
 
 # HTML path
-curl -s -D - http://127.0.0.1:8080/ct/sn/cms/render/hello-world | head
+curl -s -D - http://127.0.0.1:8080/fcms/render/sn/cms/render/hello-world | head
 ```
 
-Integration SRE:
+Against your own SRE:
 
 ```bash
-sentinel harness start -p ../SRE/test --daemon
-curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
+sentinel harness start -p ./my-sre --daemon
+curl -s http://127.0.0.1:8080/fcms/render/sn/cms/render/guides/getting-started
 ```
 
 #### Clear caches
@@ -17972,7 +18246,7 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 
 - Saving `ct/**/*.md` updates the parse cache through the project watcher.
 - `full_html` is **not** regenerated on hot reload when `cms_full_html` is true — only on cold start. Restart harness after bulk content imports if you depend on `full_html`.
-- `/ct` render cache entries for the changed slug are invalidated automatically.
+- `/fcms/render` cache entries for the changed slug are invalidated automatically.
 
 ---
 
@@ -17981,9 +18255,9 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 | Symptom | Likely cause | Fix |
 |---------|----------------|-----|
 | `CMS.UNAVAILABLE` | No SRE root or cache failed to open | Check harness logs. Make sure that another process does not lock `.sentinel/cms.db` (`sentinel ps`) |
-| `CMS.NOT_FOUND` | Slug typo or file not under `ct/` | `GET /cm` to list slugs. Examine the path |
-| `/ct` 404 HTML “template missing” | No `tp/{template}.gohtml` | Add template. Template name in URL is required |
-| `/ct` empty `post` | `cms_full_html: false` and template expects `full_html` | Enable flag and restart, or use `sections` / `preamble` |
+| `CMS.NOT_FOUND` | Slug typo or file not under `ct/` | `GET /fcms` to list slugs. Examine the path |
+| `/fcms/render` 404 HTML “template missing” | No `tp/{template}.gohtml` | Add template. Template name in URL is required |
+| `/fcms/render` empty `post` | `cms_full_html: false` and template expects `full_html` | Enable flag and restart, or use `sections` / `preamble` |
 | `/kt` HTML “page contract invalid” | Missing `name`/`path`/`title` after merge | Fix YAML or `pg/*.lua` return table |
 | Stale public HTML | Render cache within TTL | Lower TTL, touch file, or wait |
 | `cms.db` huge | Many kits/slugs | Normal. Delete file to compact after cleanup |
@@ -17992,7 +18266,7 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 
 ### WordPress content API (optional)
 
-When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remote WordPress — not the git-native `ct/` CMS. Do not confuse with `/cm/sn/cms/...`.
+When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remote WordPress — not the git-native `ct/` CMS. Do not confuse those with `/fcms/{ns}/{name}/...`.
 
 ---
 
@@ -18001,10 +18275,10 @@ When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remo
 | Constraint | Rationale |
 |------------|-----------|
 | No Lua in Markdown frontmatter | Predictable parse cost at scale |
-| No default `/ct` template | Explicit routing. Proxies stay unambiguous |
+| No default `/fcms/render` template | Explicit routing. Proxies stay unambiguous |
 | No global layout in `kit.yaml` | Layout lives in `tp/*.gohtml` per site design |
-| Slash kit paths in `/cm` and `/ct` | Matches `/kt/{ns}/{name}` mental model |
-| Parse vs render cache split | JSON/API can update without storing HTML. `/ct` stays fast |
+| Slash kit paths in `/fcms` and `/fcms/render` | Matches `/kt/{ns}/{name}` mental model |
+| Parse vs render cache split | JSON/API can update without storing HTML. `/fcms/render` stays fast |
 
 ---
 
@@ -18018,9 +18292,9 @@ When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remo
 | Routes | `internal/api/gateway.go` |
 | File watcher | `internal/orchestrator/project_watcher_cms.go` |
 | Page merge | `internal/kit/discover.go`, `internal/templates/lua_executor.go` |
-| Routes spec | `system-specs/api.yaml` → `cms:` |
+| Routes spec | Harness [ndx-au/sentinel](https://github.com/ndx-au/sentinel) `system-specs/api.yaml` → `cms:` |
 
-When behavior changes, update this guide, `05-KIT-DEVELOPMENT.md` (CMS section), and `system-specs/api.yaml`.
+When behavior changes, update this guide, [Kit Development](/kit-development) (CMS section), and the harness `system-specs/api.yaml`. The specs live in the harness repository, not this docs tree.
 
 # MCP Agent Integration
 
@@ -18046,7 +18320,7 @@ MCP runs **in-process** with the harness (streamable HTTP). Clients that only sp
 
 The dashboard **MCP** page (`GET /mcp`) is in the Background section after Agents. It shows sidecar status, binding, URL, authentication, risk limits, and connection examples. It lists named clients without tokens and the tool, resource, and prompt catalog. The page is read-only.
 
-- Dashboard BFF: `GET /api/dashboard/mcp` → harness `GET /mcp`.
+- Dashboard BFF handler: `GET /api/dashboard/mcp` (`handleAPIMCP`, not a `translatePath` rewrite) fetches harness `GET /mcp`.
 - Catalog is shown even when the sidecar is off (ceiling from `mcp.risk_classes` / default `read,validate`).
 - Starting MCP still requires `sentinel harness restart -p <sre> --mcp` (no in-UI start).
 - The page does not invoke tools or edit `mcp.clients`.
@@ -18424,7 +18698,7 @@ Expect a JSON-RPC response with `serverInfo.name` = `sentinel-harness`.
 
 ## Harness Internals — Code Architecture
 
-Contributor reference for the Sentinel **harness** Go codebase. This document describes how subsystems are wired, where code lives, and how requests flow through the runtime. The **code is the source of truth**. User-facing behavior is also specified in `system-specs/` and the numbered docs under `docs/`.
+Contributor reference for the Sentinel **harness** Go codebase. This document describes how subsystems are wired, where code lives, and how requests flow through the runtime. The **code is the source of truth**. User-facing behavior is also specified in harness `system-specs/` and the public guides in this docs SRE.
 
 **Audience:** engineers modifying `internal/*`, `cmd/sentinel/*`, or debugging harness behavior at runtime.
 
@@ -18450,7 +18724,7 @@ Sentinel separates two concerns:
 | Harness API | 8080 | `sentinel harness start -p <sre>` |
 | Dashboard BFF | 9090 | `sentinel dashboard start --sre-location <sre>` |
 
-The dashboard is a standalone process that proxies HTTP to the harness and maintains its own UI database. See [internal/dashboard/server.go](../internal/dashboard/server.go).
+The dashboard is a standalone process that proxies HTTP to the harness and maintains its own UI database. See [internal/dashboard/server.go](https://github.com/ndx-au/sentinel/blob/main/internal/dashboard/server.go).
 
 **Embedded SRE content:** this repo does not contain kit directories. `./build.sh` syncs a minimal embed from sibling `../sre-init` for CLI scaffolding only — never add kits under this repo.
 
@@ -18462,25 +18736,25 @@ The dashboard is a standalone process that proxies HTTP to the harness and maint
 cmd/sentinel/main.go  →  commands.Execute()
 ```
 
-All commands live under [cmd/sentinel/commands/](../cmd/sentinel/commands/). Important groups:
+All commands live under [cmd/sentinel/commands/](https://github.com/ndx-au/sentinel/tree/main/cmd/sentinel/commands). Important groups:
 
 | Command group | Purpose | Long-running? |
 |---------------|---------|---------------|
 | `sentinel harness start` | Bootstrap and run the harness | Yes |
-| `sentinel dashboard start` | Standalone web UI (BFF) | Yes |
-| `sentinel sre init\|test\|kit\|bundle` | Scaffolding and validation | No |
-| `sentinel secret`, `backup`, `db`, `storage` | Operational utilities | No |
+| `sentinel dashboard start` | Standalone web UI (BFF, loopback) | Yes |
+| `sentinel sre init\|test\|kit\|bundle\|secret\|config\|doctor\|storage` | Scaffolding, vault, and validation | No |
+| `sentinel backup`, `db`, `approvals` | Operational utilities | No |
 | `sentinel register`, `login`, `license` | Marketplace / licensing | No |
 | `sentinel mcp proxy` | Signing proxy for MCP clients | Optional sidecar |
-| `sentinel probes run` | Adversarial probe runner | No |
+| `cmd/simulator -mode probe` | Adversarial probe runner (not a `sentinel` subcommand) | No |
 
-**Critical convention:** harness subsystem wiring is centralized in [harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go), not scattered across individual handlers. When adding a new runtime dependency, bootstrap is the integration point.
+**Critical convention:** harness subsystem wiring is centralized in [harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go), not scattered across individual handlers. When adding a new runtime dependency, bootstrap is the integration point.
 
 ---
 
 ### Bootstrap sequence
 
-`sentinel harness start` calls `BootstrapHarness` → `bootstrapFullHarness`, then `StartServices`, then starts HTTP listeners in [harness_start.go](../cmd/sentinel/commands/harness_start.go).
+`sentinel harness start` calls `BootstrapHarness` → `bootstrapFullHarness`, then `StartServices`, then starts HTTP listeners in [harness_start.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_start.go).
 
 ```mermaid
 flowchart TD
@@ -18501,7 +18775,7 @@ flowchart TD
 
 #### HarnessComponents inventory
 
-The `HarnessComponents` struct in [harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go) is the authoritative list of runtime subsystems:
+The `HarnessComponents` struct in [harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go) is the authoritative list of runtime subsystems:
 
 | Field | Package | Role |
 |-------|---------|------|
@@ -18532,7 +18806,7 @@ When `bootstrapWPProxyOnly` runs (through `--wp-proxy-only` paths), only `App`, 
 
 #### Start and shutdown order
 
-**StartServices** ([harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go)):
+**StartServices** ([harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go)):
 
 1. Scheduler → WebhookRouter → EventBus.
 2. BackupManager schedule sync.
@@ -18549,7 +18823,7 @@ When `bootstrapWPProxyOnly` runs (through `--wp-proxy-only` paths), only `App`, 
 
 ### Application container (`internal/app`)
 
-[internal/app/app.go](../internal/app/app.go) owns shared infrastructure created before subsystem wiring.
+[internal/app/app.go](https://github.com/ndx-au/sentinel/blob/main/internal/app/app.go) owns shared infrastructure created before subsystem wiring.
 
 #### Initialization order
 
@@ -18575,7 +18849,7 @@ ContentCache → FormSystem → LuaPool → VaultManager → StateManager
 
 #### Component interface
 
-Lifecycle types are re-exported from [internal/health](../internal/health) through [internal/app/component.go](../internal/app/component.go):
+Lifecycle types are re-exported from [internal/health](https://github.com/ndx-au/sentinel/blob/main/internal/health) through [internal/app/component.go](https://github.com/ndx-au/sentinel/blob/main/internal/app/component.go):
 
 ```go
 type Component interface {
@@ -18598,16 +18872,16 @@ Two configuration files serve different purposes (see [Configuration Guide](/con
 | Machine infra | `.sentinel/config.json` | `config.Load` through koanf | `api.port`, `data_dir`, `vault_passphrase`, TLS, marketplace, WS |
 | Project behavior | `sentinel.yaml` | `config.LoadProjectConfig` | `name`, `hotreload`, `git`, `wp_central`, `default_kit`, limits |
 
-Environment variables (`SENTINEL_*`) override configuration file values. See [internal/config/env.go](../internal/config/env.go).
+Environment variables (`SENTINEL_*`) override configuration file values. See [internal/config/env.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/env.go).
 
 #### Build modes
 
-Compile-time tags select behavior in [buildmode_dev.go](../internal/config/buildmode_dev.go) vs [buildmode_prod.go](../internal/config/buildmode_prod.go):
+Compile-time tags select behavior in [buildmode_dev.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/buildmode_dev.go) vs [buildmode_prod.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/buildmode_prod.go):
 
 | Constant | `go build -tags dev` | Production (default) |
 |----------|----------------------|----------------------|
 | `DevModeAllowed` | `true` | `false` |
-| `PrereleaseRegistrationBypass` | `false` | `true` (set `false` before public release) |
+| `PrereleaseRegistrationBypass` | `false` | `false` |
 
 Production builds require a valid marketplace license for flow/trigger **execution** (discovery and listing remain available).
 
@@ -18615,23 +18889,23 @@ Production builds require a valid marketplace license for flow/trigger **executi
 
 ### Package map
 
-Top-level packages under [internal/](../internal/), grouped by role:
+Top-level packages under [internal/](https://github.com/ndx-au/sentinel/tree/main/internal), grouped by role:
 
 | Group | Packages | Role |
 |-------|----------|------|
 | **Core runtime** | `app`, `config`, `health`, `logger`, `safety`, `util`, `version` | DI, configuration, logging, crash recovery |
-| **HTTP surface** | `api`, `httputil`, `requestparams` | Chi gateway, handlers, middleware, brevity routes |
-| **Execution** | `flows`, `luavm`, `lua`, `connectors`, `modules`, `luatest`, `luautil` | Flow lifecycle, sandbox, `sn.*` registration |
-| **Kit platform** | `orchestrator`, `kit`, `scaffold`, `templates`, `templatesync`, `library` | Discovery, loading, pages/forms, API library |
+| **HTTP surface** | `api`, `httputil`, `requestparams`, `clientip` | Chi gateway, handlers, middleware, brevity routes, client IP |
+| **Execution** | `flows`, `luavm`, `lua`, `connectors`, `modules`, `luatest`, `luautil`, `execution` | Flow lifecycle, sandbox, `sn.*` registration, execution authority |
+| **Kit platform** | `orchestrator`, `kit`, `scaffold`, `templates`, `templatesync`, `library`, `skills` | Discovery, loading, pages/forms, API library, skills |
 | **Triggers & events** | `triggers`, `events` | Cron, webhooks, event bus, flow-defined triggers |
 | **Forms & UI data** | `forms`, `cache`, `uploads`, `yaml`, `core` | FormSystem, template pipeline, submissions |
 | **Persistence** | `state`, `vault`, `dbutil`, `pgmanager` | SQLite state, encrypted vault, kit DBs, PG pools |
-| **Content** | `cms`, `storage`, `storagebundle` | CMS cache (`cms.db`), S3-compatible storage |
+| **Content** | `cms`, `ccms`, `storage`, `storagebundle` | File CMS cache (`cms.db`), collection CMS, S3-compatible storage |
 | **Realtime** | `ws` | WebSocket bus + Lua bindings |
 | **Security** | `security`, `auth`, `fsaccess` | Audit logging, auth helpers, filesystem policy enforcer |
-| **Ops & integration** | `docker`, `backup`, `git`, `marketplace`, `mcp`, `probes` | Compose stacks, backups, SKM, MCP server |
+| **Ops & integration** | `docker`, `backup`, `git`, `marketplace`, `mcp`, `probes`, `mail`, `observability` | Compose stacks, backups, SKM, MCP server, mail, traces |
 | **AI / RAG** | `ai`, `rag`, `session` | AI client, RAG control plane, memory sessions |
-| **Dashboard** | `dashboard` | Standalone BFF + SQLCipher UI DB |
+| **Dashboard** | `dashboard`, `dashboardinstance`, `guilauncher`, `harnessinstance` | Standalone BFF + SQLCipher UI DB, instance discovery, GUI launcher |
 | **CLI & embed** | `cli`, `static`, `sreinit` | Terminal formatting, embedded assets |
 | **Testing** | `testutil`, `luatest` | Harness unit/integration helpers |
 
@@ -18655,8 +18929,8 @@ flowchart LR
 
 #### Discovery rules
 
-1. **`kit.DiscoverKits(sreRoot)`** — scans for directories matching `{ns}.{name}/kit.yaml` ([discover.go](../internal/kit/discover.go)).
-2. **`kit.LoadKit(path)`** — parses manifest and auto-discovers subdirectories ([loader.go](../internal/kit/loader.go)):
+1. **`kit.DiscoverKits(sreRoot)`** — scans for directories matching `{ns}.{name}/kit.yaml` ([discover.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/discover.go)).
+2. **`kit.LoadKit(path)`** — parses manifest and auto-discovers subdirectories ([loader.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/loader.go)):
 
    | Directory | Content |
    |-----------|---------|
@@ -18665,30 +18939,32 @@ flowchart LR
    | `fm/` | Form YAML definitions |
    | `cn/` | Connectors |
    | `md/` | Modules |
-   | `dd/` | Data definitions |
-   | `db/` | Kit SQLite databases (through KitDatabaseManager) |
+   | `dd/` | Data definitions (YAML). Loader discovers `dd/`, not `db/`. |
+   | `tp/` | Go HTML templates (`*.gohtml`). Not trigger YAML. |
 
-3. **`Orchestrator.LoadAllKits`** — initializes PG manager, kit DB manager, library service, AI client, RAG manager, memory sessions, then calls `loadKitsFromDisk` ([registry.go](../internal/orchestrator/registry.go)).
+3. **`Orchestrator.LoadAllKits`** — initializes PG manager, kit DB manager, library service, AI client, RAG manager, memory sessions, then calls `loadKitsFromDisk` ([registry.go](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/registry.go)).
 
 #### Flow ID convention
 
-Kit flows use `{namespace}.{kit-name}/{flow-basename}`:
+Canonical internal ID is `{ns}-{name}:{flow}` (dots in the kit directory become dashes). Slash alias `{ns}.{name}/{flow}` is also accepted. HTTP is `/fl/{ns}.{name}/{flow}`:
 
 ```
-sn.core/fl/assistant.lua  →  sn.core/assistant
+sn.core-agent/fl/assistant.lua  →  sn-core-agent:assistant
+HTTP: GET /fl/sn.core-agent/assistant
+slash alias: sn.core-agent/assistant
 ```
 
-Legacy system flows under project `fl/` (without kit prefix) use bare IDs.
+Colon IDs in HTTP (`/fl/{ns}-{name}:{flow}`) are a legacy fallback.
 
 #### Kit lifecycle
 
-[KitLifecycle](../internal/kit/lifecycle.go) coordinates per-kit reload, disable, and enable. It is wired in bootstrap and exposed through `/hl/kt/{ns}/{name}/rl|off|on`. Design details: [specs/kitlife.md](https://github.com/ndx-au/sentinel/blob/main/specs/kitlife.md).
+[KitLifecycle](https://github.com/ndx-au/sentinel/blob/main/internal/kit/lifecycle.go) coordinates per-kit reload, disable, and enable. It is wired in bootstrap and exposed through `/hl/kt/{ns}/{name}/rl|off|on`. Design details: [specs/kitlife.md](https://github.com/ndx-au/sentinel/blob/main/specs/kitlife.md).
 
 ---
 
 ### Flow execution path
 
-[internal/flows/manager.go](../internal/flows/manager.go) bridges the HTTP API to gopher-lua execution and state persistence.
+[internal/flows/manager.go](https://github.com/ndx-au/sentinel/blob/main/internal/flows/manager.go) bridges the HTTP API to gopher-lua execution and state persistence.
 
 ```mermaid
 sequenceDiagram
@@ -18712,7 +18988,7 @@ sequenceDiagram
 |------|---------------|---------|
 | `SetLuaStateSetup` | `orch.RegisterLuaState(L)` | Global `sn.*` primitives (including HTTP, JSON, and DB schema) |
 | `SetLuaFlowSetup` | Per-flow closures | Kit DB, CMS, WebSocket APIs scoped to flow's kit |
-| `SetCtxSetup` | Bootstrap closure | `ctx.secret`, `ctx.pg`, `ctx.project_config`, `ctx.keyhole` |
+| `SetCtxSetup` | Bootstrap closure | `ctx.secret`, `ctx.pg`, `ctx.project_config`, `ctx.keyhole`, `ctx.cache` |
 | `SetTriggerSync` | `FlowTriggerSync` | Sync Lua `triggers` table on flow load |
 | `SetTriggerHelperRegistrar` | `triggers.RegisterTriggerHelpers` | Trigger helper functions in VM |
 | `SetEventBus` | EventBus instance | `sentinel.emit()` from flows |
@@ -18722,7 +18998,7 @@ sequenceDiagram
 
 #### Lua VM pool security
 
-[internal/luavm/pool.go](../internal/luavm/pool.go):
+[internal/luavm/pool.go](https://github.com/ndx-au/sentinel/blob/main/internal/luavm/pool.go):
 
 - `SkipOpenLibs: true` — only safe standard libraries are opened manually.
 - One `LState` per execution — gopher-lua states are **not goroutine-safe**.
@@ -18730,14 +19006,15 @@ sequenceDiagram
 
 #### Flow lifecycle hooks
 
-Each flow script can define:
+Required hooks (`VerifyHooks`): `setup`, `main`, `cleanup`. Optional: `failed` (auto no-op), `timeout()`.
 
 | Function | When called |
 |----------|-------------|
-| `setup()` | Before `main`, once per execution |
-| `main()` | Primary work |
-| `cleanup()` | After successful `main` |
-| `failed(err)` | On error (if defined) |
+| `setup()` | Before `main`, once per execution (required) |
+| `main()` | Primary work (required) |
+| `failed(err)` | On setup/main error (optional; auto no-op) |
+| `timeout()` | When execution hits the deadline (optional) |
+| `cleanup()` | Always last, including after `failed` on error (required) |
 
 Triggers (cron, webhook, event, form, manual) all converge on the same execution path through FlowManager.
 
@@ -18745,15 +19022,17 @@ Triggers (cron, webhook, event, form, manual) all converge on the same execution
 
 ### HTTP gateway (`internal/api`)
 
-[internal/api/gateway.go](../internal/api/gateway.go) is the harness HTTP surface.
+[internal/api/gateway.go](https://github.com/ndx-au/sentinel/blob/main/internal/api/gateway.go) is the harness HTTP surface.
 
 #### Middleware chain
 
 Order in `setupMiddleware()`:
 
 ```
-stripTrailingSlash → CORS → requestID → recoverer → auth → IP filter (optional)
+requestLimits → stripTrailingSlash → CORS (only if origins set) → requestID → recoverer → auth → IP filter (optional)
 ```
+
+`requestLimits` is first. CORS middleware is installed only when `corsOrigins` is non-empty. Harness bootstrap currently passes `nil`, so CORS is unwired. There is no `api.cors_origins` config field.
 
 | Middleware | Behavior |
 |------------|----------|
@@ -18761,17 +19040,17 @@ stripTrailingSlash → CORS → requestID → recoverer → auth → IP filter (
 | `ipFilterEngine` | Per-service path rules (harness vs wp-proxy) |
 | Public keys | Loaded from `{SRE}/.sentinel/pub-keys/*.pub` for dashboard/agent signatures |
 
-MCP reuses harness auth through `Gateway.HTTPAuthMiddleware()` ([harness_mcp.go](../cmd/sentinel/commands/harness_mcp.go)).
+MCP reuses harness auth through `Gateway.HTTPAuthMiddleware()` ([harness_mcp.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_mcp.go)).
 
 #### Response contract
 
-**Always HTTP 200.** Errors appear in the JSON body:
+JSON `writeError` uses HTTP 200 with:
 
 ```json
-{"ok": false, "err": "CODE", "msg": "human-readable message"}
+{"ok": false, "err": "CODE", "code": "CODE", "msg": "human-readable message", "req_id": "..."}
 ```
 
-This is an architecture lock — do not return 4xx/5xx for application errors.
+Detect failure with `ok === false` / `err`. This is **not** always HTTP 200: OPTIONS 204 (if CORS is wired), WS disabled 503, form HTML 4xx/5xx/302, CMS HTML render 4xx/5xx, git handlers 4xx/5xx. Do not return 4xx/5xx from JSON `writeError` for application errors.
 
 #### Dependency injection
 
@@ -18789,7 +19068,7 @@ Routes are registered in `setupRoutes()`. Prefixes follow the brevity regime (`/
 
 ### Trigger engine
 
-Package: [internal/triggers/](../internal/triggers/)
+Package: [internal/triggers/](https://github.com/ndx-au/sentinel/tree/main/internal/triggers)
 
 | Component | Responsibility |
 |-----------|----------------|
@@ -18801,13 +19080,13 @@ Package: [internal/triggers/](../internal/triggers/)
 
 Trigger types: **cron**, **webhook**, **event**, **manual**, **form**.
 
-Flow-defined triggers (Lua table) and YAML/config triggers both land in the same registry. `FlowTriggerSync` prevents import cycles between `flows` and `triggers` packages through interfaces.
+Flow-defined triggers live in Lua (`triggers = { cron()/webhook()/event() }`). `FlowTriggerSync` prevents import cycles between `flows` and `triggers` packages through interfaces.
 
 ---
 
 ### Form system
 
-Package: [internal/forms/](../internal/forms/)
+Package: [internal/forms/](https://github.com/ndx-au/sentinel/tree/main/internal/forms)
 
 `FormSystem` is a coordinator implementing `core.Component`:
 
@@ -18843,13 +19122,17 @@ Cross-reference [The `.sentinel/` directory](/sentinel-directory) for operator-f
 
 `data_dir` defaults relative to SRE root through `.sentinel/config.json`. State DB encryption uses SQLCipher when `state.encrypt_db` is enabled.
 
-Kit-scoped SQLite databases live under `{ns}.{name}/db/` and are managed by `kit.KitDatabaseManager`.
+Kit-scoped SQLite databases live at `{projectRoot}/.sentinel/data/{ns}.{name}.db` and are managed by `kit.KitDatabaseManager`. The loader discovers data definitions from kit `dd/`, not `db/`.
+
+Triggers are Lua tables (`triggers = { cron()/webhook()/event() }`), not YAML under `tp/`. `tp/` is Go HTML templates.
+
+`ctx.cache` (page invalidation) and `ctx.fs` (FS Control) exist on the flow context.
 
 ---
 
 ### Hot reload
 
-[ProjectWatcher](../internal/orchestrator/project_watcher.go) uses fsnotify with debouncing (default 100ms) when started through `StartProjectWatcher`.
+[ProjectWatcher](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/project_watcher.go) uses fsnotify with debouncing (default 100ms) when started through `StartProjectWatcher`.
 
 Monitored changes inside kit directories:
 
@@ -18874,7 +19157,7 @@ SRE-wide reload is also available through `POST /hl/reload` and `SIGUSR1` to the
 
 #### Dashboard BFF
 
-[internal/dashboard/server.go](../internal/dashboard/server.go):
+[internal/dashboard/server.go](https://github.com/ndx-au/sentinel/blob/main/internal/dashboard/server.go):
 
 - Discovers running harness instances (port scan).
 - Proxies REST to harness. Maintains local SQLCipher DB for UI preferences.
@@ -18883,11 +19166,11 @@ SRE-wide reload is also available through `POST /hl/reload` and `SIGUSR1` to the
 
 #### MCP server
 
-[internal/mcp/](../internal/mcp/) — optional sidecar enabled with `sentinel harness start --mcp`. Listens on API port + 100 by default. See [MCP Agent Integration](/mcp-agent-integration).
+[internal/mcp/](https://github.com/ndx-au/sentinel/tree/main/internal/mcp) — optional sidecar enabled with `sentinel harness start --mcp`. Listens on API port + 100 by default. See [MCP Agent Integration](/mcp-agent-integration).
 
 #### Marketplace
 
-[internal/marketplace/](../internal/marketplace/):
+[internal/marketplace/](https://github.com/ndx-au/sentinel/tree/main/internal/marketplace):
 
 - `LicenseManager` — Ed25519 license verification. Gates flow execution in prod.
 - `Installer` — kit download with signature verification.
@@ -18896,15 +19179,15 @@ SRE-wide reload is also available through `POST /hl/reload` and `SIGUSR1` to the
 
 #### Docker orchestrator
 
-[internal/docker/](../internal/docker/) manages compose stacks from templates in [internal/static/docker-templates/](../internal/static/docker-templates/). Exposed through `/docker` API routes and dashboard.
+[internal/docker/](https://github.com/ndx-au/sentinel/tree/main/internal/docker) manages compose stacks from templates in [internal/static/docker-templates/](https://github.com/ndx-au/sentinel/tree/main/internal/static/docker-templates). Exposed through `/docker` API routes and dashboard.
 
 #### FS Control
 
-[internal/fsaccess/](../internal/fsaccess/) — policy enforcer for file connector writes. Policies stored in state DB. Exposed through `/fs/pl` API and `ctx.fs` Lua binding.
+[internal/fsaccess/](https://github.com/ndx-au/sentinel/tree/main/internal/fsaccess) — policy enforcer for file connector writes. Policies stored in state DB. Exposed through `/fs/pl` API and `ctx.fs` Lua binding.
 
 #### Git sync
 
-[internal/git/](../internal/git/) — when `sentinel.yaml` sets `git.sync: auto`, `GitSyncManager` runs periodic pull/push and emits events on the EventBus.
+[internal/git/](https://github.com/ndx-au/sentinel/tree/main/internal/git) — when `sentinel.yaml` sets `git.sync: auto`, `GitSyncManager` runs periodic pull/push and emits events on the EventBus.
 
 ---
 
@@ -18925,7 +19208,7 @@ sentinel dashboard start --sre-location ../SRE/test
 
 Override with `$SENTINEL_TEST_SRE`. **Never** add kit directories or flows under this repo.
 
-Unit tests use `t.TempDir()` or [internal/testutil](../internal/testutil/).
+Unit tests use `t.TempDir()` or [internal/testutil](https://github.com/ndx-au/sentinel/tree/main/internal/testutil).
 
 #### Code conventions
 
@@ -18936,11 +19219,11 @@ Unit tests use `t.TempDir()` or [internal/testutil](../internal/testutil/).
 | Logging | slog-style: `logger.Error("msg", "key", val, "error", err)` |
 | API naming | Brevity regime: two-char routes and query params |
 | Route changes | Require explicit approval before modifying router table |
-| Docs sync | Update `system-specs/` and relevant `docs/` when behavior changes |
+| Docs sync | Update harness `system-specs/` and the public guides in ndx-au/sentinel-docs when behavior changes |
 
 #### Changing routes
 
-Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maintainers. Update `system-specs/api.yaml`, [15-HARNESS-HTTP-ROUTES.md](/harness-http-routes), and `sre-url-map.md` together.
+Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maintainers. Update harness `system-specs/api.yaml`, [Harness HTTP Routes](/harness-http-routes), and harness `sre-url-map.md` together.
 
 ---
 
@@ -18950,13 +19233,13 @@ Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maint
 |----------|---------|
 | [CLAUDE.md](https://github.com/ndx-au/sentinel/blob/main/CLAUDE.md) | Agent rules, package layout summary, common mistakes |
 | [specs/kitlife.md](https://github.com/ndx-au/sentinel/blob/main/specs/kitlife.md) | Kit enable/disable and reload design |
-| [system-specs/](../system-specs/) | Machine-readable API, configuration, trigger, Lua contracts |
+| [system-specs/](https://github.com/ndx-au/sentinel/tree/main/system-specs) | Machine-readable API, configuration, trigger, Lua contracts |
 | [sre-url-map.md](https://github.com/ndx-au/sentinel/blob/main/sre-url-map.md) | URL construction cheat sheet |
 | [sre4agents.md](https://github.com/ndx-au/sentinel/blob/main/sre4agents.md) | Full SRE development reference |
 | `.claude/skills/sn-go-*` | Per-subsystem harness skills (lua, triggers, forms, configuration, security, dashboard, …) |
-| [16-SENTINEL-DIRECTORY.md](/sentinel-directory) | On-disk artifact inventory |
-| [18-MCP-AGENT-INTEGRATION.md](/mcp-agent-integration) | MCP server setup |
-| [10-ADVERSARIAL-TESTING.md](/adversarial-testing) | Probe runner for harness QA |
+| [The .sentinel/ directory](/sentinel-directory) | On-disk artifact inventory |
+| [MCP Agent Integration](/mcp-agent-integration) | MCP server setup |
+| [Adversarial Testing](/adversarial-testing) | Probe runner for harness QA |
 
 ---
 
@@ -18964,18 +19247,18 @@ Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maint
 
 | Concern | Primary file |
 |---------|--------------|
-| CLI entry | [cmd/sentinel/main.go](../cmd/sentinel/main.go) |
-| Harness wiring | [cmd/sentinel/commands/harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go) |
-| Harness runtime loop | [cmd/sentinel/commands/harness_start.go](../cmd/sentinel/commands/harness_start.go) |
-| App container | [internal/app/app.go](../internal/app/app.go) |
-| HTTP gateway | [internal/api/gateway.go](../internal/api/gateway.go) |
-| Flow execution | [internal/flows/manager.go](../internal/flows/manager.go) |
-| Kit loading | [internal/orchestrator/registry.go](../internal/orchestrator/registry.go) |
-| Kit discovery | [internal/kit/discover.go](../internal/kit/discover.go), [loader.go](../internal/kit/loader.go) |
-| Hot reload | [internal/orchestrator/project_watcher.go](../internal/orchestrator/project_watcher.go) |
-| Lua pool | [internal/luavm/pool.go](../internal/luavm/pool.go) |
-| Configuration | [internal/config/config.go](../internal/config/config.go) |
-| Dashboard | [internal/dashboard/server.go](../internal/dashboard/server.go) |
+| CLI entry | [cmd/sentinel/main.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/main.go) |
+| Harness wiring | [cmd/sentinel/commands/harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go) |
+| Harness runtime loop | [cmd/sentinel/commands/harness_start.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_start.go) |
+| App container | [internal/app/app.go](https://github.com/ndx-au/sentinel/blob/main/internal/app/app.go) |
+| HTTP gateway | [internal/api/gateway.go](https://github.com/ndx-au/sentinel/blob/main/internal/api/gateway.go) |
+| Flow execution | [internal/flows/manager.go](https://github.com/ndx-au/sentinel/blob/main/internal/flows/manager.go) |
+| Kit loading | [internal/orchestrator/registry.go](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/registry.go) |
+| Kit discovery | [internal/kit/discover.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/discover.go), [loader.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/loader.go) |
+| Hot reload | [internal/orchestrator/project_watcher.go](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/project_watcher.go) |
+| Lua pool | [internal/luavm/pool.go](https://github.com/ndx-au/sentinel/blob/main/internal/luavm/pool.go) |
+| Configuration | [internal/config/config.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/config.go) |
+| Dashboard | [internal/dashboard/server.go](https://github.com/ndx-au/sentinel/blob/main/internal/dashboard/server.go) |
 
 # Agentic AI — operator guide
 
@@ -18985,7 +19268,7 @@ Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maint
 
 This guide explains how to enable LLM flows in an SRE. The operator path is **API Library + Vault → Agents validate → release controls → flow (`sn.ai.chat`) → trace in dashboard**.
 
-Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Lua API details: [`02-LUA-API.md`](/lua-api) (AI / Memory / RAG sections).
+Architecture reference (harness repo): [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Lua API details: [Lua API](/lua-api) (AI / Memory / RAG sections).
 
 Harness regression: `go test ./internal/api -run TestAgenticAIOperatorPath` exercises this chain with a mock provider (no live API key required).
 
@@ -18993,10 +19276,11 @@ Harness regression: `go test ./internal/api -run TestAgenticAIOperatorPath` exer
 
 ### Prerequisites
 
-- Harness built and pointed at an SRE: `sentinel -p /path/to/sre`.
-- Dashboard reachable (default proxy: `http://localhost:9090` when using `sentinel dashboard start`).
+- Harness built and pointed at an SRE: `sentinel harness start -p /path/to/sre`.
+- Dashboard reachable on loopback: `http://127.0.0.1:9090` when using `sentinel dashboard start`.
 - An API key for a supported provider (`openai`, `anthropic`, or `gemini` adapters ship in the harness).
-- Starter kits installed: `sentinel sre init --with-bundle core` (from [ndx-video/sre-init](https://github.com/ndx-au/sre-init) or `--with-local ../sre-init`).
+- Starter kits installed: `sentinel sre init --with-bundle core` (from [ndx-au/sre-init](https://github.com/ndx-au/sre-init) or `--with-local ../sre-init`).
+- AI tool, filesystem, and native HTTP effects can block until `.sentinel/execution-policy.json` grants the operation and, when the grant requires approval, `sentinel approvals grant` issues a matching ticket. See [Security readiness](/security-readiness).
 
 The **core** bundle includes `sn.core-agent` with `sn.md.agent.run` (persona + memory + optional RAG + `sn.ai.chat`) and the `sn-core-agent:assistant` flow. The **examples** bundle adds `sn.eg-support` / `sn.eg-rag-chat` flows that call `sn.ai.chat` directly. Install **examples** for more chat smoke patterns:
 
@@ -19201,7 +19485,7 @@ Dashboard RAG overview (`/rag`) surfaces the same embedded retrieval summary as 
 
 Offline, fixture-driven retrieval benchmarks for the harness RAG stack. Live PG-backed eval against a running SRE is optional. **CI gates on embedded fixtures** in `internal/rag/testdata/retrieval_eval_fixtures.json`.
 
-Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) (AI-S04). Operator path for enabling RAG: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator).
+Architecture reference (harness repo): [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) (AI-S04). Operator path for enabling RAG: [Agentic AI operator guide](/agentic-ai-operator).
 
 ---
 
@@ -19268,7 +19552,7 @@ AI tool-loop failure classes (`not_found`, `timeout`, `runtime`) are documented 
 
 - Fixtures: `internal/ai/testdata/tool_loop_error_fixtures.json`.
 - CI: `go test ./internal/ai -count=1 -run TestToolLoopErrorGoldenFixtures`.
-- Lua API: [`02-LUA-API.md` — Tool-loop error classes](/lua-api#tool-loop-error-classes).
+- Lua API: [Lua API — Tool-loop error classes](/lua-api#tool-loop-error-classes).
 
 ---
 
@@ -19277,11 +19561,13 @@ AI tool-loop failure classes (`not_found`, `timeout`, `runtime`) are documented 
 Fixture CI does not require a running harness. To validate RAG against a real SRE (PostgreSQL + embeddings configured in `.sentinel/config.json`):
 
 ```bash
-./build.ps1   # or ./build.sh
-.\sentinel.exe -p /path/to/sre harness start
+./build.sh
+sentinel harness start -p /path/to/sre
 ```
 
-Example local target (sibling of harness repo): `E:\_CODE\SRE\test` with kits `sn.roadmap-fixtures`, `sn.core-rag`, `sn.eg-rag-chat`. Run `sn-roadmap-fixtures:rag_guard_smoke` or inspect `/rag` overview evaluation panel.
+Windows-only alternative: `./build.ps1` then `.\sentinel.exe harness start -p /path/to/sre`.
+
+Example local target (sibling of the harness repo): `$SRE` or `/home/$USER/sre/test` with kits `sn.roadmap-fixtures`, `sn.core-rag`, `sn.eg-rag-chat`. Run `sn-roadmap-fixtures:rag_guard_smoke` or inspect `/rag` overview evaluation panel.
 
 If PG or embedding providers are not configured, skip live smoke — fixture CI remains the release gate.
 
@@ -19301,7 +19587,7 @@ If PG or embedding providers are not configured, skip live smoke — fixture CI 
 
 This guide explains how to add a Go **runtime adapter** for a new `meta.runtime.provider` value in API Library. Operators register vendors in the dashboard. At startup, `BuildClientFromLibrary` connects the adapters.
 
-Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Operator smoke path: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator).
+Architecture reference (harness repo, not this docs tree): [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Operator smoke path: [Agentic AI operator guide](/agentic-ai-operator).
 
 ---
 
@@ -19473,7 +19759,7 @@ When you publish content, select **one primary public plane** for each site orig
 |-------|------|-------------|-----------------|
 | File CMS | **fcms** | Git Markdown in kit `ct/` | Harness `/fcms`, `/fcms/render` |
 | Collection CMS | **ccms** | Postgres + Graphile | Graphile **:1880**. Editor on harness `/ccms/...`. Dashboard **Collections** |
-| WordPress | **wpcms** | WP + MariaDB | Dedicated WP ingress (**8800** legacy default. Target convention **1800**) |
+| WordPress | **wpcms** | WP + MariaDB | Dedicated WP ingress (**8800** runtime default). Container publishes `127.0.0.1:18080` |
 | Automation | (core) | Kits, vault, state | Harness **8080** |
 
 Never call the whole product “CMS” without the plane name.
@@ -19486,7 +19772,8 @@ Never call the whole product “CMS” without the plane name.
 |---------|-------------------|
 | Harness API / automation | **8080** |
 | Graphile (ccms reflective API) | **1880** (bind `127.0.0.1` by default) |
-| wpcms ingress | **8800** (kept as runtime default this release. Target **1800** for new installs) |
+| wpcms ingress | **8800** (runtime default this release). **1800** is a future convention, not the target for new installs yet |
+| WordPress container | `127.0.0.1:18080` (loopback; operators use the ingress, not this port) |
 
 Postgres for the Graphile data plane binds **localhost-only** by default (`127.0.0.1:15432` in the template). Do not put Graphile and WordPress on the same public port.
 
@@ -19498,7 +19785,7 @@ Postgres for the Graphile data plane binds **localhost-only** by default (`127.0
 - Canonical routes: **`/fcms`**, **`/fcms/render`**.
 - Legacy aliases (deprecation window): `/cm`, `/ct`.
 - Cache: `.sentinel/cms.db` (name historical. Product language is **fcms**).
-- Full guide: [17-SENTINEL-CMS.md](/sentinel-cms).
+- Full guide: [fcms operator guide](/sentinel-cms).
 - Reference kit naming: prefer **fcms** in docs. Existing `sn.cms` remains valid with deprecation toward fcms vocabulary.
 
 ---
@@ -19607,7 +19894,7 @@ docker compose -f docker-compose.dataplane.yaml restart graphile
 
 ### wpcms
 
-Unchanged product plane. Dedicated ingress only. See [14-WORDPRESS.md](/wordpress). Graphile is not the WP API.
+Unchanged product plane. Dedicated ingress only. See [WordPress](/wordpress). Graphile is not the WP API.
 
 ---
 
@@ -19672,8 +19959,10 @@ evidence for a hosted observation period.
 
 | Control | Implementation |
 |---------|----------------|
-| Encryption at rest | Vault: application-layer AES-256-GCM on SQLite. State: SQLCipher **opt-in**, default off. It needs a supported CGO build and tests of the file and key. Older files need assessment and a reviewed offline migration. |
-| Auth | ED25519 dashboard signatures + bearer tokens. Auth failures emit `AUDIT[auth:…]` |
+| Encryption at rest | Vault: application-layer AES-256-GCM on SQLite. State: SQLCipher **opt-in**, `EncryptDB` default false. It needs a supported CGO build and tests of the file and key. Older files need assessment and a reviewed offline migration. Dashboard SQLite uses the fixed passphrase `sentinel-dashboard-v1` (OS filesystem boundary). |
+| Auth | ED25519 dashboard signatures (`X-Sn-Sig`) + bearer tokens. Dashboard binds `127.0.0.1` only. Auth failures emit `AUDIT[auth:…]` |
+| Operator approvals | `.sentinel/execution-policy.json` plus `sentinel approvals runtime`, `grant`, and `revoke` for exact native actions. Landed in the first-release security cycle. |
+| Request admission | Request gate 32 active / 4 body-bearing / 32 MiB (`internal/security/request_limits.go`). |
 | Vault CRUD | SQLite `secret_access_log` plus `AUDIT[vault:secret:…]` |
 | Occupy | `AUDIT[license:occupy:granted\|denied\|lapsed]` |
 | Transport | TLS is optional (`tls.enabled`). In production, enable TLS |
@@ -19702,12 +19991,14 @@ Define access and the retention schedule through the same process.
 
 Hands-on acceptance trail for **M1 — Agentic AI completion**. Work through each section in order. Sample payloads are copy-paste ready.
 
+Primary commands are POSIX (`sentinel` or the local `sndev` build). Paths use `$SRE` or `/home/...`. PowerShell is an optional Windows appendix, not the required path.
+
 | Reference | Path |
 |-----------|------|
-| Architecture spec | [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) |
-| Operator guide | [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator) |
-| Provider extension | [`23-AI-PROVIDER-EXTENSION.md`](/ai-provider-extension) |
-| UAT SRE (no git) | `E:\_CODE\SRE\agentic-uat` |
+| Architecture spec (harness repo) | [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) |
+| Operator guide | [Agentic AI operator guide](/agentic-ai-operator) |
+| Provider extension | [AI provider extension](/ai-provider-extension) |
+| UAT SRE (no git) | `$SRE` (example: `/home/$USER/sre/agentic-uat`) |
 
 **Time:** ~60–90 minutes with a live API key. **Without a key:** you can still complete sections marked *(no key)*.
 
@@ -19718,30 +20009,30 @@ Hands-on acceptance trail for **M1 — Agentic AI completion**. Work through eac
 The trail uses a dedicated SRE outside the harness repo:
 
 ```
-E:\_CODE\SRE\agentic-uat
+$SRE=/home/$USER/sre/agentic-uat
 ```
 
 #### 0.1 Create (if missing)
 
-From PowerShell:
+```bash
+SRE=/home/$USER/sre/agentic-uat   # or any dedicated directory
+HARNESS=/path/to/sentinel         # harness checkout; optional if sentinel is on PATH
+SRE_INIT=/path/to/sre-init        # https://github.com/ndx-au/sre-init
 
-```powershell
-$UAT = "E:\_CODE\SRE\agentic-uat"
-$HARNESS = "E:\_CODE\sentinel"
-$SRE_INIT = "E:\_CODE\sre-init"
+mkdir -p "$SRE"
+cd "$SRE"
 
-New-Item -ItemType Directory -Force -Path $UAT | Out-Null
-Set-Location $UAT
-
-& "$HARNESS\sndev.exe" -n sre init --minimal `
-  --with-local $SRE_INIT `
-  --with-bundle core `
+sentinel sre init --minimal \
+  --with-local "$SRE_INIT" \
+  --with-bundle core \
   --with-bundle examples
 ```
 
+Use `./sndev` from the harness checkout if you are running a local dev binary instead of `sentinel`.
+
 #### 0.2 Vault passphrase (required for secrets)
 
-Edit `.sentinel\config.json` and set:
+Edit `$SRE/.sentinel/config.json` and set:
 
 ```json
 "vault_passphrase": "uat-trail-2026!"
@@ -19749,8 +20040,8 @@ Edit `.sentinel\config.json` and set:
 
 The harness creates the vault database at first start. You can also export:
 
-```powershell
-$env:SENTINEL_VAULT_PASSPHRASE = "uat-trail-2026!"
+```bash
+export SENTINEL_VAULT_PASSPHRASE="uat-trail-2026!"
 ```
 
 #### 0.3 Environment shortcuts
@@ -19766,9 +20057,9 @@ SENTINEL_API_KEY=
 
 #### 0.4 Verify kits
 
-```powershell
-& "$HARNESS\sndev.exe" -p $UAT sre test sn.core-agent/md -f agent -v
-& "$HARNESS\sndev.exe" -p $UAT sre test sn.core-agent/fl -f assistant -v
+```bash
+sentinel -p "$SRE" sre test sn.core-agent/md -f agent -v
+sentinel -p "$SRE" sre test sn.core-agent/fl -f assistant -v
 ```
 
 | Check | Pass |
@@ -19782,43 +20073,46 @@ SENTINEL_API_KEY=
 
 The **dashboard starts standalone** (healthy without a harness). Attach the UAT harness from **Instances** when ready, or start the harness first and connect manually.
 
-```powershell
-$UAT = "E:\_CODE\SRE\agentic-uat"
-$HARNESS = "E:\_CODE\sentinel"
+There is no root `start` command.
+
+```bash
+SRE=/home/$USER/sre/agentic-uat
 
 # Terminal A — dashboard (no harness required; -d auto-clears stale PID/port)
-& "$HARNESS\sndev.exe" dashboard start -p $UAT -d
+sentinel dashboard start -p "$SRE" -d
 
 # Terminal B — harness API (when you are ready for flow/API tests)
-& "$HARNESS\sndev.exe" -p $UAT start -d
+sentinel harness start -p "$SRE" -d
 ```
 
-**Attach harness in dashboard:** open **http://localhost:9090/instances** → connect to `localhost:8080` (SRE path `E:\_CODE\SRE\agentic-uat`).
+Dashboard binds **http://127.0.0.1:9090**. Dashboard logs live under `$HOME/.sentinel/` (for example `$HOME/.sentinel/dashboard-9090.log`). Harness daemon logs live under `$SRE/.sentinel/` (for example `$SRE/.sentinel/harness-8080.log`).
 
-Optional: `dashboard start localhost:8080 -p $UAT -d` tries attachment after listen but still starts if the harness is down.
+**Attach harness in dashboard:** open **http://127.0.0.1:9090/instances** → connect to `127.0.0.1:8080` (SRE path `$SRE`).
 
-Open **http://localhost:9090** (dashboard) or **http://127.0.0.1:8080** (API direct, after harness is up).
+Optional: `sentinel dashboard start localhost:8080 -p "$SRE" -d` tries attachment after listen but still starts if the harness is down.
+
+Open **http://127.0.0.1:9090** (dashboard) or **http://127.0.0.1:8080** (API direct, after harness is up).
 
 #### Dashboard troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| `not yet healthy` on `-d` start | Rebuild recent `sndev`. Check `C:\Users\<you>\.sentinel\dashboard-9090.log`. |
+| `not yet healthy` on `-d` start | Rebuild recent `sentinel` / `sndev`. Check `$HOME/.sentinel/dashboard-9090.log`. |
 | `PID file exists` (foreground) | Confirm delete, or use `-d` to auto-replace. |
 | Attach 502 on Instances | Start harness (Terminal B) first, then connect. |
 | Port 9090 in use (foreground) | Confirm kill, or use `-d` to auto-replace. |
 
-Copy the API bearer token from `.sentinel\config.json`:
+Copy the API bearer token from `$SRE/.sentinel/config.json`:
 
-```powershell
-(Get-Content "$UAT\.sentinel\config.json" | ConvertFrom-Json).api.tokens[0].token
+```bash
+python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["api"]["tokens"][0]["token"])' "$SRE/.sentinel/config.json"
 ```
 
 Set `$TOKEN` for curl examples:
 
-```powershell
-$TOKEN = "<paste-token>"
-$BASE = "http://127.0.0.1:8080"
+```bash
+TOKEN="<paste-token>"
+BASE="http://127.0.0.1:8080"
 ```
 
 | Check | Pass |
@@ -19836,9 +20130,9 @@ $BASE = "http://127.0.0.1:8080"
 
 #### CLI
 
-```powershell
-$env:SENTINEL_VAULT_PASSPHRASE = "uat-trail-2026!"
-& "$HARNESS\sndev.exe" -p $UAT secret set openai_api_key_uat
+```bash
+export SENTINEL_VAULT_PASSPHRASE="uat-trail-2026!"
+sentinel -p "$SRE" secret set openai_api_key_uat
 # paste key at prompt
 ```
 
@@ -19921,9 +20215,9 @@ curl -s -X POST "$BASE/lib" \
 
 Restart harness after library changes if providers do not appear:
 
-```powershell
-# Ctrl+C Terminal A, then start again
-& "$HARNESS\sndev.exe" -p $UAT start
+```bash
+# stop the Terminal B process, then:
+sentinel harness start -p "$SRE" -d
 ```
 
 | Check | Pass |
@@ -19960,7 +20254,7 @@ Agents → **Providers** tab:
 | Vendor | Adapter badge | Pass |
 |--------|---------------|------|
 | OpenAI UAT | `active` | ☐ |
-| Ollama UAT | `unsupported` + hint linking `docs/23-AI-PROVIDER-EXTENSION.md` | ☐ |
+| Ollama UAT | `unsupported` + hint linking [AI provider extension](/ai-provider-extension) | ☐ |
 
 ---
 
@@ -20008,6 +20302,8 @@ curl -s -X PUT "$BASE/ai/release" \
 }
 ```
 
+AI tool, filesystem, and native HTTP effects can block until `.sentinel/execution-policy.json` grants the operation and, when the grant requires approval, `sentinel approvals grant` issues a matching ticket.
+
 #### HTTP
 
 ```bash
@@ -20024,8 +20320,8 @@ curl -s -X POST "$BASE/fl/sn-core-agent:assistant/run" \
 
 #### CLI
 
-```powershell
-& "$HARNESS\sndev.exe" -p $UAT run sn-core-agent:assistant `
+```bash
+sentinel -p "$SRE" run sn-core-agent:assistant \
   --params-json '{"agent_id":"uat-bot","session_id":"trail-session-1","message":"Hello from UAT trail","model":"gpt-4o-mini"}'
 ```
 
@@ -20191,12 +20487,12 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/ai/audit?limit=10"
 
 Generate a new agent flow from harness scaffold:
 
-```powershell
-Set-Location $UAT
-& "$HARNESS\sndev.exe" -p $UAT sre flow new my-uat-agent --kit sn.core-agent --preset agent -n
+```bash
+cd "$SRE"
+sentinel -p "$SRE" sre flow new my-uat-agent --kit sn.core-agent --preset agent -n
 ```
 
-Open `sn.core-agent\fl\my-uat-agent.lua` — **expect** `sn.md.agent.run({...})`, not inlined persona/memory/chat.
+Open `sn.core-agent/fl/my-uat-agent.lua` — **expect** `sn.md.agent.run({...})`, not inlined persona/memory/chat.
 
 | Check | Pass |
 |-------|------|
@@ -20231,10 +20527,10 @@ Skip unless PostgreSQL + pgvector are configured in `sentinel.yaml` and RAG subs
 
 ### 14 — Harness regression *(no SRE required)*
 
-From harness repo:
+From the harness repo:
 
-```powershell
-cd E:\_CODE\sentinel
+```bash
+cd /path/to/sentinel
 go test ./internal/api -count=1 -run TestAgenticAIOperatorPath
 go test ./internal/ai -count=1 -run "BuildClient|Adapter"
 go test ./internal/rag -count=1 -run TestRetrievalEvalRegression
@@ -20262,6 +20558,27 @@ go test ./internal/scaffold -count=1 -run Preset
 **Tester:** _______________ **Date:** _______________ **Harness build:** _______________
 
 **Notes:**
+
+---
+
+### Appendix — Windows (optional)
+
+PowerShell is optional. Do not treat a drive letter as required. Use a generic `$SRE` (for example `$HOME\sre\agentic-uat`). The binary is `sentinel.exe` or a local `sndev.exe` from the harness checkout. There is no root `start` command.
+
+```powershell
+$SRE = "$HOME\sre\agentic-uat"
+$HARNESS = "<path-to-sentinel-checkout>"
+
+New-Item -ItemType Directory -Force -Path $SRE | Out-Null
+Set-Location $SRE
+
+& "$HARNESS\sentinel.exe" sre init --minimal --with-bundle core --with-bundle examples
+
+& "$HARNESS\sentinel.exe" dashboard start -p $SRE -d
+& "$HARNESS\sentinel.exe" harness start -p $SRE -d
+```
+
+Dashboard: **http://127.0.0.1:9090**. Logs: `$HOME\.sentinel\`. Then follow the POSIX HTTP steps above.
 
 ---
 
@@ -20309,7 +20626,7 @@ Protect all traffic with TLS and make sure that certificates are valid.
 The dashboard stores privileged harness credentials and relies on trusted ingress.
 It does not provide a general login or role-based access system for end users.
 
-The harness can listen on all interfaces. The security closure fixes the dashboard listener to IPv4 loopback. It has no public bind flag. For remote access, use authenticated ingress or a controlled tunnel that can reach loopback in the dashboard network namespace. A separate container cannot reach this listener through the usual container address.
+The harness can listen on all interfaces. The dashboard binds `127.0.0.1` only. It has no public bind flag. For remote access, use authenticated ingress or a controlled tunnel that can reach loopback in the dashboard network namespace. A separate container cannot reach this listener through the usual container address.
 An empty dashboard whitelist allows all peers.
 A production build does not automatically enable TLS or make these listeners private.
 Apply explicit firewall rules and authenticated ingress.
@@ -20348,7 +20665,7 @@ Dispatch examines the operator pause state.
 Retrieved documents, tool results, persistent memory, and skill twins remain untrusted data.
 Their instructions cannot grant authority.
 These controls do not guarantee resistance to prompt injection or the safety of an allowed action.
-The harness has no general mechanism that binds a specific action to human approval.
+Bind high-impact native actions to human approval with `.sentinel/execution-policy.json` and `sentinel approvals runtime|grant|revoke`.
 Recovery hooks have independent five-second limits.
 Host calls must honour cancellation.
 Deployment controls must enforce quotas for running jobs, heap use, and networks.
@@ -20366,13 +20683,13 @@ It does not cover all encoded, split, short, or unregistered values.
 Store connector and provider credentials in the vault.
 Protect the master passphrase and recovery material separately.
 
-State encryption is optional.
+State encryption is optional. `state.encrypt_db` (`EncryptDB`) defaults to false.
 It needs a SQLCipher build with CGO support.
 The baseline corrects ignored SQLCipher key parameters.
 Before use, it makes sure that the database format and key are correct.
 Whether an older database remained plaintext after an encryption request is unknown until assessment.
 Portable builds without CGO cannot provide SQLCipher coverage.
-The dashboard's fixed embedded database key does not replace access controls for the OS, files, or volumes.
+The dashboard SQLite store uses the fixed passphrase `sentinel-dashboard-v1`. That key does not replace access controls for the OS, files, or volumes.
 
 Preserve existing database files and backups.
 Plan an offline migration with review.
@@ -20432,15 +20749,16 @@ The reviewed copy converter preserves fail-closed startup. Follow the
 [offline migration runbook](/sqlcipher-offline-migration) and separate
 [rollout checklist](/sqlcipher-rollout-checklist). Conversion does not approve
 installation. Native CGO/SQLCipher release validation and matching runtime keys
-are required. The security closure also binds MCP sessions to authenticated
+are required. The harness also binds MCP sessions to authenticated
 identity and permission profile and extends scoped AI checks to streaming and retries.
 Native AI stream callbacks wait for full validation, with 4 MiB and 16,384-chunk
 limits. Kit and host APIs still require trusted operators and deployment isolation.
 
-### First-release security branch: management and file controls
+### First-release security cycle: management and file controls
 
-The following applies to the unreleased security remediation branch; upgrade all
-participating clients before rollout. It is not a statement about older releases.
+These controls landed in the first-release security cycle and are in the current
+harness. Upgrade all participating clients before rollout. They are not a
+statement about older releases.
 
 The dashboard accepts a local Host authority (`localhost`, a loopback IP, and the
 actual port), rejects foreign browser origins and does not grant CORS access.
@@ -20476,7 +20794,7 @@ bounds, not a distributed user quota or complete network denial-of-service prote
 Enforce connection/rate limits and OS resource budgets at deployment ingress too.
 
 
-### First-release branch: metadata and native HTTP
+### First-release security cycle: metadata and native HTTP
 
 Flow inspection has no execution host APIs. Keep metadata and top-level declarations
 free of network, files, secrets and model calls; perform work in execution hooks.
@@ -20498,7 +20816,7 @@ address-translation ranges; they pin checked public DNS answers and inherit neit
 proxy settings nor a cookie jar. Custom network routing still requires deployment
 egress controls. Private-service automation remains an operator responsibility.
 
-The unreleased branch now initializes an approval runtime and binds private
+The harness initializes an approval runtime and binds private
 execution identity before registration, asynchronous execution and both form entry
 paths. MCP-started flows begin with agent restrictions. Model calls during trigger
 registration are refused before the provider. Remaining SQL resource identity,
@@ -20528,7 +20846,7 @@ covers an authorized send and denied recipient mutation. This does not establish
 real relay configuration, live delivery or operational confidentiality.
 
 
-### First-release branch: execution policy and operator approval
+### First-release security cycle: execution policy and operator approval
 
 An optional owner-managed `.sentinel/execution-policy.json` is read at startup.
 Keep it a regular file, at most 1 MiB, writable only by the owner on Unix. Invalid,
@@ -20546,8 +20864,8 @@ a matching restricted grant deny. Broad automatic grants need careful review;
 persistent code and control-plane effects remain under assessment.
 
 A required native action waits up to five minutes, or the earlier synchronous
-caller deadline, for a local operator's exact approval. Use the local `approvals
-runtime`, `approvals grant` and `approvals revoke` CLI commands against the existing
+caller deadline, for a local operator's exact approval. Use `sentinel approvals
+runtime`, `sentinel approvals grant` and `sentinel approvals revoke` against the existing
 instance state and key configuration. Review the complete action file, canonical
 source, authenticated actor and execution ID before granting. Tickets are single
 use and bind the runtime, actor, execution, source digest, operation, arguments and
@@ -20577,10 +20895,10 @@ uncommitted writes. Schema names are single portable database labels, not paths;
 quoted SQL identifiers are escaped. These checks do not make arbitrary SQL a kit
 isolation boundary. Do not grant unrestricted raw SQL to an agent as a substitute
 for reviewed operations and database permissions; backend/file-access review remains
-open on the first-release branch.
+open after the first-release security cycle.
 
 
-### First-release branch: MCP credential audiences
+### First-release security cycle: MCP credential audiences
 
 Credentials listed in `mcp.clients` are MCP-only by default. Use separate bearer
 credentials or signing keys for agents and operators. An agent credential cannot
@@ -20610,7 +20928,7 @@ control of the separate operator credential and the service restart procedure.
 No customer installation or running service is changed automatically by this work.
 
 
-### First-release branch: persistent executable changes
+### First-release security cycle: persistent executable changes
 
 A restricted execution must have both an applicable filesystem grant and a
 single-use exact approval before it writes, appends to or deletes executable
@@ -20633,7 +20951,7 @@ previous Lua context is restored afterward. Test evidence for that callback uses
 an isolated Lua VM and a transaction double, not a live PostgreSQL server.
 
 
-### First-release branch: agent usage budgets
+### First-release security cycle: agent usage budgets
 
 Managed model calls retain budget policies for their source aliases and delegated
 ancestors. Until the usage ledger records delegation ancestry, each applicable
@@ -20660,7 +20978,7 @@ and separate instances can exceed locally observed usage. These controls are not
 hard monetary spending limit; use the provider and deployment controls appropriate
 to the service as well.
 
-### First-release branch: raw database access
+### First-release security cycle: raw database access
 
 Restricted `sn.db` SQLite query and execution operations, and PostgreSQL handle
 query and execution operations, require an applicable grant and a separate,

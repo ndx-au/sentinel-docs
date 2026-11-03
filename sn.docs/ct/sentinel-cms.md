@@ -14,7 +14,7 @@ status: stable
 > See [Content planes](/content-planes) for the full model.  
 > **Canonical routes:** `/fcms`, `/fcms/render`. **Legacy aliases:** `/cm`, `/ct` (deprecation window).
 
-Markdown files in a kit’s `ct/` directory are the source of truth. The harness parses them into a local cache. **`/fcms`** (alias `/cm`) serves structured JSON. **`/fcms/render`** (alias `/ct`) renders public HTML. Kit pages and Lua flows can access the same content.
+Markdown files in a kit’s `ct/` directory are the source of truth. The harness parses them into a local cache. **`/fcms`** serves structured JSON. **`/fcms/render`** renders public HTML. Kit pages and Lua flows can access the same content.
 
 **Audience:** operators, SRE maintainers, and integrators who run or proxy **fcms**-backed sites — not harness contributors.
 
@@ -22,14 +22,14 @@ Markdown files in a kit’s `ct/` directory are the source of truth. The harness
 
 | Document | Focus |
 |----------|--------|
-| [Kit Development — CMS Kits](/kit-development#cms-kits) | Authoring kits, frontmatter, templates, `sn.cms.*` in Lua |
+| [Kit Development — CMS Kits](/kit-development#fcms-kits-file-cms) | Authoring kits, frontmatter, templates, `sn.cms.*` in Lua |
 | [Lua API — CMS](/lua-api) | Flow-level `sn.cms.get` / `sn.cms.list` |
 | [HTTP API Reference](/api-reference) | Full API payloads and error codes |
 | [Harness HTTP routes](/harness-http-routes) | Prefix catalog and keyhole behavior |
 | [The `.sentinel/` directory](/sentinel-directory) | `cms.db` location, backup, rebuild |
-| `system-specs/api.yaml` | Machine-readable route definitions |
+| Harness `system-specs/api.yaml` | Machine-readable route definitions in [ndx-au/sentinel](https://github.com/ndx-au/sentinel) |
 
-**Reference kit:** `sn.cms` in the integration test SRE (`../SRE/test/sn.cms` or `$SENTINEL_TEST_SRE/sn.cms`).
+**Reference kit:** any kit with Markdown in `ct/` (create one with `sentinel sre init`, or add `ct/` to an existing kit).
 
 ---
 
@@ -41,10 +41,10 @@ Markdown files in a kit’s `ct/` directory are the source of truth. The harness
 
   {ns}.{name}/ct/**/*.md  ──watch──►  cms.db  (bbolt)
          │                              ├─ bucket "cms"   → parsed CacheEntry per slug
-         │                              └─ bucket "render" → pre-rendered HTML (/ct only)
+         │                              └─ bucket "render" → pre-rendered HTML (/fcms/render only)
          │
-         ├──► GET /cm/{ns}/{name}/…     JSON for editors & agents
-         ├──► GET /ct/{ns}/{name}/{template}/…   HTML (Go templates, no Lua VM)
+         ├──► GET /fcms/{ns}/{name}/…     JSON for editors & agents
+         ├──► GET /fcms/render/{ns}/{name}/{template}/…   HTML (Go templates, no Lua VM)
          └──► GET /kt/{ns}/{name}/…     Kit UI pages (Lua variables + tp/*.gohtml)
 ```
 
@@ -52,7 +52,7 @@ Three ways to publish HTML from the same content:
 
 | Path | When to use | Lua at render? |
 |------|-------------|----------------|
-| **`/ct/...`** | Production site pages, reverse-proxied URLs, CDN-friendly static-ish HTML | **No** — fastest |
+| **`/fcms/render/...`** | Production site pages, reverse-proxied URLs, CDN-friendly static-ish HTML | **No** — fastest |
 | **`/kt/...`** | Kit UI with dynamic variables, auth, sidebars, forms | **Yes** — page `variables:` and optional `pg/*.lua` merge |
 | **Flow + template** | Custom logic, APIs, non-page responses | **Yes** — full flow sandbox |
 
@@ -142,7 +142,7 @@ sn.cms/                          # kit directory on disk: {namespace}.{kit_name}
   pg/                            # Kit page definitions (optional UI routes)
     home.yaml                    # YAML only, or YAML + home.lua merge
     render.yaml
-  tp/                            # Go html/template for pages and /ct
+  tp/                            # Go html/template for pages and /fcms/render
     home.html
     render.html
   fl/                            # Optional flows (e.g. legacy render helpers)
@@ -163,8 +163,8 @@ Internal cache keys use the on-disk kit directory name (`sn.cms`). HTTP APIs exp
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
 | `cms_full_html` | bool | `false` | Populate `full_html` on parsed entries (needed for `{{ safeHTML .post.full_html }}` in templates). Rebuilt on cold start. See [Hot reload](#hot-reload). |
-| `cms_render_cache_ttl_sec` | int | `0` (= harness default **300s**) | TTL for `/ct` HTML render cache entries. |
-| `cms_metadata` | map | — | Maps content folder → form name for metadata editors (`GET /cm/{ns}/{name}/_meta`). |
+| `cms_render_cache_ttl_sec` | int | `0` (= harness default **300s**) | TTL for `/fcms/render` HTML render cache entries. |
+| `cms_metadata` | map | — | Maps content folder → form name for metadata editors (`GET /fcms/{ns}/{name}/_meta`). |
 
 Example:
 
@@ -190,13 +190,13 @@ CMS HTTP routes use **slash-separated kit paths**, aligned with kit UI URLs:
 |---------|---------|------------|--------|
 | Kit | `sn.cms/` | `sn/cms` | `/kt/sn/cms/...` |
 
-The top-level prefix **`/ct`** is both the on-disk folder name (`ct/`) and the public HTML API — intentional symmetry for operators and reverse proxies.
+On disk the Markdown lives in `ct/`. The public HTML API is **`/fcms/render`**.
 
 Examples (harness on `http://127.0.0.1:8080`):
 
 ```http
-GET /cm/sn/cms/guides/getting-started
-GET /ct/sn/cms/render/guides/getting-started
+GET /fcms/sn/cms/guides/getting-started
+GET /fcms/render/sn/cms/render/guides/getting-started
 GET /kt/sn/cms/render?slug=guides/getting-started
 ```
 
@@ -204,12 +204,12 @@ GET /kt/sn/cms/render?slug=guides/getting-started
 
 ## Parse cache (`cms.db`)
 
-Location: `{data_dir}/cms.db` (default `.sentinel/cms.db`). See [16-SENTINEL-DIRECTORY.md](/sentinel-directory).
+Location: `{data_dir}/cms.db` (default `.sentinel/cms.db`). See [The `.sentinel/` directory](/sentinel-directory).
 
 | Bucket | Key | Value | Purpose |
 |--------|-----|-------|---------|
 | `cms` | `{kitDir}` → `{slug}` | JSON `CacheEntry` | Parsed frontmatter, preamble HTML, section tree, source path, content hash |
-| `render` | `{kitDir}\|{template}\|{slug}` | JSON `{ html, made_ts }` | Cached output of `GET /ct/...` only |
+| `render` | `{kitDir}\|{template}\|{slug}` | JSON `{ html, made_ts }` | Cached output of `GET /fcms/render/...` only |
 
 **Source of truth remains git-tracked files in `ct/`.** Deleting `cms.db` is safe: the harness rebuilds the parse cache on next start from `ct/`. The render bucket is also rebuilt on demand after expiry or invalidation.
 
@@ -225,7 +225,7 @@ At startup, the CMS builder scans all kit `ct/` trees and fills the `cms` bucket
 
 Each `ct/**/*.md` file can start with YAML frontmatter (`---` delimiters). Known fields map to structured types. Any other keys are preserved under `meta`.
 
-| Field | Required | Exposed through `/cm` | In Lua `sn.cms.get` |
+| Field | Required | Exposed through `/fcms` | In Lua `sn.cms.get` |
 |-------|----------|-------------------|---------------------|
 | `title` | Recommended | Yes | Yes |
 | `slug` | No (filename is canonical) | Yes | Yes |
@@ -262,9 +262,9 @@ Editors and automation can mutate files on disk through the harness (still subje
 
 | Method | Path | Body / notes |
 |--------|------|----------------|
-| `POST` | `/cm/{ns}/{name}` | `{ "slug", "frontmatter", "markdown" }` — creates `ct/{slug}.md` |
-| `PUT` | `/cm/{ns}/{name}/{slug…}` | `{ "frontmatter", "markdown", "hash?" }` — optimistic concurrency through `hash` |
-| `DELETE` | `/cm/{ns}/{name}/{slug…}` | Removes `ct/{slug}.md` (path-confined) |
+| `POST` | `/fcms/{ns}/{name}` | `{ "slug", "frontmatter", "markdown" }` — creates `ct/{slug}.md` |
+| `PUT` | `/fcms/{ns}/{name}/{slug…}` | `{ "frontmatter", "markdown", "hash?" }` — optimistic concurrency through `hash` |
+| `DELETE` | `/fcms/{ns}/{name}/{slug…}` | Removes `ct/{slug}.md` (path-confined) |
 
 All CMS JSON endpoints return HTTP **200** with `{ "ok": true, ... }` or `{ "ok": false, "err": "CODE", "msg": "..." }`.
 
@@ -272,12 +272,12 @@ Common error codes: `CMS.UNAVAILABLE`, `CMS.NOT_FOUND`, `CMS.INVALID_SLUG`, `CMS
 
 ---
 
-## `/cm` — structured content API
+## `/fcms` — structured content API
 
 ### List everything
 
 ```http
-GET /cm
+GET /fcms
 ```
 
 ```json
@@ -293,7 +293,7 @@ GET /cm
 ### Get one document (parsed)
 
 ```http
-GET /cm/sn/cms/guides/getting-started
+GET /fcms/sn/cms/guides/getting-started
 ```
 
 ```json
@@ -312,7 +312,7 @@ GET /cm/sn/cms/guides/getting-started
 ### Raw editor mode
 
 ```http
-GET /cm/sn/cms/guides/getting-started?raw=1
+GET /fcms/sn/cms/guides/getting-started?raw=1
 ```
 
 Returns `{ frontmatter, markdown, hash }` for round-trip editing. `agent_context` is **included** in raw mode.
@@ -320,7 +320,7 @@ Returns `{ frontmatter, markdown, hash }` for round-trip editing. `agent_context
 ### Content tree
 
 ```http
-GET /cm/sn/cms/_tree
+GET /fcms/sn/cms/_tree
 ```
 
 Returns a hierarchical tree of slugs for one kit (for file-tree UIs).
@@ -328,7 +328,7 @@ Returns a hierarchical tree of slugs for one kit (for file-tree UIs).
 ### Folder → form mapping
 
 ```http
-GET /cm/sn/cms/_meta?folder=guides
+GET /fcms/sn/cms/_meta?folder=guides
 ```
 
 Uses `cms_metadata` in `kit.yaml`. Falls back to `_default`. Response: `{ "ok": true, "form": "cms-guide" }` (empty string if unmapped).
@@ -337,14 +337,14 @@ Form field definitions for editors: `GET /fm/{kitDirName}/_def/{formName}` (stil
 
 ---
 
-## `/ct` — fast HTML rendering
+## `/fcms/render` — fast HTML rendering
 
 Renders cached Markdown through a named kit template **without starting the Lua VM**. Frontmatter is converted to Go template data. The primary variable is `.post` (same shape as `sn.cms.get` in Lua).
 
 ### Route pattern
 
 ```http
-GET /ct/{namespace}/{kit_name}/{template}/{slug…}
+GET /fcms/render/{namespace}/{kit_name}/{template}/{slug…}
 ```
 
 | Segment | Required | Notes |
@@ -385,14 +385,14 @@ Expose a clean public URL while keeping the harness path explicit internally:
 
 ```text
 Public:     https://my-site.com/guides/getting-started
-Proxy to:   http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
+Proxy to:   http://127.0.0.1:8080/fcms/render/sn/cms/render/guides/getting-started
 ```
 
 Caddy example:
 
 ```caddyfile
 handle /guides/* {
-  rewrite * /ct/sn/cms/render{path}
+  rewrite * /fcms/render/sn/cms/render{path}
   reverse_proxy 127.0.0.1:8080
 }
 ```
@@ -466,14 +466,14 @@ variables:
     return sn.cms.get(slug)
 ```
 
-Prefer **`/ct/...`** for public post pages when you do not need Lua. Keep `/kt/...` for authenticated or highly dynamic views.
+Prefer **`/fcms/render/...`** for public post pages when you do not need Lua. Keep `/kt/...` for authenticated or highly dynamic views.
 
 ---
 
 ## Authentication and production
 
-- CMS JSON routes follow the same harness auth model as the rest of the API (Bearer token in production). See [Configuration Guide](/configuration-guide).
-- `/ct` HTML responses are typically **public** when mounted behind a site reverse proxy — restrict at the edge if content is non-public.
+- **JSON (`/fcms`)** uses the harness API auth model: **Bearer token** and **Ed25519 `X-Sn-Sig`**. Either is accepted. See [Configuration Guide](/configuration-guide).
+- **HTML (`/fcms/render`)** is typically **unauthenticated** so public sites and reverse proxies can serve it. Restrict at the edge if the content is not public.
 - `agent_context` is for AI/editor tooling in Lua and raw mode only. Do not rely on its absence in Lua if untrusted code can run in flows.
 
 ---
@@ -483,7 +483,7 @@ Prefer **`/ct/...`** for public post pages when you do not need Lua. Keep `/kt/.
 ### Enable CMS for a kit
 
 1. Add `ct/` with at least one `.md` file.
-2. Add `tp/` templates if you use `/ct` or kit pages.
+2. Add `tp/` templates if you use `/fcms/render` or kit pages.
 3. Optionally set `cms_full_html: true` if templates need full-document HTML.
 4. Restart harness or rely on file watcher for parse cache updates.
 
@@ -494,17 +494,17 @@ Prefer **`/ct/...`** for public post pages when you do not need Lua. Keep `/kt/.
 curl -s http://127.0.0.1:8080/hl | jq .
 
 # Content visible
-curl -s http://127.0.0.1:8080/cm/sn/cms/hello-world | jq .
+curl -s http://127.0.0.1:8080/fcms/sn/cms/hello-world | jq .
 
 # HTML path
-curl -s -D - http://127.0.0.1:8080/ct/sn/cms/render/hello-world | head
+curl -s -D - http://127.0.0.1:8080/fcms/render/sn/cms/render/hello-world | head
 ```
 
-Integration SRE:
+Against your own SRE:
 
 ```bash
-sentinel harness start -p ../SRE/test --daemon
-curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
+sentinel harness start -p ./my-sre --daemon
+curl -s http://127.0.0.1:8080/fcms/render/sn/cms/render/guides/getting-started
 ```
 
 ### Clear caches
@@ -519,7 +519,7 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 
 - Saving `ct/**/*.md` updates the parse cache through the project watcher.
 - `full_html` is **not** regenerated on hot reload when `cms_full_html` is true — only on cold start. Restart harness after bulk content imports if you depend on `full_html`.
-- `/ct` render cache entries for the changed slug are invalidated automatically.
+- `/fcms/render` cache entries for the changed slug are invalidated automatically.
 
 ---
 
@@ -528,9 +528,9 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 | Symptom | Likely cause | Fix |
 |---------|----------------|-----|
 | `CMS.UNAVAILABLE` | No SRE root or cache failed to open | Check harness logs. Make sure that another process does not lock `.sentinel/cms.db` (`sentinel ps`) |
-| `CMS.NOT_FOUND` | Slug typo or file not under `ct/` | `GET /cm` to list slugs. Examine the path |
-| `/ct` 404 HTML “template missing” | No `tp/{template}.gohtml` | Add template. Template name in URL is required |
-| `/ct` empty `post` | `cms_full_html: false` and template expects `full_html` | Enable flag and restart, or use `sections` / `preamble` |
+| `CMS.NOT_FOUND` | Slug typo or file not under `ct/` | `GET /fcms` to list slugs. Examine the path |
+| `/fcms/render` 404 HTML “template missing” | No `tp/{template}.gohtml` | Add template. Template name in URL is required |
+| `/fcms/render` empty `post` | `cms_full_html: false` and template expects `full_html` | Enable flag and restart, or use `sections` / `preamble` |
 | `/kt` HTML “page contract invalid” | Missing `name`/`path`/`title` after merge | Fix YAML or `pg/*.lua` return table |
 | Stale public HTML | Render cache within TTL | Lower TTL, touch file, or wait |
 | `cms.db` huge | Many kits/slugs | Normal. Delete file to compact after cleanup |
@@ -539,7 +539,7 @@ curl -s http://127.0.0.1:8080/ct/sn/cms/render/guides/getting-started
 
 ## WordPress content API (optional)
 
-When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remote WordPress — not the git-native `ct/` CMS. Do not confuse with `/cm/sn/cms/...`.
+When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remote WordPress — not the git-native `ct/` CMS. Do not confuse those with `/fcms/{ns}/{name}/...`.
 
 ---
 
@@ -548,10 +548,10 @@ When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remo
 | Constraint | Rationale |
 |------------|-----------|
 | No Lua in Markdown frontmatter | Predictable parse cost at scale |
-| No default `/ct` template | Explicit routing. Proxies stay unambiguous |
+| No default `/fcms/render` template | Explicit routing. Proxies stay unambiguous |
 | No global layout in `kit.yaml` | Layout lives in `tp/*.gohtml` per site design |
-| Slash kit paths in `/cm` and `/ct` | Matches `/kt/{ns}/{name}` mental model |
-| Parse vs render cache split | JSON/API can update without storing HTML. `/ct` stays fast |
+| Slash kit paths in `/fcms` and `/fcms/render` | Matches `/kt/{ns}/{name}` mental model |
+| Parse vs render cache split | JSON/API can update without storing HTML. `/fcms/render` stays fast |
 
 ---
 
@@ -565,6 +565,6 @@ When WordPress proxy is enabled, separate routes under `/cm/wp/...` talk to remo
 | Routes | `internal/api/gateway.go` |
 | File watcher | `internal/orchestrator/project_watcher_cms.go` |
 | Page merge | `internal/kit/discover.go`, `internal/templates/lua_executor.go` |
-| Routes spec | `system-specs/api.yaml` → `cms:` |
+| Routes spec | Harness [ndx-au/sentinel](https://github.com/ndx-au/sentinel) `system-specs/api.yaml` → `cms:` |
 
-When behavior changes, update this guide, `05-KIT-DEVELOPMENT.md` (CMS section), and `system-specs/api.yaml`.
+When behavior changes, update this guide, [Kit Development](/kit-development) (CMS section), and the harness `system-specs/api.yaml`. The specs live in the harness repository, not this docs tree.

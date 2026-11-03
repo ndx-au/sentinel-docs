@@ -46,8 +46,10 @@ evidence for a hosted observation period.
 
 | Control | Implementation |
 |---------|----------------|
-| Encryption at rest | Vault: application-layer AES-256-GCM on SQLite. State: SQLCipher **opt-in**, default off. It needs a supported CGO build and tests of the file and key. Older files need assessment and a reviewed offline migration. |
-| Auth | ED25519 dashboard signatures + bearer tokens. Auth failures emit `AUDIT[auth:…]` |
+| Encryption at rest | Vault: application-layer AES-256-GCM on SQLite. State: SQLCipher **opt-in**, `EncryptDB` default false. It needs a supported CGO build and tests of the file and key. Older files need assessment and a reviewed offline migration. Dashboard SQLite uses the fixed passphrase `sentinel-dashboard-v1` (OS filesystem boundary). |
+| Auth | ED25519 dashboard signatures (`X-Sn-Sig`) + bearer tokens. Dashboard binds `127.0.0.1` only. Auth failures emit `AUDIT[auth:…]` |
+| Operator approvals | `.sentinel/execution-policy.json` plus `sentinel approvals runtime`, `grant`, and `revoke` for exact native actions. Landed in the first-release security cycle. |
+| Request admission | Request gate 32 active / 4 body-bearing / 32 MiB (`internal/security/request_limits.go`). |
 | Vault CRUD | SQLite `secret_access_log` plus `AUDIT[vault:secret:…]` |
 | Occupy | `AUDIT[license:occupy:granted\|denied\|lapsed]` |
 | Transport | TLS is optional (`tls.enabled`). In production, enable TLS |

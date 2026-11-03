@@ -16,7 +16,7 @@ This document lists HTTP paths on `api.port` (default `8080`). [HTTP API Referen
 
 ## Conventions
 
-- Responses use the harness shape: HTTP **200** with errors in the JSON body (`ok`, `err`, `msg`) unless noted.
+- JSON `writeError` responses use HTTP **200** with `{ok: false, err, code, msg, req_id}`. Detect failure with `ok === false` / `err`. Not always HTTP 200: OPTIONS 204 (only if CORS is wired), WS disabled 503, form HTML 4xx/5xx/302, CMS HTML render 4xx/5xx, git 4xx/5xx.
 - Short prefixes follow the brevity regime for **core automation** (`/fl`, `/ex`, `/hl`, `/tr`, …).
 - **Content planes** use clear multi-character names: `/fcms`, `/ccms` (see [Content planes](/content-planes)).
 - Auth: in production mode, Bearer token or dashboard signing (`X-Sn-Sig`) applies except for explicitly public routes (see `system-specs/api.yaml`).
@@ -106,7 +106,7 @@ Git-native Markdown content in kit `ct/` directories (**fcms** plane). Slash kit
 | DELETE | `/fcms/{ns}/{name}/*` | Delete content |
 | GET | `/fcms/render/{ns}/{name}/{template}/*` (alias `/ct/...`) | Render HTML through `tp/{template}.gohtml` (no Lua VM) |
 
-Full operator guide: [17-SENTINEL-CMS.md](/sentinel-cms). Content planes: [24-CONTENT-PLANES.md](/content-planes).
+Full operator guide: [fcms operator guide](/sentinel-cms). Content planes: [Content planes](/content-planes).
 
 ## ccms — collection CMS (`/ccms`)
 
@@ -128,7 +128,7 @@ CLI: `sentinel ccms migrate|validate|status|install-refkit`.
 
 This endpoint returns a read-only snapshot of the optional MCP sidecar (`sentinel harness start --mcp`). It returns HTTP 200 with `{ok: true, ...}`. The tool, resource, and prompt catalog remains visible when `enabled` is false. Operators can inspect the risk ceiling. The response excludes bearer tokens, vault values, and occupy license keys.
 
-The dashboard page `GET /mcp` and BFF `GET /api/dashboard/mcp` proxy this payload. Details: [MCP Agent Integration](/mcp-agent-integration).
+The dashboard page `GET /mcp` and BFF handler `GET /api/dashboard/mcp` (not a path rewrite) fetch this payload. Details: [MCP Agent Integration](/mcp-agent-integration).
 
 ---
 
@@ -144,8 +144,12 @@ The dashboard page `GET /mcp` and BFF `GET /api/dashboard/mcp` proxy this payloa
 | `/bk/*` | Backups |
 | `/src/*` | Source file API |
 | `/schema/*` | Schema helpers |
-| `/cfg/*` | Configuration API |
+| `/cfg/*` | Configuration API (`/cfg/project`, `/cfg/ip-filters`) |
 | `/fs/pl`, `/fs/test` | Filesystem access policies (FS Control) |
+| `/st/export`, `/st/import`, `/st/{id}/objects` | Storage bundle export/import and object listing |
+| `/lib/{id}/validate` | `POST` vendor credential validation |
+| `/docker/capability`, `/docker/templates` | Docker host capability and templates |
+| `/cm/wp/*` | WordPress content plane (when WP-central is enabled) |
 | `/mk/*` | Marketplace (SKM) |
 | `/cert/*` | TLS CA / server cert distribution |
 | `/panic/recent` | Recovered panic events |
@@ -161,7 +165,8 @@ The standalone dashboard rewrites friendly paths to harness brevity paths (see `
 - `/api/executions` → `/ex`.
 - `/api/health` → `/hl`.
 - `/api/kt` or `/api/k` → `/hl/kt`.
-- `/api/dashboard/mcp` → `/mcp`.
+- `/api/kt/{ns}/{name}/pb/...` → `/kt/{ns}/{name}/pb/...` (public bundle; not `/hl/kt`).
+- `/api/dashboard/mcp` is a **BFF handler** (`handleAPIMCP`), not a `translatePath` rewrite.
 - `/api/fs/*` → `/fs/*`.
 
 ---

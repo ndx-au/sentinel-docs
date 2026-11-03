@@ -18,7 +18,7 @@ When you publish content, select **one primary public plane** for each site orig
 |-------|------|-------------|-----------------|
 | File CMS | **fcms** | Git Markdown in kit `ct/` | Harness `/fcms`, `/fcms/render` |
 | Collection CMS | **ccms** | Postgres + Graphile | Graphile **:1880**. Editor on harness `/ccms/...`. Dashboard **Collections** |
-| WordPress | **wpcms** | WP + MariaDB | Dedicated WP ingress (**8800** legacy default. Target convention **1800**) |
+| WordPress | **wpcms** | WP + MariaDB | Dedicated WP ingress (**8800** runtime default). Container publishes `127.0.0.1:18080` |
 | Automation | (core) | Kits, vault, state | Harness **8080** |
 
 Never call the whole product “CMS” without the plane name.
@@ -31,7 +31,8 @@ Never call the whole product “CMS” without the plane name.
 |---------|-------------------|
 | Harness API / automation | **8080** |
 | Graphile (ccms reflective API) | **1880** (bind `127.0.0.1` by default) |
-| wpcms ingress | **8800** (kept as runtime default this release. Target **1800** for new installs) |
+| wpcms ingress | **8800** (runtime default this release). **1800** is a future convention, not the target for new installs yet |
+| WordPress container | `127.0.0.1:18080` (loopback; operators use the ingress, not this port) |
 
 Postgres for the Graphile data plane binds **localhost-only** by default (`127.0.0.1:15432` in the template). Do not put Graphile and WordPress on the same public port.
 
@@ -43,7 +44,7 @@ Postgres for the Graphile data plane binds **localhost-only** by default (`127.0
 - Canonical routes: **`/fcms`**, **`/fcms/render`**.
 - Legacy aliases (deprecation window): `/cm`, `/ct`.
 - Cache: `.sentinel/cms.db` (name historical. Product language is **fcms**).
-- Full guide: [17-SENTINEL-CMS.md](/sentinel-cms).
+- Full guide: [fcms operator guide](/sentinel-cms).
 - Reference kit naming: prefer **fcms** in docs. Existing `sn.cms` remains valid with deprecation toward fcms vocabulary.
 
 ---
@@ -152,7 +153,7 @@ docker compose -f docker-compose.dataplane.yaml restart graphile
 
 ## wpcms
 
-Unchanged product plane. Dedicated ingress only. See [14-WORDPRESS.md](/wordpress). Graphile is not the WP API.
+Unchanged product plane. Dedicated ingress only. See [WordPress](/wordpress). Graphile is not the WP API.
 
 ---
 

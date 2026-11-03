@@ -70,7 +70,7 @@ curl -N http://localhost:8080/lg/live
 ```
 
 **Dashboard approach:**
-The dashboard at `http://localhost:9090` provides a graphical log viewer with:
+The dashboard at `http://127.0.0.1:9090` (loopback only) provides a graphical log viewer with:
 - Real-time log streaming through WebSocket.
 - Filtering by flow, level, and text search.
 - Execution detail views with timing and parameter data.
@@ -238,13 +238,13 @@ error: execution timeout after 30000ms
 
 **Solutions:**
 
-1. **Increase the timeout for specific flows that legitimately need more time:**
-   ```yaml
-   # sentinel.yaml
-   flows:
-     overrides:
-       sn-core-agent:my-flow:
-         timeout_ms: 60000  # 1 minute
+1. **Increase the default Lua execution timeout** in `.sentinel/config.json`. There is no `flows.overrides.timeout_ms` in `sentinel.yaml`.
+   ```json
+   {
+     "lua": {
+       "execution_timeout": 60
+     }
+   }
    ```
    Increase a timeout only for a flow with known work that needs more time. Review the cause before you increase it.
 
@@ -304,13 +304,13 @@ secret 'api_key' not found
 
 1. **List existing secrets and examine their names for typos:**
    ```bash
-   ./sentinel secret list
+   ./sentinel sre secret ls
    ```
    Secret names are case-sensitive. `api_key` and `API_KEY` are different secrets.
 
 2. **Create the missing secret:**
    ```bash
-   ./sentinel secret set api_key "your_secret_value_here"
+   ./sentinel sre secret set api_key "your_secret_value_here"
    ```
 
 3. **Make sure that the vault is accessible and unlocked:**
@@ -429,10 +429,10 @@ error: database is locked
    ```
    The default usually supports normal operation. If you need a higher value, examine whether flows hold write locks too long. Optimize those flows.
 
-2. **Check database health:**
+2. **Check database health.** There is no `sentinel db shell` command. Query through `sentinel db query` or open the file with `sqlite3`:
    ```bash
-   ./sentinel db shell
-   sqlite> PRAGMA integrity_check;
+   ./sentinel db query "PRAGMA integrity_check;" --kit <kit-id>
+   sqlite3 .sentinel/state.db "PRAGMA integrity_check;"
    ```
    The expected result is `ok`. If the command reports errors, corruption is possible. The next section explains recovery.
 
@@ -545,16 +545,7 @@ The dashboard proxies API requests to the harness through its BFF (Backend-for-F
 
 **Understanding the cause:** The harness limits API requests to protect resources. Automated scripts can exceed this limit with rapid requests.
 
-**Solution:** Increase the rate limit in `.sentinel/config.json`:
-```json
-{
-  "limits": {
-    "rate_limit_rps": 1000
-  }
-}
-```
-
-If normal operation reaches rate limits, examine unnecessary requests. WebSocket streams can replace frequent polling.
+**Solution:** `AUTH.RATE_LIMIT` is an internal per-token limiter. There is no `limits.rate_limit_rps` configuration key. Slow down request loops. WebSocket streams can replace frequent polling. Webhook triggers use their own `WEBHOOK.RATE_LIMIT` settings.
 
 ---
 
@@ -624,7 +615,8 @@ Use the direct internal harness address for the dashboard connection.
 1. **Make sure that hot reload is enabled:**
    ```yaml
    # sentinel.yaml
-   hotreload: true
+   hotreload:
+     yaml: full
    ```
 
 2. **Force a manual reload:**
@@ -666,7 +658,7 @@ Use the direct internal harness address for the dashboard connection.
 
 **Solutions:**
 
-1. **Verify the license key format.** Valid keys start with `sk_free_` or `sk_ent_` followed by a base64url payload and an Ed25519 signature separated by a period.
+1. **Verify the license key format.** Valid keys start with `sk_ce_`, `sk_free_`, or `sk_ent_` followed by a base64url payload and an Ed25519 signature separated by a period.
 
 2. **Check network connectivity to the marketplace:**
    ```bash
@@ -683,28 +675,26 @@ Use the direct internal harness address for the dashboard connection.
    "
    ```
 
-### Phone-home failures
+### Occupy failures
 
-**Symptom:** Dashboard shows license as invalid or marketplace features are blocked.
+**Symptom:** Dashboard shows license as invalid or executions are blocked.
 
-**Understanding the cause:** The phone-home system verifies the license periodically (default every 7 days). If verification fails for 48 hours (the grace period), marketplace features are blocked. This can happen due to network issues, DNS problems, or the marketplace server being unavailable.
+**Understanding the cause:** The 7-day phone-home window and 48-hour grace period are removed. Occupy retries about every 15 seconds. Production executions are gated by a live occupy lease. Network issues, DNS problems, or an unreachable license HQ (`license.ndx.au`) prevent a lease.
 
 **Solutions:**
 
-1. **Check when the next verification is scheduled:**
+1. **Register (occupy) the harness:**
    ```bash
-   cat .sentinel/config.json | python3 -c "
-   import sys, json
-   config = json.load(sys.stdin)
-   print('Next check:', config.get('marketplace', {}).get('next_check', 'NOT SET'))
-   "
+   ./sentinel login
+   ./sentinel register
    ```
 
-2. **Test network connectivity to the marketplace server.**
+2. **Test network connectivity to license HQ:**
+   ```bash
+   curl -s https://license.ndx.au/
+   ```
 
-3. **Check if you are within the grace period.** Marketplace features continue to work for 48 hours after the first phone-home failure. If you resolve the network issue within this window, everything returns to normal automatically.
-
-4. **Restart the harness** to force an immediate phone-home attempt.
+3. **Restart the harness** so occupy retries immediately. A successful lease is required before production executions run.
 
 ---
 
@@ -761,7 +751,7 @@ error: could not decrypt vault
    export SENTINEL_VAULT_PASSPHRASE="new_passphrase"
    ./sentinel harness start -p ./project
    # Then re-add all secrets:
-   ./sentinel secret set api_key "value"
+   ./sentinel sre secret set api_key "value"
    ```
 
 ---
@@ -803,11 +793,11 @@ error: could not decrypt vault
 
 **Solutions:**
 
-1. **Limit concurrent flow executions:**
+1. **Limit concurrent flow executions** with the Lua VM pool. There is no `limits.max_concurrent_flows` key.
    ```json
    {
-     "limits": {
-       "max_concurrent_flows": 5
+     "lua": {
+       "pool_size": 5
      }
    }
    ```
@@ -1041,9 +1031,8 @@ Or use the Refresh links on individual dashboard pages to fetch fresh data from 
 ### Enable Debug Logging
 
 ```bash
-export SENTINEL_DEBUG=1
 export SENTINEL_LOG_LEVEL=debug
-./sentinel harness start -p ./project
+./sentinel harness start -p ./project --debug
 ```
 
 Debug logging produces verbose output from every harness component, including:
@@ -1062,26 +1051,25 @@ curl http://localhost:8080/hl
 # Component health (kits, triggers, database, vault)
 curl http://localhost:8080/hl/kt
 
-# List all registered components
-./sentinel components list
+# List kits in the SRE
+./sentinel sre kit list
 ```
 
 ### Review Audit Logs
 
-```bash
-# Recent audit entries
-./sentinel audit list --limit 100
+There is no `sentinel audit list` command. `sentinel audit [path]` validates SRE structure. Harness security events go to process logs:
 
-# Filter by type
-./sentinel audit list --filter type=ERROR
+```bash
+./sentinel audit /path/to/project
+./sentinel logs --level warn
 ```
 
 ### Check Configuration
 
 ```bash
-# Check specific config values
-./sentinel config get api.port
-./sentinel config get logging.level
+# Check specific config values (key is log.level, not logging.level)
+./sentinel sre config get api.port
+./sentinel sre config get log.level
 
 # Dump the full configuration (be careful -- may contain sensitive values)
 cat .sentinel/config.json | python3 -m json.tool
@@ -1089,16 +1077,15 @@ cat .sentinel/config.json | python3 -m json.tool
 
 ### Database Inspection
 
-```bash
-# Open an interactive SQLite shell on the state database
-./sentinel db shell
+There is no `sentinel db shell` command.
 
-# Useful queries:
-sqlite> .tables                                    -- List all tables
-sqlite> SELECT * FROM executions ORDER BY started_at DESC LIMIT 5;  -- Recent executions
-sqlite> SELECT * FROM triggers;                    -- All registered triggers
-sqlite> SELECT COUNT(*) FROM executions WHERE status = 'failed';    -- Count failures
-sqlite> PRAGMA integrity_check;                    -- Verify database health
+```bash
+# Read-only SQL against a kit database
+./sentinel db query "PRAGMA integrity_check;" --kit <kit-id>
+
+# Inspect the harness state database with sqlite3
+sqlite3 .sentinel/state.db ".tables"
+sqlite3 .sentinel/state.db "PRAGMA integrity_check;"
 ```
 
 ---

@@ -12,7 +12,7 @@ status: stable
 
 This guide explains how to add a Go **runtime adapter** for a new `meta.runtime.provider` value in API Library. Operators register vendors in the dashboard. At startup, `BuildClientFromLibrary` connects the adapters.
 
-Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Operator smoke path: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator).
+Architecture reference (harness repo, not this docs tree): [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Operator smoke path: [Agentic AI operator guide](/agentic-ai-operator).
 
 ---
 

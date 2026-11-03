@@ -12,12 +12,14 @@ status: stable
 
 Hands-on acceptance trail for **M1 — Agentic AI completion**. Work through each section in order. Sample payloads are copy-paste ready.
 
+Primary commands are POSIX (`sentinel` or the local `sndev` build). Paths use `$SRE` or `/home/...`. PowerShell is an optional Windows appendix, not the required path.
+
 | Reference | Path |
 |-----------|------|
-| Architecture spec | [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) |
-| Operator guide | [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator) |
-| Provider extension | [`23-AI-PROVIDER-EXTENSION.md`](/ai-provider-extension) |
-| UAT SRE (no git) | `E:\_CODE\SRE\agentic-uat` |
+| Architecture spec (harness repo) | [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) |
+| Operator guide | [Agentic AI operator guide](/agentic-ai-operator) |
+| Provider extension | [AI provider extension](/ai-provider-extension) |
+| UAT SRE (no git) | `$SRE` (example: `/home/$USER/sre/agentic-uat`) |
 
 **Time:** ~60–90 minutes with a live API key. **Without a key:** you can still complete sections marked *(no key)*.
 
@@ -28,30 +30,30 @@ Hands-on acceptance trail for **M1 — Agentic AI completion**. Work through eac
 The trail uses a dedicated SRE outside the harness repo:
 
 ```
-E:\_CODE\SRE\agentic-uat
+$SRE=/home/$USER/sre/agentic-uat
 ```
 
 ### 0.1 Create (if missing)
 
-From PowerShell:
+```bash
+SRE=/home/$USER/sre/agentic-uat   # or any dedicated directory
+HARNESS=/path/to/sentinel         # harness checkout; optional if sentinel is on PATH
+SRE_INIT=/path/to/sre-init        # https://github.com/ndx-au/sre-init
 
-```powershell
-$UAT = "E:\_CODE\SRE\agentic-uat"
-$HARNESS = "E:\_CODE\sentinel"
-$SRE_INIT = "E:\_CODE\sre-init"
+mkdir -p "$SRE"
+cd "$SRE"
 
-New-Item -ItemType Directory -Force -Path $UAT | Out-Null
-Set-Location $UAT
-
-& "$HARNESS\sndev.exe" -n sre init --minimal `
-  --with-local $SRE_INIT `
-  --with-bundle core `
+sentinel sre init --minimal \
+  --with-local "$SRE_INIT" \
+  --with-bundle core \
   --with-bundle examples
 ```
 
+Use `./sndev` from the harness checkout if you are running a local dev binary instead of `sentinel`.
+
 ### 0.2 Vault passphrase (required for secrets)
 
-Edit `.sentinel\config.json` and set:
+Edit `$SRE/.sentinel/config.json` and set:
 
 ```json
 "vault_passphrase": "uat-trail-2026!"
@@ -59,8 +61,8 @@ Edit `.sentinel\config.json` and set:
 
 The harness creates the vault database at first start. You can also export:
 
-```powershell
-$env:SENTINEL_VAULT_PASSPHRASE = "uat-trail-2026!"
+```bash
+export SENTINEL_VAULT_PASSPHRASE="uat-trail-2026!"
 ```
 
 ### 0.3 Environment shortcuts
@@ -76,9 +78,9 @@ SENTINEL_API_KEY=
 
 ### 0.4 Verify kits
 
-```powershell
-& "$HARNESS\sndev.exe" -p $UAT sre test sn.core-agent/md -f agent -v
-& "$HARNESS\sndev.exe" -p $UAT sre test sn.core-agent/fl -f assistant -v
+```bash
+sentinel -p "$SRE" sre test sn.core-agent/md -f agent -v
+sentinel -p "$SRE" sre test sn.core-agent/fl -f assistant -v
 ```
 
 | Check | Pass |
@@ -92,43 +94,46 @@ SENTINEL_API_KEY=
 
 The **dashboard starts standalone** (healthy without a harness). Attach the UAT harness from **Instances** when ready, or start the harness first and connect manually.
 
-```powershell
-$UAT = "E:\_CODE\SRE\agentic-uat"
-$HARNESS = "E:\_CODE\sentinel"
+There is no root `start` command.
+
+```bash
+SRE=/home/$USER/sre/agentic-uat
 
 # Terminal A — dashboard (no harness required; -d auto-clears stale PID/port)
-& "$HARNESS\sndev.exe" dashboard start -p $UAT -d
+sentinel dashboard start -p "$SRE" -d
 
 # Terminal B — harness API (when you are ready for flow/API tests)
-& "$HARNESS\sndev.exe" -p $UAT start -d
+sentinel harness start -p "$SRE" -d
 ```
 
-**Attach harness in dashboard:** open **http://localhost:9090/instances** → connect to `localhost:8080` (SRE path `E:\_CODE\SRE\agentic-uat`).
+Dashboard binds **http://127.0.0.1:9090**. Dashboard logs live under `$HOME/.sentinel/` (for example `$HOME/.sentinel/dashboard-9090.log`). Harness daemon logs live under `$SRE/.sentinel/` (for example `$SRE/.sentinel/harness-8080.log`).
 
-Optional: `dashboard start localhost:8080 -p $UAT -d` tries attachment after listen but still starts if the harness is down.
+**Attach harness in dashboard:** open **http://127.0.0.1:9090/instances** → connect to `127.0.0.1:8080` (SRE path `$SRE`).
 
-Open **http://localhost:9090** (dashboard) or **http://127.0.0.1:8080** (API direct, after harness is up).
+Optional: `sentinel dashboard start localhost:8080 -p "$SRE" -d` tries attachment after listen but still starts if the harness is down.
+
+Open **http://127.0.0.1:9090** (dashboard) or **http://127.0.0.1:8080** (API direct, after harness is up).
 
 ### Dashboard troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| `not yet healthy` on `-d` start | Rebuild recent `sndev`. Check `C:\Users\<you>\.sentinel\dashboard-9090.log`. |
+| `not yet healthy` on `-d` start | Rebuild recent `sentinel` / `sndev`. Check `$HOME/.sentinel/dashboard-9090.log`. |
 | `PID file exists` (foreground) | Confirm delete, or use `-d` to auto-replace. |
 | Attach 502 on Instances | Start harness (Terminal B) first, then connect. |
 | Port 9090 in use (foreground) | Confirm kill, or use `-d` to auto-replace. |
 
-Copy the API bearer token from `.sentinel\config.json`:
+Copy the API bearer token from `$SRE/.sentinel/config.json`:
 
-```powershell
-(Get-Content "$UAT\.sentinel\config.json" | ConvertFrom-Json).api.tokens[0].token
+```bash
+python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["api"]["tokens"][0]["token"])' "$SRE/.sentinel/config.json"
 ```
 
 Set `$TOKEN` for curl examples:
 
-```powershell
-$TOKEN = "<paste-token>"
-$BASE = "http://127.0.0.1:8080"
+```bash
+TOKEN="<paste-token>"
+BASE="http://127.0.0.1:8080"
 ```
 
 | Check | Pass |
@@ -146,9 +151,9 @@ $BASE = "http://127.0.0.1:8080"
 
 ### CLI
 
-```powershell
-$env:SENTINEL_VAULT_PASSPHRASE = "uat-trail-2026!"
-& "$HARNESS\sndev.exe" -p $UAT secret set openai_api_key_uat
+```bash
+export SENTINEL_VAULT_PASSPHRASE="uat-trail-2026!"
+sentinel -p "$SRE" secret set openai_api_key_uat
 # paste key at prompt
 ```
 
@@ -231,9 +236,9 @@ curl -s -X POST "$BASE/lib" \
 
 Restart harness after library changes if providers do not appear:
 
-```powershell
-# Ctrl+C Terminal A, then start again
-& "$HARNESS\sndev.exe" -p $UAT start
+```bash
+# stop the Terminal B process, then:
+sentinel harness start -p "$SRE" -d
 ```
 
 | Check | Pass |
@@ -270,7 +275,7 @@ Agents → **Providers** tab:
 | Vendor | Adapter badge | Pass |
 |--------|---------------|------|
 | OpenAI UAT | `active` | ☐ |
-| Ollama UAT | `unsupported` + hint linking `docs/23-AI-PROVIDER-EXTENSION.md` | ☐ |
+| Ollama UAT | `unsupported` + hint linking [AI provider extension](/ai-provider-extension) | ☐ |
 
 ---
 
@@ -318,6 +323,8 @@ curl -s -X PUT "$BASE/ai/release" \
 }
 ```
 
+AI tool, filesystem, and native HTTP effects can block until `.sentinel/execution-policy.json` grants the operation and, when the grant requires approval, `sentinel approvals grant` issues a matching ticket.
+
 ### HTTP
 
 ```bash
@@ -334,8 +341,8 @@ curl -s -X POST "$BASE/fl/sn-core-agent:assistant/run" \
 
 ### CLI
 
-```powershell
-& "$HARNESS\sndev.exe" -p $UAT run sn-core-agent:assistant `
+```bash
+sentinel -p "$SRE" run sn-core-agent:assistant \
   --params-json '{"agent_id":"uat-bot","session_id":"trail-session-1","message":"Hello from UAT trail","model":"gpt-4o-mini"}'
 ```
 
@@ -501,12 +508,12 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/ai/audit?limit=10"
 
 Generate a new agent flow from harness scaffold:
 
-```powershell
-Set-Location $UAT
-& "$HARNESS\sndev.exe" -p $UAT sre flow new my-uat-agent --kit sn.core-agent --preset agent -n
+```bash
+cd "$SRE"
+sentinel -p "$SRE" sre flow new my-uat-agent --kit sn.core-agent --preset agent -n
 ```
 
-Open `sn.core-agent\fl\my-uat-agent.lua` — **expect** `sn.md.agent.run({...})`, not inlined persona/memory/chat.
+Open `sn.core-agent/fl/my-uat-agent.lua` — **expect** `sn.md.agent.run({...})`, not inlined persona/memory/chat.
 
 | Check | Pass |
 |-------|------|
@@ -541,10 +548,10 @@ Skip unless PostgreSQL + pgvector are configured in `sentinel.yaml` and RAG subs
 
 ## 14 — Harness regression *(no SRE required)*
 
-From harness repo:
+From the harness repo:
 
-```powershell
-cd E:\_CODE\sentinel
+```bash
+cd /path/to/sentinel
 go test ./internal/api -count=1 -run TestAgenticAIOperatorPath
 go test ./internal/ai -count=1 -run "BuildClient|Adapter"
 go test ./internal/rag -count=1 -run TestRetrievalEvalRegression
@@ -572,6 +579,27 @@ go test ./internal/scaffold -count=1 -run Preset
 **Tester:** _______________ **Date:** _______________ **Harness build:** _______________
 
 **Notes:**
+
+---
+
+## Appendix — Windows (optional)
+
+PowerShell is optional. Do not treat a drive letter as required. Use a generic `$SRE` (for example `$HOME\sre\agentic-uat`). The binary is `sentinel.exe` or a local `sndev.exe` from the harness checkout. There is no root `start` command.
+
+```powershell
+$SRE = "$HOME\sre\agentic-uat"
+$HARNESS = "<path-to-sentinel-checkout>"
+
+New-Item -ItemType Directory -Force -Path $SRE | Out-Null
+Set-Location $SRE
+
+& "$HARNESS\sentinel.exe" sre init --minimal --with-bundle core --with-bundle examples
+
+& "$HARNESS\sentinel.exe" dashboard start -p $SRE -d
+& "$HARNESS\sentinel.exe" harness start -p $SRE -d
+```
+
+Dashboard: **http://127.0.0.1:9090**. Logs: `$HOME\.sentinel\`. Then follow the POSIX HTTP steps above.
 
 ---
 

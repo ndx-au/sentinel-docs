@@ -28,25 +28,26 @@ The kit philosophy is built on three principles:
 
 Every Sentinel project is ultimately a collection of kits. Even a project with a single automation flow has that flow inside a kit. The harness discovers kits automatically at startup by scanning the project root for directories that match the naming pattern and contain a `kit.yaml` manifest.
 
-Starter content for `sentinel sre init` provides working references. Core kits include `sn.core-agent`, `sn.core-rag`, `sn.tools-http`, and `sn.supervisor`. Examples include `sn.eg-support`, `sn.eg-itops`, and `sn.eg-rag-chat`. Legacy compatibility examples include `sn.example-support` and `sn.example-itops`.
+Starter content is opt-in. `sentinel sre init` installs no kits by default. Pass `--starter-kits` or `--with-bundle core` to pull kits from [ndx-au/sre-init](https://github.com/ndx-au/sre-init). The core bundle includes kits such as `sn.core-agent`. Example bundles add `sn.eg-support`, `sn.eg-itops`, and `sn.eg-rag-chat`.
 
 ---
 
 ## Kit Discovery
 
-When the harness starts, it scans the project root directory for kit directories. A directory is recognized as a kit if:
+When the harness starts, it scans the project root directory for kit directories. `DiscoverKits` recognizes a directory as a kit if:
 
-1. Its name follows the `{namespace}.{name}` pattern (for example `acme.billing`, `sn.core-agent`, `my.utils`).
+1. Its name **contains a `.`** (for example `acme.billing`, `sn.core-agent`, `my.utils`).
 2. It contains a `kit.yaml` file at its root.
 
-Both conditions must be met. A directory called `acme.billing` without a `kit.yaml` is ignored. A directory called `utilities` with a `kit.yaml` is also ignored because it does not match the naming pattern.
+Both conditions must be met. A directory called `acme.billing` without a `kit.yaml` is ignored. A directory called `utilities` with a `kit.yaml` is also ignored because the name has no `.`.
+
+Discovery does **not** enforce a charset beyond the required `.`. `sentinel sre kit new` (and other scaffold commands) use a **separate** charset: lowercase alphanumeric and `_` (scaffold names must start with a letter).
 
 **Naming rules:**
 
 - The **namespace** is a short identifier for the organization or author. Examples: `sn` (Sentinel built-in), `acme` (a company), `jd` (a developer's initials).
 - The **name** is a short identifier for the kit's purpose. Examples: `core`, `billing`, `diag`, `blog`.
-- Both parts must be lowercase alphanumeric. Hyphens are allowed within each part but not as the first or last character.
-- The dot (`.`) is the separator and must appear exactly once.
+- The dot (`.`) separates namespace from kit name. Discovery only requires that a `.` is present.
 
 **Discovery is flat**: Kits must be direct children of the project root. Nested kits (a kit inside another kit) are not supported. The harness does not recurse into subdirectories.
 
@@ -115,12 +116,12 @@ acme.billing/
 | Directory | Purpose | Content Types |
 |-----------|---------|---------------|
 | `fl/` | Flows | `.lua` files (auto-discovered, each becomes a runnable flow) |
-| `cn/` | Connectors | `.lua` files (registered in the `sn.cn.{ns}.{name}` namespace) |
-| `md/` | Modules | `.lua` files (registered in the `sn.md.*` namespace) |
-| `ct/` | CMS content | `.md` files (parsed and exposed through `sn.cms.*` and `/cm`) |
+| `cn/` | Connectors | `.lua` files loaded from flows with `require("cn/...")` |
+| `md/` | Modules | `.lua` files loaded from flows with `require("md/...")` |
+| `ct/` | CMS content | `.md` files (parsed and exposed through `sn.cms.*` and `/fcms`) |
 | `pg/` | Pages | `.yaml` files (page definitions referencing templates) |
 | `fm/` | Forms | `.yaml` files (form definitions with fields and events) |
-| `tp/` | Templates | `.gohtml` files (Go HTML templates for rendering pages) |
+| `tp/` | Templates | `.gohtml` files (Go HTML templates for rendering pages). **Not** trigger YAML — triggers live in Lua `triggers = {}` |
 | `pb/` | Public assets | Any file type (served publicly through HTTP) |
 | `dd/` | Data definitions / migrations | **ccms:** ordered `.sql` migrations (`sentinel ccms migrate`). Legacy kit SQLite helpers can still use `.yaml` schemas — do not confuse with ccms SQL migrations. |
 
@@ -141,9 +142,9 @@ This creates the directory with a `kit.yaml` and the standard subdirectories (`f
 For common workflows, use scaffold presets instead of starting from empty files:
 
 ```bash
-./sentinel sre flow new assistant --kit acme.billing --preset agent
-./sentinel connector new stripe_lookup --kit acme.billing --preset tool
-./sentinel module new knowledge --kit acme.billing --preset rag
+sentinel sre flow new assistant --kit acme.billing --preset agent
+sentinel sre connector new stripe_lookup --kit acme.billing --preset tool
+sentinel sre module new knowledge --kit acme.billing --preset rag
 ```
 
 ### Manual Creation
@@ -306,9 +307,8 @@ pages:
 
 forms:
   - name: payment
-    stub: billing-payment
-    # The stub is a unique identifier for this form, used in event names
-    # and form data access. Event: kf.{namespace}.{name}.{form-name}
+    # Omit stub to default to kf.{ns}.{name}.{filename} (here: kf.acme.billing.payment).
+    # Dots in the stub become nested tables on ctx.fm — e.g. ctx.fm.kf.acme.billing.payment.
 
     fields:
       - name: invoice_id
@@ -329,17 +329,27 @@ database:
   tables:
     - name: invoices
       columns:
-        - id TEXT PRIMARY KEY
-        - amount REAL
-        - status TEXT
-        - created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        - name: id
+          type: text
+          primary_key: true
+        - name: amount
+          type: real
+        - name: status
+          type: text
+        - name: created_at
+          type: datetime
 
     - name: payments
       columns:
-        - id TEXT PRIMARY KEY
-        - invoice_id TEXT
-        - amount REAL
-        - created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        - name: id
+          type: text
+          primary_key: true
+        - name: invoice_id
+          type: text
+        - name: amount
+          type: real
+        - name: created_at
+          type: datetime
 
   imports:
     - shared
@@ -434,12 +444,12 @@ Flows are the core business logic of a kit. Each `.lua` file in the `fl/` direct
 
 ### Flow Lifecycle
 
-Every flow follows a strict lifecycle with four callback functions:
+Every flow follows a strict lifecycle. Registration requires `setup`, `main`, and `cleanup`. `failed` and `timeout` are optional:
 
 ```lua
 function setup()
   -- Called before main(). Use for initialization, resource allocation,
-  -- or pre-flight checks. Optional.
+  -- or pre-flight checks. Required.
 end
 
 function main(params)
@@ -452,16 +462,19 @@ function main(params)
 end
 
 function cleanup()
-  -- Called after main() completes (whether success or failure).
+  -- Called last after main() (whether success or failure).
   -- Use for releasing resources, closing connections, or final logging.
-  -- Optional.
+  -- Required.
 end
 
 function failed(err)
-  -- Called when main() throws an error or exceeds the execution timeout.
+  -- Called when setup() or main() throws. Optional (auto no-op if omitted).
   -- The err parameter contains the error message.
   -- Use for error reporting, alerting, or rollback logic.
-  -- Optional.
+end
+
+function timeout()
+  -- Optional. Called when execution hits the deadline.
 end
 ```
 
@@ -474,7 +487,8 @@ end
 
 - The `main(params)` function receives a params table containing trigger data. More context is available through the `ctx` global.
 - There is no `flow = {}` metadata table. Flow metadata is auto-discovered from the file's triggers and the kit manifest.
-- The `ctx` global is available in all four functions.
+- The `ctx` global is available in `setup`, `main`, `cleanup`, `failed`, and `timeout`.
+- Snippets later in this guide may omit `setup()` / `cleanup()` for brevity. Registration still requires those three hooks.
 
 ### The ctx Global
 
@@ -508,8 +522,9 @@ function main(params)
   -- Access secrets from the vault
   local stripe_key = ctx.secret("stripe_api_key")
 
-  -- Make an HTTP request via a connector
-  local resp = sn.cn.acme.billing.exec({
+  -- Load a kit connector with require("cn/...")
+  local stripe = require("cn/stripe")
+  local resp = stripe.exec({
     method = "POST",
     path = "/charges",
     data = { amount = 1000, source = "tok_visa" }
@@ -522,7 +537,7 @@ function main(params)
   )
 
   -- Emit an event for other flows to react to
-  sn.event.emit("payment.completed", {
+  sentinel.emit("payment.completed", {
     invoice_id = invoice_id,
     amount = 1000
   })
@@ -596,7 +611,7 @@ function main(params)
 end
 ```
 
-Events are emitted from Lua flows through `sn.event.emit("event.name", data)`. A flow can listen for multiple events by declaring multiple `event()` entries in its triggers table.
+Events are emitted from Lua flows through `sentinel.emit("event.name", data)`. A flow can listen for multiple events by declaring multiple `event()` entries in its triggers table.
 
 **Form trigger** -- Execute when a form is submitted:
 
@@ -606,16 +621,15 @@ triggers = {
 }
 
 function main(params)
-  -- Form data is accessible via ctx.fm
-  -- The key is the form's stub name
-  local invoice_id = ctx.fm["billing-payment"].invoice_id
-  local amount = ctx.fm["billing-payment"].amount
+  -- Form data is nested on dots in the stub (default kf.{ns}.{name}.{filename})
+  local invoice_id = ctx.fm.kf.acme.billing.payment.invoice_id
+  local amount = ctx.fm.kf.acme.billing.payment.amount
 
   ctx.log("info", "Processing form submission for invoice " .. invoice_id)
 end
 ```
 
-Form submission events follow the pattern `kf.{namespace}.{name}.{form-name}`. The form data is stored in `ctx.fm` keyed by the form's `stub` value.
+Form submission events follow the pattern `kf.{namespace}.{name}.{filename}` when `stub` is omitted. Dots in the stub become nested tables on `ctx.fm` (for example `ctx.fm.kf.acme.billing.payment`).
 
 ---
 
@@ -625,7 +639,13 @@ Connectors are Lua scripts that encapsulate integration with an external service
 
 ### How Connectors Work
 
-When the harness loads a kit, it scans the `cn/` directory for `.lua` files. Each connector registers whichever public table/functions it chooses under `sn.cn.*`. For example, the shipped `sn.tools-http/cn/http_json.lua` connector registers `sn.cn.http_json`.
+When a flow runs, kit connectors in `cn/` are loaded with `require("cn/...")` relative to the kit directory. For example `require("cn/stripe")` loads `acme.billing/cn/stripe.lua`. Kit connectors are not auto-registered on `sn.cn` from the kit path.
+
+Built-in harness connectors live under `sn.cn.sn.*`:
+
+- `sn.cn.sn.http.exec`
+- `sn.cn.sn.smtp.exec`
+- `sn.cn.sn.file.exec`
 
 ### Example Connector
 
@@ -662,12 +682,13 @@ return connector
 
 ### Using Connectors in Flows
 
-Connectors are called through the `sn.cn` namespace:
+Kit connectors are called after `require("cn/...")`. Built-ins use `sn.cn.sn.*`:
 
 ```lua
 -- In a flow
 function main(params)
-  local resp = sn.cn.acme.billing.exec({
+  local stripe = require("cn/stripe")
+  local resp = stripe.exec({
     method = "POST",
     path = "/charges",
     data = { amount = 1000, currency = "usd", source = "tok_visa" }
@@ -698,7 +719,12 @@ Modules are reusable Lua code libraries that provide shared functionality across
 
 ### How Modules Work
 
-Modules in the `md/` directory are registered in the `sn.md.{namespace}.{name}` namespace. A module must return a table containing its public functions.
+Kit modules in `md/` are loaded with `require("md/...")` relative to the kit directory. For example `require("md/invoice")` loads `acme.billing/md/invoice.lua`. Kit modules are not auto-registered on `sn.md` from the kit path. A module must return a table containing its public functions.
+
+Built-in harness modules live under `sn.md.sn.*`:
+
+- `sn.md.sn.transform`
+- `sn.md.sn.validate`
 
 ### Example Module
 
@@ -725,7 +751,7 @@ function invoice_module.finalize(invoice_id)
     { "finalized", invoice_id }
   )
 
-  sn.event.emit("invoice.finalized", { invoice_id = invoice_id })
+  sentinel.emit("invoice.finalized", { invoice_id = invoice_id })
 end
 
 function invoice_module.get(invoice_id)
@@ -740,12 +766,12 @@ return invoice_module
 
 ### Using Modules in Flows
 
-Modules are accessed through the `sn.md` namespace:
+Kit modules are accessed after `require("md/...")`. Built-ins use `sn.md.sn.*`:
 
 ```lua
 -- In a flow
 function main(params)
-  local invoice = sn.md.acme.billing
+  local invoice = require("md/invoice")
 
   local inv_id = invoice.create(9999, "cust_123")
   invoice.finalize(inv_id)
@@ -767,18 +793,15 @@ Forms capture user input through a web interface and trigger flows when submitte
 name: Payment Form
 # Required. Human-readable name displayed at the top of the form.
 
-stub: billing-payment
-# Required. Unique identifier for this form. Used in:
-#   - Event name: kf.{namespace}.{name}.{form-name}
-#   - Form data access: ctx.fm["{stub}"]
-#   - URL path: /kt/{ns}/{name}/fm/{stub}
+# stub: omit to default to kf.{ns}.{name}.{filename} (payment.yaml → kf.acme.billing.payment).
+# Dots nest on ctx.fm: ctx.fm.kf.acme.billing.payment
+# Event name and URL path use that stub.
 
 description: Submit payment for an invoice
 # Optional. Explanatory text displayed below the form title.
 
-password: null
-# Optional. If set, the form requires this password before displaying.
-# Set to null or omit for no password protection.
+# password: "$2a$10$..."  # bcrypt hash only. Omit the field for no password.
+# Never store plaintext. Do not leave an empty password field.
 
 fields:
   - name: invoice_id
@@ -883,10 +906,10 @@ on_submit: confirmation.gohtml
 
 When a form is submitted, the harness automatically emits an event:
 
-- Event name pattern: `kf.{namespace}.{name}.{form-name}`.
-- Example: Submitting the `payment` form in `acme.billing` emits `kf.acme.billing.payment`.
+- Event name: the form stub. Empty stub becomes `kf.{namespace}.{name}.{filename}`.
+- Example: Submitting `fm/payment.yaml` in `acme.billing` emits `kf.acme.billing.payment`.
 
-Any flow that listens for this event is triggered with the form data available in `ctx.fm`:
+Any flow that listens for this event is triggered with the form data nested on `ctx.fm`:
 
 ```lua
 triggers = {
@@ -894,7 +917,7 @@ triggers = {
 }
 
 function main(params)
-  local data = ctx.fm["billing-payment"]  -- Keyed by the form's stub
+  local data = ctx.fm.kf.acme.billing.payment
   local invoice_id = data.invoice_id
   local amount = data.amount
   local email = data.email
@@ -1026,46 +1049,47 @@ Define your database schema in `dd/schema.yaml`. The harness creates tables on s
 
 ```yaml
 tables:
-  invoices:
-    id:
-      type: TEXT PRIMARY KEY
-    customer_id:
-      type: TEXT
-    amount:
-      type: REAL
-    status:
-      type: TEXT DEFAULT 'draft'
-    created_at:
-      type: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    updated_at:
-      type: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  - name: invoices
+    columns:
+      - name: id
+        type: text
+        primary_key: true
+      - name: customer_id
+        type: text
+      - name: amount
+        type: real
+      - name: status
+        type: text
+        default: draft
+      - name: created_at
+        type: datetime
+      - name: updated_at
+        type: datetime
+    indexes:
+      - [customer_id]
 
-  payments:
-    id:
-      type: TEXT PRIMARY KEY
-    invoice_id:
-      type: TEXT
-    amount:
-      type: REAL
-    status:
-      type: TEXT
-    created_at:
-      type: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-
-  indexes:
-    - name: idx_invoices_customer
-      table: invoices
-      columns: [customer_id]
-    - name: idx_payments_invoice
-      table: payments
-      columns: [invoice_id]
+  - name: payments
+    columns:
+      - name: id
+        type: text
+        primary_key: true
+      - name: invoice_id
+        type: text
+      - name: amount
+        type: real
+      - name: status
+        type: text
+      - name: created_at
+        type: datetime
+    indexes:
+      - [invoice_id]
 ```
 
 ### Database Access in Lua
 
 ```lua
 -- Create tables (alternative to dd/schema.yaml)
-sn.db.exec("CREATE TABLE IF NOT EXISTS invoices (id TEXT PRIMARY KEY, amount REAL, status TEXT)")
+sn.db.exec("CREATE TABLE IF NOT EXISTS invoices (id TEXT, amount REAL, status TEXT)")
 
 -- Insert
 sn.db.exec(
@@ -1110,7 +1134,7 @@ end)
 
 ### Schema Design Patterns
 
-**Use TEXT for IDs**: SQLite is typeless internally, but TEXT PRIMARY KEY with generated IDs (for example `inv_` prefix + random bytes) provides human-readable, unique identifiers.
+**Use `text` for IDs**: In `kit.yaml` / `dd/` column types, use `type: text` with `primary_key: true`. Generated IDs (for example `inv_` prefix + random bytes) provide human-readable, unique identifiers. Valid types include `text`, `integer`, `real`, `datetime`, `json`, `uuid`, `boolean`, and `blob`.
 
 **Use TIMESTAMP DEFAULT CURRENT_TIMESTAMP**: For audit trails and chronological queries.
 
@@ -1166,7 +1190,7 @@ Assets are served with appropriate Content-Type headers based on file extension.
 
 Place branding files under `{namespace}.{name}/pb/` using **fixed basenames**. The harness picks the first existing extension per slot: **`.svg` → `.png` → `.jpg`**. No manifest or dashboard configuration entry is required — drop files on disk and reload the kit/SRE.
 
-Authoritative dimensions and basenames: `system-specs/kits.yaml` → `branding.images`.
+Authoritative dimensions and basenames live in the harness repo (`github.com/ndx-au/sentinel`, `system-specs/kits.yaml` → `branding.images`), not in this docs tree.
 
 The harness does **not** validate pixel size. The dashboard (`/kits`, `/kitview`) uses `object-fit: fill` in fixed aspect slots. Wrong dimensions look **warped** on purpose.
 
@@ -1211,7 +1235,7 @@ For kits with a web UI (`pg/`), `kit.yaml` `branding.favicon` points at **`/pb/f
 
 #### Optional design spec
 
-`dc/DESIGN.md` (see `branding.design-spec` in `system-specs/kits.yaml`) can document colors, typography, and art direction for humans and agents authoring kit assets.
+`dc/DESIGN.md` (see `branding.design-spec` in the harness `system-specs/kits.yaml`) can document colors, typography, and art direction for humans and agents authoring kit assets.
 
 ---
 
@@ -1293,7 +1317,7 @@ Content starts here in Markdown format...
 | `date` | string | No | Publication date in RFC3339 or YYYY-MM-DD format. |
 | `description` | string | No | Short summary for listings and SEO. |
 | `tags` | string[] | No | Tag list for categorization and filtering. |
-| `agent_context` | object | No | AI agent metadata. **Never exposed through the REST API.** Available to Lua flows through `sn.cms.get()` but stripped from `/cm/*` API responses. Use for AI-specific context like tone instructions, content briefs, or editorial notes. |
+| `agent_context` | object | No | AI agent metadata. **Never exposed through the REST API.** Available to Lua flows through `sn.cms.get()` but stripped from `/fcms/*` API responses. Use for AI-specific context like tone instructions, content briefs, or editorial notes. |
 | *(other fields)* | any | No | Any unknown fields are stored in a `meta{}` map. |
 
 ### cms_full_html Flag
@@ -1354,8 +1378,9 @@ end
 
 Content is also available through HTTP:
 
-- `GET /cm` -- List all slugs across all CMS kits.
-- `GET /cm/{kitName}/{slug}` -- Get parsed content for a specific slug (agent_context is stripped).
+- `GET /fcms` -- List all slugs across all CMS kits.
+- `GET /fcms/{ns}/{name}/{slug}` -- Get parsed content for a specific slug (agent_context is stripped).
+- Writes: `POST` / `PUT` `/fcms/{ns}/{name}/...` (Lua `sn.cms` is get+list only).
 
 ### Complete CMS Template Example
 
@@ -1642,7 +1667,7 @@ If your kit needs to expose functionality through multiple interfaces (CLI, REST
 
 ## Best Practices Summary
 
-1. **Name kits consistently**: Always use `{namespace}.{name}` pattern with lowercase alphanumeric characters.
+1. **Name kits consistently**: Discovery needs a `.` in the directory name plus `kit.yaml`. Scaffold charset is lowercase alphanumeric and `_`.
 2. **Document everything with skill twins**: Keep an up-to-date `.md` skill twin for each code file.
 3. **Version semantically**: Follow semver in `kit.yaml` and bump versions on every meaningful change.
 4. **Isolate databases**: Use kit-scoped databases. Import explicitly when cross-kit access is needed.

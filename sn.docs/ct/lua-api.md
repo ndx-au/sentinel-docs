@@ -58,14 +58,14 @@ Every flow has access to:
 
 The following Lua standard library functions are removed from the sandbox:
 
-- `io.*` -- No file I/O (use `sn.cn.file.exec()` for controlled file operations).
-- `os.*` -- No system commands (exception: `os.date` is available for time formatting).
+- `io.*` -- No file I/O (use `sn.cn.sn.file.exec()` for controlled file operations).
+- `os.*` -- The `os` library is **not** loaded. There is no `os.date`. Use `sn.time.now()` (ISO8601 UTC) or `sn.time.unix()`.
 - `debug.*` -- No debug introspection.
 - `package.*` -- No `require()` or module loading.
 - `load()`, `loadstring()` -- No dynamic code evaluation.
 - `dofile()` -- No file execution.
 
-If you need file operations, use the built-in file connector (`sn.cn.file.exec()`). If you need to call an external service, use `sn.http`. The sandbox channels all external interaction through auditable, rate-limitable APIs.
+If you need file operations, use the built-in file connector (`sn.cn.sn.file.exec()`). If you need to call an external service, use `sn.http`. The sandbox channels all external interaction through auditable, rate-limitable APIs.
 
 Long-running operational work such as scheduled backups remains harness-owned. Lua flows can observe backup state and react to backup lifecycle events, but they do not become the scheduler or worker for those jobs.
 
@@ -79,7 +79,7 @@ Before an AI call, examine `sn.ai.enabled` or handle the disabled error in `pcal
 
 ## Flow Lifecycle
 
-Every Lua flow must define four lifecycle functions: `setup`, `main`, `cleanup`, and `failed`. Missing required hooks fail registration. `timeout` is optional.
+Every Lua flow must define three required hooks (`VerifyHooks`): `setup`, `main`, and `cleanup`. Missing required hooks fail registration. `failed` is optional (auto no-op if omitted). `timeout()` is optional and runs when execution exceeds the context deadline.
 
 ```lua
 function setup()
@@ -102,9 +102,14 @@ function cleanup()
 end
 
 function failed(err)
-  -- Called when setup() or main() throws, then cleanup() still runs.
+  -- Called when setup() or main() throws, then cleanup() still runs last.
   -- The err parameter is the error message string.
   -- Use for error-specific cleanup or alerting.
+end
+
+function timeout()
+  -- Optional. Called when setup() or main() hits the execution deadline.
+  -- If timeout() itself errors, failed() runs, then cleanup() still runs last.
 end
 ```
 
@@ -113,6 +118,9 @@ end
 1. Success: `setup` → `main` → `cleanup`.
 2. Setup fails: `setup` → `failed` → `cleanup`.
 3. Main fails: `setup` → `main` → `failed` → `cleanup`.
+4. Timeout: `setup` → `main` → `timeout()` [→ `failed` if `timeout()` errors] → `cleanup`.
+
+`cleanup` always runs last after `failed` on error.
 
 ### Important Notes
 
@@ -126,9 +134,15 @@ end
 ### Minimal Flow Example
 
 ```lua
+function setup()
+end
+
 function main(params)
   ctx.log("info", "Hello from Sentinel!")
   return {ok = true, msg = "It works"}
+end
+
+function cleanup()
 end
 ```
 
@@ -197,7 +211,7 @@ end
 
 ## Context (ctx)
 
-The `ctx` object is a global that provides execution context, logging, state management, and secret access. It is available in all four lifecycle functions (`setup`, `main`, `cleanup`, `failed`).
+The `ctx` object is a global that provides execution context, logging, state management, and secret access. It is available in all lifecycle functions (`setup`, `main`, `cleanup`, `failed`, and `timeout` when defined).
 
 **Important:** During harness dry-run (flow registration at startup), `ctx` is `nil`. If your flow has top-level code outside of the lifecycle functions, always guard `ctx` access:
 
@@ -262,7 +276,7 @@ Returns all configured backup plans.
 local plans, err = sn.backup.plans()
 if err == nil then
   for _, plan in ipairs(plans) do
-    ctx.log("info", "backup plan", "name", plan.name, "schedule", plan.schedule)
+    ctx.log("info", "backup plan " .. tostring(plan.name) .. " " .. tostring(plan.schedule))
   end
 end
 ```
@@ -277,7 +291,7 @@ Returns recent backup runs. Optional `opts` fields:
 local runs, err = sn.backup.runs({ limit = 10, status = "failed" })
 if err == nil then
   for _, run in ipairs(runs) do
-    ctx.log("warn", "backup issue", "plan", run.plan_name, "error", run.error_message)
+    ctx.log("warn", "backup issue " .. tostring(run.plan_name) .. " " .. tostring(run.error_message))
   end
 end
 ```
@@ -289,7 +303,7 @@ Returns the currently active in-process backup jobs known to this harness instan
 ```lua
 local running = sn.backup.running()
 if #running > 0 then
-  ctx.log("info", "backup jobs active", "count", #running)
+  ctx.log("info", "backup jobs active: " .. tostring(#running))
 end
 ```
 
@@ -304,7 +318,7 @@ Returns a small backup summary:
 ```lua
 local status, err = sn.backup.status()
 if err == nil and status.running_count > 0 then
-  ctx.log("info", "backup subsystem busy", "running", status.running_count)
+  ctx.log("info", "backup subsystem busy: " .. tostring(status.running_count))
 end
 ```
 
@@ -323,7 +337,7 @@ triggers = {
 }
 
 function main(params)
-  ctx.log("error", "backup failed", "plan", params.plan_name, "error", params.error_message)
+  ctx.log("error", "backup failed: " .. tostring(params.plan_name) .. " " .. tostring(params.error_message))
   return {ok = true}
 end
 ```
@@ -440,9 +454,38 @@ ctx.fs("delete", "sn.mine/data/tmp.txt")
 
 Kit identity for policy matching uses the same first-hyphen flow-id parse as `sn.db` / `sn.cms` / `sn.ws` (`ops-code-progress:scan` → kit `ops.code-progress`).
 
+#### ctx.keyhole
+
+```lua
+local mode = ctx.keyhole
+-- Returns the runtime keyhole string from `.sentinel/config.json` (may be empty).
+```
+
+**Type:** string
+
+#### ctx.project_config()
+
+Returns the loaded `sentinel.yaml` project config as a Lua table (wired in harness bootstrap). Raises if marshaling fails.
+
+```lua
+local cfg = ctx.project_config()
+ctx.log("info", "project " .. tostring(cfg.name))
+```
+
+#### ctx.cache.invalidate_paths(paths) / ctx.cache.invalidate_all()
+
+Page-cache invalidation for the executing kit (optional extra kit targeting via args).
+
+```lua
+local n = ctx.cache.invalidate_paths({"/", "/about"})
+local ok = ctx.cache.invalidate_all()
+```
+
+`invalidate_paths` returns the number of distinct pages invalidated. `invalidate_all` returns `true` when the kit cache was cleared.
+
 #### ctx.log(level, message)
 
-Writes a log entry associated with this execution. Logs are stored in the state database and can be streamed in real-time through the SSE API (`GET /ex/{id}/lg`).
+Writes a log entry associated with this execution. Logs are stored in the state database and can be streamed in real-time through the SSE API (`GET /ex/{id}/lg`). Extra arguments after `message` are ignored -- there is no key-value structured logging on this function.
 
 ```lua
 ctx.log("info", "Processing order " .. order_id)
@@ -656,7 +699,7 @@ end
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `headers` | table | `{}` | Key-value pairs of HTTP headers. Keys are header names, values are header values. |
-| `timeout_ms` | integer | `30000` | Request timeout in milliseconds. If the server does not respond within this time, the request fails with an error. |
+| `timeout_ms` | integer | `10000` | Request timeout in milliseconds (default 10s). Values `<= 0` or above 30s are clamped to the 30s maximum. |
 
 ### Response Object
 
@@ -666,9 +709,9 @@ All HTTP methods return a response object with the following fields:
 {
   status = 200,             -- HTTP status code (integer)
   body = "...",             -- Response body as a string
-  headers = {               -- Response headers (lowercase keys)
-    ["content-type"] = "application/json",
-    ["x-rate-limit"] = "100"
+  headers = {               -- Response headers (Go canonical MIME keys)
+    ["Content-Type"] = "application/json",
+    ["X-Rate-Limit"] = "100"
   }
 }
 ```
@@ -677,7 +720,7 @@ All HTTP methods return a response object with the following fields:
 |-------|------|-------------|
 | `status` | integer | HTTP status code (for example 200, 404, and 500) |
 | `body` | string | Response body as a raw string. Parse JSON with `sn.json.dec()`. |
-| `headers` | table | Response headers. Header names are lowercased. |
+| `headers` | table | Response headers. Keys are Go canonical MIME header names (for example `Content-Type`), not lowercased. |
 
 ### Real-World Examples
 
@@ -1005,7 +1048,7 @@ end
 
 ## Database (sn.db)
 
-Every kit gets its own isolated SQLite database. The database file is stored at `.sentinel/data/{kit-name}.db` within the SRE directory. Other kits cannot access it unless explicitly imported in `kit.yaml`.
+Every kit gets its own isolated SQLite database. The database file is stored at `{projectRoot}/.sentinel/data/{ns}.{name}.db` (for example `.sentinel/data/sn.core-agent.db`). Other kits cannot access it unless explicitly imported in `kit.yaml`.
 
 SQLite is a full-featured relational database that supports transactions, indexes, JSON functions, and most SQL operations. It is ideal for storing flow state, caching API responses, tracking processed items, and building simple CRUD applications.
 
@@ -1153,7 +1196,7 @@ end)
 ### Database Isolation
 
 Each kit gets its own database file:
-- **Location:** `.sentinel/data/{kit-name}.db`.
+- **Location:** `{projectRoot}/.sentinel/data/{ns}.{name}.db`.
 - **Access:** By default, only flows within the kit can access its database.
 - **Cross-kit access:** An import in `kit.yaml` can permit a kit to read another kit's database. Avoid this access unless necessary.
 
@@ -1341,11 +1384,15 @@ ctx.log("info", "Current time: " .. ts)
 
 **Returns:** ISO8601 timestamp string in UTC (for example `"2026-02-10T12:00:00Z"`).
 
-**Note:** `os.date` is also available in the sandbox for more flexible time formatting:
+### sn.time.unix()
+
+Returns the current Unix timestamp as a number.
 
 ```lua
-local formatted = os.date("%Y-%m-%d %H:%M:%S")
+local epoch = sn.time.unix()
 ```
+
+The `os` library is not available. Do not call `os.date`.
 
 ---
 
@@ -1575,7 +1622,7 @@ function main(params)
 end
 ```
 
-Operator setup: enable `sn.ai` on the Agents dashboard, register an AI-capable API Library vendor, and store the API key in Vault. Step-by-step smoke: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator). Architecture: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).
+Operator setup: enable `sn.ai` on the Agents dashboard, register an AI-capable API Library vendor, and store the API key in Vault. Step-by-step smoke: [Agentic AI operator guide](/agentic-ai-operator). Architecture: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).
 
 ---
 
@@ -1751,7 +1798,7 @@ Connectors are pre-built integrations that provide standardized access to extern
 
 ### How Connector Namespacing Works
 
-Connector names are defined by the connector itself. Current starter-kit examples include `sn.cn.http_json` and `sn.cn.rag_ingest`.
+Harness built-in connectors register under `sn.cn.sn.*`. Kit connectors register whatever tables they expose under `sn.cn.*`. `http_json` is a **kit** connector (for example `sn.cn.http_json`), not a harness builtin.
 
 ### Starter-Kit Connector Examples
 
@@ -1769,13 +1816,17 @@ local result, err = sn.cn.rag_ingest.call({
 })
 ```
 
-### SMTP Connector (sn.cn.smtp)
+### HTTP Connector (sn.cn.sn.http)
 
-Sends email through SMTP. Useful for notifications and alerts.
+Harness builtin: `sn.cn.sn.http.exec({url=..., method=..., body=..., ...})`. This is separate from `sn.http.get/post/put/del` and from the kit connector `sn.cn.http_json`.
+
+### SMTP Connector (sn.cn.sn.smtp)
+
+Sends email through SMTP. Useful for notifications and alerts. The host field is `host`, not `server`.
 
 ```lua
-sn.cn.smtp.exec({
-  server = "smtp.gmail.com",
+sn.cn.sn.smtp.exec({
+  host = "smtp.gmail.com",
   port = 587,
   from = "bot@example.com",
   password = ctx.secret("gmail_app_password"),
@@ -1789,7 +1840,7 @@ sn.cn.smtp.exec({
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `server` | string | yes | SMTP server hostname |
+| `host` | string | yes | SMTP server hostname |
 | `port` | integer | yes | SMTP port (587 for TLS, 465 for SSL) |
 | `from` | string | yes | Sender email address |
 | `password` | string | yes | SMTP password or app-specific password |
@@ -1797,20 +1848,20 @@ sn.cn.smtp.exec({
 | `subject` | string | yes | Email subject line |
 | `body` | string | yes | Email body (plain text) |
 
-### File Connector (sn.cn.file)
+### File Connector (sn.cn.sn.file)
 
 Performs controlled file operations within the SRE directory. This is the sanctioned way to write files from within the sandbox.
 
 ```lua
 -- Write a file (overwrite mode)
-sn.cn.file.exec({
+sn.cn.sn.file.exec({
   mode = "overwrite",
   path = "sn.log/output/report.jsonl",
   content = sn.json.enc({test = "result"}) .. "\n"
 })
 
 -- Append to a file
-sn.cn.file.exec({
+sn.cn.sn.file.exec({
   mode = "append",
   path = "sn.log/output/report.jsonl",
   content = sn.json.enc({test = "another result"}) .. "\n"
@@ -1941,7 +1992,7 @@ end
 | `date` | string | Publication date (RFC3339 or YYYY-MM-DD) |
 | `description` | string | Short description |
 | `tags` | array | Tag strings |
-| `agent_context` | table | AI agent context block. Available in Lua only -- stripped from `/cm/*` REST API responses. |
+| `agent_context` | table | AI agent context block. Available in Lua only -- stripped from `/fcms/*` REST API responses. |
 | `meta` | table | Any unrecognized frontmatter fields |
 
 **Section structure:** Each section in the `sections` map contains:
@@ -2046,7 +2097,7 @@ function main(params)
 end
 ```
 
-**Cross-reference:** CMS content is also accessible through the REST API. See [HTTP API Reference: Content (CMS)](/api-reference#content-cms) for external endpoint documentation.
+**Cross-reference:** CMS content is also accessible through the REST API (`GET /fcms/{ns}/{name}/*`, legacy `/cm`). See [HTTP API Reference: Content (CMS)](/api-reference#content-cms) for external endpoint documentation.
 
 ---
 
@@ -2054,9 +2105,31 @@ end
 
 Beyond the built-in APIs documented above, Sentinel flows can access more services that implement the Triple-Access Pattern. These services expose Lua APIs alongside their CLI and REST interfaces, ensuring consistent behavior across all access methods.
 
+### Storage (sn.st)
+
+Harness object-storage bindings (`internal/storage/lua_api.go`):
+
+```lua
+local points, err = sn.st.list()
+local point, err = sn.st.get(id)
+local url, err = sn.st.resolve(ref, path)
+local meta, err = sn.st.head(ref, key)
+local put, err = sn.st.put(ref, key, data)
+```
+
+Also `sn.st.get_by_stub(stub)`. Each call returns `(result, nil)` or `(nil, error_string)`.
+
+### Kit registry (sn.kit)
+
+```lua
+local kit = sn.kit.get("sn", "core-agent")  -- nil if missing
+local kits = sn.kit.list()
+local form = sn.kit.find_form("contact")
+```
+
 ### API Library Service (sn.lib)
 
-The API library service manages vendor definitions, endpoints, and call templates. It is accessible from Lua flows:
+The API library service is implemented (`internal/library/lua.go`). It manages vendor definitions, endpoints, and call templates:
 
 ```lua
 -- List vendors
@@ -2366,9 +2439,8 @@ For security, the following Lua standard library functions are **NOT available**
 
 | Removed | Reason |
 |---------|--------|
-| `io.*` | File I/O -- use `sn.cn.file.exec()` instead |
-| `os.execute`, `os.remove`, `os.rename`, `os.tmpname`, `os.getenv`, `os.exit` | System commands -- too dangerous |
-| `os.date` | **Available** (exception) -- safe for time formatting |
+| `io.*` | File I/O -- use `sn.cn.sn.file.exec()` instead |
+| `os.*` | Entire `os` library is not loaded (no `os.date`, no system commands) |
 | `debug.*` | Debug introspection can expose harness internals |
 | `package.*` | Module loading -- prevents loading untrusted libraries |
 | `load()`, `loadstring()` | Dynamic code evaluation -- prevents code injection |
@@ -2377,11 +2449,11 @@ For security, the following Lua standard library functions are **NOT available**
 **Why these restrictions exist:** Flows contain user code that runs on the host. Without the sandbox, malicious or faulty code can expose secrets, delete files, or execute commands. The sandbox restricts access to the APIs that the harness provides and audits.
 
 **What to use instead:**
-- Need file I/O? Use `sn.cn.file.exec()`.
+- Need file I/O? Use `sn.cn.sn.file.exec()`.
 - Need to call an external service? Use `sn.http.*`.
 - Need to store data? Use `sn.db.*` or `ctx.pg()`.
 - Need shared logic? Put it in a module (`sn.md.*`).
-- Need time formatting? Use `os.date()` (it is available).
+- Need time? Use `sn.time.now()` or `sn.time.unix()`.
 
 ---
 
@@ -2393,7 +2465,7 @@ For security, the following Lua standard library functions are **NOT available**
 
 3. **Log important operations.** Use `ctx.log()` at appropriate levels. This is your primary debugging tool in production.
 
-4. **Set reasonable HTTP timeouts.** Always specify `timeout_ms` for HTTP requests. The default of 30 seconds is often too long. A timeout of 5-10 seconds is reasonable for most API calls.
+4. **Set reasonable HTTP timeouts.** Always specify `timeout_ms` for HTTP requests. The default is 10 seconds; the maximum is 30 seconds. A timeout of 5-10 seconds is reasonable for most API calls.
 
 5. **Handle errors gracefully with pcall.** If the flow must continue after an error, wrap the operation in `pcall`. Use the same protection to return a meaningful error. Operations include JSON parsing, HTTP requests, database queries, and secret retrieval.
 

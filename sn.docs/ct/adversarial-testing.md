@@ -34,7 +34,7 @@ There are two ways to use adversarial testing in Sentinel:
 
 2. **Agent Skill** (`/sn-go-adversarial`) -- An AI-driven approach where an agent autonomously discovers the API surface, generates probes, executes them, diagnoses failures, fixes bugs, and re-verifies. This is used during development when you want an AI assistant to find and fix bugs in a test-debug-fix cycle.
 
-Both approaches work by sending HTTP requests against a running harness and evaluating responses against the API contract. The API contract states that every response must be HTTP 200 with a JSON body. Errors are communicated in the body as `{ok: false, err: "CODE", msg: "..."}`. A probe "passes" when the response conforms to this contract (even if the response indicates an error -- a well-formatted error response is correct behavior).
+Both approaches work by sending HTTP requests against a running harness and evaluating responses against the API contract. For **harness JSON APIs**, that contract is HTTP 200 with a JSON body. Errors are communicated in the body as `{ok: false, err: "CODE", msg: "..."}`. HTML surfaces such as `/fcms/render` and form HTML are outside this contract. A JSON probe "passes" when the response conforms to this contract (even if the response indicates an error -- a well-formatted error response is correct behavior).
 
 ---
 
@@ -90,7 +90,7 @@ TOTAL              5     5     0     0
 All 8 probes passed.
 ```
 
-A "PASS" means that the response meets the API contract. A "FAIL" means that it violates the contract. Violations include non-200 status codes, invalid JSON, and restricted file contents from traversal requests.
+A "PASS" means that the JSON API response meets the contract. A "FAIL" means that it violates the contract. Violations include non-200 status codes on JSON APIs, invalid JSON, and restricted file contents from traversal requests. Do not apply the 200+JSON rule to HTML `/fcms/render` or form HTML.
 
 ---
 
@@ -130,12 +130,14 @@ Each feature corresponds to a group of API endpoints and generates probes across
 | `secrets` | `/sc` CRUD, upsert, malformed input | 8 | Vault operations: creating, reading, updating, and deleting secrets. Tests for SQL injection in secret names, oversized values, and idempotent upsert behavior. |
 | `triggers` | `/tr` CRUD, invalid types, empty fields | 7 | Trigger management: creating cron and event triggers, listing, deletion. Tests invalid cron expressions, empty trigger names, and nonexistent trigger IDs. |
 | `forms` | `/fm` list, render, submissions, stats | 5 | Form system: listing forms, rendering form HTML, submitting form data, and querying submission statistics. |
-| `cms` | `/cm` list, get, traversal attempts | 4 | CMS content: listing entries, fetching by slug, and path traversal attacks attempting to read files outside the CMS directory. |
+| `cms` | `/cm` list, get, traversal attempts | 4 | File CMS JSON: listing entries, fetching by slug, and path traversal. Probes still hit legacy `/cm`. Canonical plane routes are `/fcms` and `/fcms/render`. |
 | `source` | `/src/*` read, write, traversal | 4 | Source file management: reading and writing SRE source files, with traversal probes attempting to escape the SRE directory. |
 | `config` | `/cfg/project` read/write | 2 | Project configuration: reading and writing sentinel.yaml configuration. |
 | `kits` | `/kt/{ns}/{name}` pages, assets, traversal | 3 | Kit serving: fetching kit pages, static assets, and traversal probes attempting to leak kit.yaml or escape the kit directory. |
 | `webhooks` | `/wh/*` unknown hooks, traversal, large payload | 4 | Webhook handling: posting to nonexistent webhook paths, path traversal through webhook URLs, and oversized payload handling. |
-| `all` | Everything above | ~55 | Runs all probe sets. This is the recommended option for full regression testing. |
+| `all` | Everything above | ~55 | Runs all JSON probe sets. Dashboard, MCP, approvals, and FS Control are **not** in this set. |
+
+The request gate caps bodies at **32 MiB** (`internal/security/request_limits.go`: 32 active handlers, 4 body-bearing, 32 MiB read). Some JSON parsers still apply a **10 MB** limit (`internal/requestparams` `DefaultMaxBodySize`). Do not describe 10 MB as the harness-wide body cap.
 
 ---
 
@@ -352,12 +354,12 @@ TR-002: GET /tr/nonexistent_trigger_id        -> should return clean error
 
 **What it tests:** Response schema validation. Does every response conform to the API contract? Are required fields present? Is the JSON well-formed?
 
-**Why it matters:** API consumers (especially AI agents) depend on consistent response formats. A response that is missing the `ok` field, returns non-JSON content, or uses a non-200 status code breaks the API contract.
+**Why it matters:** API consumers (especially AI agents) depend on consistent JSON response formats. On harness JSON APIs, a response that is missing the `ok` field, returns non-JSON content, or uses a non-200 status code breaks the JSON contract. HTML `/fcms/render` and form HTML are not in that contract.
 
 **Examples:**
 ```
 HL-004: GET /hl -> verify status, mode, ver fields exist
-All probes implicitly check: HTTP 200, valid JSON, ok field present
+JSON probes typically check: HTTP 200, valid JSON, ok field present
 ```
 
 ---
@@ -490,7 +492,7 @@ Mode: debug
 | **Total**    | **17** |**16**|  **1**|  **1**|
 
 ### Failures Found & Fixed
-1. PROBE-WH-007: 50MB payload caused OOM -> Added 10MB body limit in webhook router -> fixed
+1. PROBE-WH-007: 50 MiB payload caused OOM -> request gate 32 MiB body cap in `internal/security/request_limits.go` -> fixed
 
 ### Observations
 - Webhook HMAC verification correctly rejects invalid signatures
@@ -661,25 +663,25 @@ Probes test API correctness. The simulator shows activity, and live logs show ha
 
 ## Extending the Probe Runner
 
-The probe runner is designed to be extended when new endpoints are added to the harness. To add probes for a new feature area, edit `cmd/simulator/main.go`:
+The probe runner is designed to be extended when new endpoints are added to the harness. `cmd/simulator/main.go` only parses flags and calls `internal/probes`. Add new JSON probes in `internal/probes/*.go`:
 
-1. **Add a new probe generation method** to the `ProbeRunner` struct:
+1. **Add a probe table** in a new or existing file under `internal/probes/`:
    ```go
-   func (r *ProbeRunner) fooProbes() []Probe {
+   func FooProbes() []Probe {
        // Return a slice of probes for the "foo" feature
    }
    ```
 
-2. **Register it in the `generateProbes()` switch statement** so it is included when `-feature foo` or `-feature all` is specified.
+2. **Register it in `Runner.GenerateProbes()`** (`internal/probes/runner.go`) so it is included when `-feature foo` or `-feature all` is specified.
 
-3. **Use the assertion helpers** to test responses:
+3. **Use the assertion helpers** to test JSON responses:
 
 ```go
-func (r *ProbeRunner) fooProbes() []Probe {
+func FooProbes() []Probe {
     return []Probe{
         {
             ID: "FOO-001", Category: "happy", Method: "GET", Path: "/foo",
-            Assert: assertOKResponse(),
+            Assert: AssertOKResponse(),
         },
         {
             ID: "FOO-002", Category: "traversal", Method: "GET", Path: "/foo/../../etc/passwd",
@@ -693,20 +695,22 @@ func (r *ProbeRunner) fooProbes() []Probe {
         {
             ID: "FOO-003", Category: "malformed", Method: "POST", Path: "/foo",
             Body: "not valid json",
-            Assert: assertErrorResponse(),
+            Assert: AssertErrorResponse(),
         },
     }
 }
 ```
 
+Dashboard, MCP, approvals, and FS Control have no entries in the ~55 JSON probes. Do not add those surfaces here unless you also extend the runner.
+
 ### Assertion Helpers
 
 | Helper | What It Checks | When to Use |
 |--------|---------------|-------------|
-| `assertHTTP200JSON()` | HTTP 200 + valid JSON (object or array) | For endpoints that return data without an `ok` field |
-| `assertOKResponse()` | HTTP 200 + `{ok: true}` | For endpoints with an expected success result |
-| `assertErrorResponse()` | HTTP 200 + `{ok: false}` | For probes with an expected error (malformed input, nonexistent resource) |
-| `assertOKWithField(f)` | HTTP 200 + `{ok: true, f: ...}` | For endpoints with a required response field |
+| `AssertHTTP200JSON()` | HTTP 200 + valid JSON (object or array) | For JSON endpoints that return data without an `ok` field |
+| `AssertOKResponse()` | HTTP 200 + `{ok: true}` | For JSON endpoints with an expected success result |
+| `AssertErrorResponse()` | HTTP 200 + `{ok: false}` | For JSON probes with an expected error (malformed input, nonexistent resource) |
+| `AssertOKWithField(f)` | HTTP 200 + `{ok: true, f: ...}` | For JSON endpoints with a required response field |
 | Custom function | Any custom validation logic | For traversal checks, specific error code validation, response body content checks |
 
 ---

@@ -12,7 +12,7 @@ status: stable
 
 This guide explains how to enable LLM flows in an SRE. The operator path is **API Library + Vault → Agents validate → release controls → flow (`sn.ai.chat`) → trace in dashboard**.
 
-Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Lua API details: [`02-LUA-API.md`](/lua-api) (AI / Memory / RAG sections).
+Architecture reference (harness repo): [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md). Lua API details: [Lua API](/lua-api) (AI / Memory / RAG sections).
 
 Harness regression: `go test ./internal/api -run TestAgenticAIOperatorPath` exercises this chain with a mock provider (no live API key required).
 
@@ -20,10 +20,11 @@ Harness regression: `go test ./internal/api -run TestAgenticAIOperatorPath` exer
 
 ## Prerequisites
 
-- Harness built and pointed at an SRE: `sentinel -p /path/to/sre`.
-- Dashboard reachable (default proxy: `http://localhost:9090` when using `sentinel dashboard start`).
+- Harness built and pointed at an SRE: `sentinel harness start -p /path/to/sre`.
+- Dashboard reachable on loopback: `http://127.0.0.1:9090` when using `sentinel dashboard start`.
 - An API key for a supported provider (`openai`, `anthropic`, or `gemini` adapters ship in the harness).
-- Starter kits installed: `sentinel sre init --with-bundle core` (from [ndx-video/sre-init](https://github.com/ndx-au/sre-init) or `--with-local ../sre-init`).
+- Starter kits installed: `sentinel sre init --with-bundle core` (from [ndx-au/sre-init](https://github.com/ndx-au/sre-init) or `--with-local ../sre-init`).
+- AI tool, filesystem, and native HTTP effects can block until `.sentinel/execution-policy.json` grants the operation and, when the grant requires approval, `sentinel approvals grant` issues a matching ticket. See [Security readiness](/security-readiness).
 
 The **core** bundle includes `sn.core-agent` with `sn.md.agent.run` (persona + memory + optional RAG + `sn.ai.chat`) and the `sn-core-agent:assistant` flow. The **examples** bundle adds `sn.eg-support` / `sn.eg-rag-chat` flows that call `sn.ai.chat` directly. Install **examples** for more chat smoke patterns:
 

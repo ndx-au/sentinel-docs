@@ -18,7 +18,7 @@ The Triple-Access Pattern is an internal Sentinel architecture. A shared service
 
 In a system like Sentinel, the same operation (for example "list all vendors" or "create a trigger") needs to be available in multiple contexts:
 
-1. **REST API** -- External clients, the dashboard, AI agents, and automation tools interact with Sentinel through HTTP endpoints. The API must be consistent, follow the brevity regime, and always return HTTP 200 with structured error bodies.
+1. **REST API** -- External clients, the dashboard, AI agents, and automation tools interact with Sentinel through HTTP endpoints. The API must be consistent, follow the brevity regime, and return JSON application errors as HTTP 200 with `{ok: false, err, code, msg, req_id}`. Detect failure with `ok === false` / `err`. Some surfaces (forms HTML, CMS HTML render, git, disabled WebSocket, CORS preflight) use real non-200 status codes.
 
 2. **CLI** -- Operators and administrators manage Sentinel from the command line. CLI commands must provide human-readable output (tables, formatted text) while also supporting machine-readable JSON output for scripting and agent consumption.
 
@@ -279,7 +279,7 @@ var queryCmd = &cobra.Command{
 
 **Implementation guidelines:**
 
-- **Always return HTTP 200.** Sentinel communicates errors in the body as `{ok: false, err: "CODE", msg: "..."}`. Some HTTP clients and proxies retry or open a circuit after a non-200 response. This behavior is unsuitable for application errors.
+- **JSON `writeError` returns HTTP 200.** Sentinel communicates JSON application errors in the body as `{ok: false, err: "CODE", code: "CODE", msg: "...", req_id: "..."}`. Some HTTP clients and proxies retry or open a circuit after a non-200 response. This behavior is unsuitable for JSON application errors. Do not treat that contract as "always HTTP 200" for HTML, git, or WebSocket upgrade.
 - **Use the brevity regime for query parameters.** Short parameter names (`?n=`, `?lv=`, `?cp=`) reduce URL length and token count for AI agent consumers. Document the full name alongside the abbreviation.
 - **Delegate all logic to the service.** The handler parses the request, calls the service, and writes the response. Keep `if` statements for business rules in the service.
 - **Map service errors to response body error codes.** The service returns typed errors. The handler maps these to the appropriate error code strings.
@@ -305,7 +305,7 @@ func (h *APIHandler) ListVendors(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Write the JSON response. Always HTTP 200.
+    // Write the JSON response. Application errors use writeError (HTTP 200 + ok:false).
     h.writeJSON(w, 200, vendors)
 }
 
@@ -458,7 +458,7 @@ Create these files:
 
 - Define handler methods on an API handler struct.
 - Register routes in the router setup (follow the brevity regime for route prefixes).
-- Remember: always HTTP 200, errors in body.
+- Remember: JSON `writeError` is HTTP 200 with errors in the body (`ok`, `err`, `code`, `msg`, `req_id`).
 
 **Step 4: Wire it all together in the DI container**
 
@@ -499,7 +499,7 @@ Each layer handles errors differently, but they all originate from the same serv
 - **Repository** -- Returns wrapped errors: `fmt.Errorf("query vendors: %w", err)`. The wrapping preserves the original error for `errors.Is()` while adding context.
 - **Service** -- Maps repository errors to service-level errors. For example, if the repository returns `sql.ErrNoRows`, the service returns `ErrNotFound`. The service also logs errors at this point.
 - **CLI** -- Uses the error code to format a user-friendly message. For example, `ErrNotFound` becomes "Resource not found: {id}".
-- **API** -- Returns HTTP 200 with `{ok: false, err: "RESOURCE_NOT_FOUND", msg: "Vendor xyz not found"}`. The error code string comes directly from the error variable's message.
+- **API** -- Returns HTTP 200 with `{ok: false, err: "RESOURCE_NOT_FOUND", code: "RESOURCE_NOT_FOUND", msg: "Vendor xyz not found"}`. The error code string comes directly from the error variable's message.
 - **Lua** -- Returns `(nil, "RESOURCE_NOT_FOUND: Vendor xyz not found")`. The flow author can then examine the error string or simply handle any non-nil error.
 
 ---
@@ -588,7 +588,7 @@ The `library` service in this codebase implements the full Triple-Access Pattern
 - Service layer: `internal/library/service.go`.
 - CLI commands: `cmd/sentinel/commands/lib.go`.
 - API handlers: `internal/api/apilib_handlers.go`.
-- Lua bindings: `internal/library/lua.go` (planned).
+- Lua bindings: `internal/library/lua.go` (implemented).
 
 When adding a new service, model it after the library service. Copy its structure, adapt the types, and follow the same patterns.
 

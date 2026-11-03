@@ -49,7 +49,7 @@ Stored in `.sentinel/config.json` as `marketplace.license_key`.
 
 ```bash
 sentinel login          # device code against kits.ndx.au
-sentinel register       # org profile + instance bind against license.ndx.au
+sentinel register       # occupy/CE path: org profile + instance bind against license.ndx.au
 sentinel harness start -p ./my-sre
 ```
 
@@ -62,8 +62,12 @@ Manual: `sentinel license activate sk_ent_...`
 | Unregistered (prod) | Blocked |
 | Registered, live occupy lease | Run |
 | Expired credential | Blocked |
-| Occupy denied / lease lapsed | Blocked |
+| Occupy denied / lease lapsed | Blocked (`ErrNoSlot` on flow **start**) |
 | SMTP configured | License deny/lapse emails |
+
+Flow **start** is gated. `/hl` still serves occupy fields (`slot_held`, `occupy_reason`, `lease_until`, `occupy_healthy`). Other HTTP endpoints may still answer.
+
+`sentinel register` is the occupy/CE registration path (instance bind against `license.ndx.au`).
 
 Dev builds (`-tags dev`) are not gated. Public `snprod` binaries set `PrereleaseRegistrationBypass=false`.
 

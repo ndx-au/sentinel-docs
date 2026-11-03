@@ -10,7 +10,7 @@ status: stable
 
 # Harness Internals — Code Architecture
 
-Contributor reference for the Sentinel **harness** Go codebase. This document describes how subsystems are wired, where code lives, and how requests flow through the runtime. The **code is the source of truth**. User-facing behavior is also specified in `system-specs/` and the numbered docs under `docs/`.
+Contributor reference for the Sentinel **harness** Go codebase. This document describes how subsystems are wired, where code lives, and how requests flow through the runtime. The **code is the source of truth**. User-facing behavior is also specified in harness `system-specs/` and the public guides in this docs SRE.
 
 **Audience:** engineers modifying `internal/*`, `cmd/sentinel/*`, or debugging harness behavior at runtime.
 
@@ -36,7 +36,7 @@ Sentinel separates two concerns:
 | Harness API | 8080 | `sentinel harness start -p <sre>` |
 | Dashboard BFF | 9090 | `sentinel dashboard start --sre-location <sre>` |
 
-The dashboard is a standalone process that proxies HTTP to the harness and maintains its own UI database. See [internal/dashboard/server.go](../internal/dashboard/server.go).
+The dashboard is a standalone process that proxies HTTP to the harness and maintains its own UI database. See [internal/dashboard/server.go](https://github.com/ndx-au/sentinel/blob/main/internal/dashboard/server.go).
 
 **Embedded SRE content:** this repo does not contain kit directories. `./build.sh` syncs a minimal embed from sibling `../sre-init` for CLI scaffolding only — never add kits under this repo.
 
@@ -48,25 +48,25 @@ The dashboard is a standalone process that proxies HTTP to the harness and maint
 cmd/sentinel/main.go  →  commands.Execute()
 ```
 
-All commands live under [cmd/sentinel/commands/](../cmd/sentinel/commands/). Important groups:
+All commands live under [cmd/sentinel/commands/](https://github.com/ndx-au/sentinel/tree/main/cmd/sentinel/commands). Important groups:
 
 | Command group | Purpose | Long-running? |
 |---------------|---------|---------------|
 | `sentinel harness start` | Bootstrap and run the harness | Yes |
-| `sentinel dashboard start` | Standalone web UI (BFF) | Yes |
-| `sentinel sre init\|test\|kit\|bundle` | Scaffolding and validation | No |
-| `sentinel secret`, `backup`, `db`, `storage` | Operational utilities | No |
+| `sentinel dashboard start` | Standalone web UI (BFF, loopback) | Yes |
+| `sentinel sre init\|test\|kit\|bundle\|secret\|config\|doctor\|storage` | Scaffolding, vault, and validation | No |
+| `sentinel backup`, `db`, `approvals` | Operational utilities | No |
 | `sentinel register`, `login`, `license` | Marketplace / licensing | No |
 | `sentinel mcp proxy` | Signing proxy for MCP clients | Optional sidecar |
-| `sentinel probes run` | Adversarial probe runner | No |
+| `cmd/simulator -mode probe` | Adversarial probe runner (not a `sentinel` subcommand) | No |
 
-**Critical convention:** harness subsystem wiring is centralized in [harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go), not scattered across individual handlers. When adding a new runtime dependency, bootstrap is the integration point.
+**Critical convention:** harness subsystem wiring is centralized in [harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go), not scattered across individual handlers. When adding a new runtime dependency, bootstrap is the integration point.
 
 ---
 
 ## Bootstrap sequence
 
-`sentinel harness start` calls `BootstrapHarness` → `bootstrapFullHarness`, then `StartServices`, then starts HTTP listeners in [harness_start.go](../cmd/sentinel/commands/harness_start.go).
+`sentinel harness start` calls `BootstrapHarness` → `bootstrapFullHarness`, then `StartServices`, then starts HTTP listeners in [harness_start.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_start.go).
 
 ```mermaid
 flowchart TD
@@ -87,7 +87,7 @@ flowchart TD
 
 ### HarnessComponents inventory
 
-The `HarnessComponents` struct in [harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go) is the authoritative list of runtime subsystems:
+The `HarnessComponents` struct in [harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go) is the authoritative list of runtime subsystems:
 
 | Field | Package | Role |
 |-------|---------|------|
@@ -118,7 +118,7 @@ When `bootstrapWPProxyOnly` runs (through `--wp-proxy-only` paths), only `App`, 
 
 ### Start and shutdown order
 
-**StartServices** ([harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go)):
+**StartServices** ([harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go)):
 
 1. Scheduler → WebhookRouter → EventBus.
 2. BackupManager schedule sync.
@@ -135,7 +135,7 @@ When `bootstrapWPProxyOnly` runs (through `--wp-proxy-only` paths), only `App`, 
 
 ## Application container (`internal/app`)
 
-[internal/app/app.go](../internal/app/app.go) owns shared infrastructure created before subsystem wiring.
+[internal/app/app.go](https://github.com/ndx-au/sentinel/blob/main/internal/app/app.go) owns shared infrastructure created before subsystem wiring.
 
 ### Initialization order
 
@@ -161,7 +161,7 @@ ContentCache → FormSystem → LuaPool → VaultManager → StateManager
 
 ### Component interface
 
-Lifecycle types are re-exported from [internal/health](../internal/health) through [internal/app/component.go](../internal/app/component.go):
+Lifecycle types are re-exported from [internal/health](https://github.com/ndx-au/sentinel/blob/main/internal/health) through [internal/app/component.go](https://github.com/ndx-au/sentinel/blob/main/internal/app/component.go):
 
 ```go
 type Component interface {
@@ -184,16 +184,16 @@ Two configuration files serve different purposes (see [Configuration Guide](/con
 | Machine infra | `.sentinel/config.json` | `config.Load` through koanf | `api.port`, `data_dir`, `vault_passphrase`, TLS, marketplace, WS |
 | Project behavior | `sentinel.yaml` | `config.LoadProjectConfig` | `name`, `hotreload`, `git`, `wp_central`, `default_kit`, limits |
 
-Environment variables (`SENTINEL_*`) override configuration file values. See [internal/config/env.go](../internal/config/env.go).
+Environment variables (`SENTINEL_*`) override configuration file values. See [internal/config/env.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/env.go).
 
 ### Build modes
 
-Compile-time tags select behavior in [buildmode_dev.go](../internal/config/buildmode_dev.go) vs [buildmode_prod.go](../internal/config/buildmode_prod.go):
+Compile-time tags select behavior in [buildmode_dev.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/buildmode_dev.go) vs [buildmode_prod.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/buildmode_prod.go):
 
 | Constant | `go build -tags dev` | Production (default) |
 |----------|----------------------|----------------------|
 | `DevModeAllowed` | `true` | `false` |
-| `PrereleaseRegistrationBypass` | `false` | `true` (set `false` before public release) |
+| `PrereleaseRegistrationBypass` | `false` | `false` |
 
 Production builds require a valid marketplace license for flow/trigger **execution** (discovery and listing remain available).
 
@@ -201,23 +201,23 @@ Production builds require a valid marketplace license for flow/trigger **executi
 
 ## Package map
 
-Top-level packages under [internal/](../internal/), grouped by role:
+Top-level packages under [internal/](https://github.com/ndx-au/sentinel/tree/main/internal), grouped by role:
 
 | Group | Packages | Role |
 |-------|----------|------|
 | **Core runtime** | `app`, `config`, `health`, `logger`, `safety`, `util`, `version` | DI, configuration, logging, crash recovery |
-| **HTTP surface** | `api`, `httputil`, `requestparams` | Chi gateway, handlers, middleware, brevity routes |
-| **Execution** | `flows`, `luavm`, `lua`, `connectors`, `modules`, `luatest`, `luautil` | Flow lifecycle, sandbox, `sn.*` registration |
-| **Kit platform** | `orchestrator`, `kit`, `scaffold`, `templates`, `templatesync`, `library` | Discovery, loading, pages/forms, API library |
+| **HTTP surface** | `api`, `httputil`, `requestparams`, `clientip` | Chi gateway, handlers, middleware, brevity routes, client IP |
+| **Execution** | `flows`, `luavm`, `lua`, `connectors`, `modules`, `luatest`, `luautil`, `execution` | Flow lifecycle, sandbox, `sn.*` registration, execution authority |
+| **Kit platform** | `orchestrator`, `kit`, `scaffold`, `templates`, `templatesync`, `library`, `skills` | Discovery, loading, pages/forms, API library, skills |
 | **Triggers & events** | `triggers`, `events` | Cron, webhooks, event bus, flow-defined triggers |
 | **Forms & UI data** | `forms`, `cache`, `uploads`, `yaml`, `core` | FormSystem, template pipeline, submissions |
 | **Persistence** | `state`, `vault`, `dbutil`, `pgmanager` | SQLite state, encrypted vault, kit DBs, PG pools |
-| **Content** | `cms`, `storage`, `storagebundle` | CMS cache (`cms.db`), S3-compatible storage |
+| **Content** | `cms`, `ccms`, `storage`, `storagebundle` | File CMS cache (`cms.db`), collection CMS, S3-compatible storage |
 | **Realtime** | `ws` | WebSocket bus + Lua bindings |
 | **Security** | `security`, `auth`, `fsaccess` | Audit logging, auth helpers, filesystem policy enforcer |
-| **Ops & integration** | `docker`, `backup`, `git`, `marketplace`, `mcp`, `probes` | Compose stacks, backups, SKM, MCP server |
+| **Ops & integration** | `docker`, `backup`, `git`, `marketplace`, `mcp`, `probes`, `mail`, `observability` | Compose stacks, backups, SKM, MCP server, mail, traces |
 | **AI / RAG** | `ai`, `rag`, `session` | AI client, RAG control plane, memory sessions |
-| **Dashboard** | `dashboard` | Standalone BFF + SQLCipher UI DB |
+| **Dashboard** | `dashboard`, `dashboardinstance`, `guilauncher`, `harnessinstance` | Standalone BFF + SQLCipher UI DB, instance discovery, GUI launcher |
 | **CLI & embed** | `cli`, `static`, `sreinit` | Terminal formatting, embedded assets |
 | **Testing** | `testutil`, `luatest` | Harness unit/integration helpers |
 
@@ -241,8 +241,8 @@ flowchart LR
 
 ### Discovery rules
 
-1. **`kit.DiscoverKits(sreRoot)`** — scans for directories matching `{ns}.{name}/kit.yaml` ([discover.go](../internal/kit/discover.go)).
-2. **`kit.LoadKit(path)`** — parses manifest and auto-discovers subdirectories ([loader.go](../internal/kit/loader.go)):
+1. **`kit.DiscoverKits(sreRoot)`** — scans for directories matching `{ns}.{name}/kit.yaml` ([discover.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/discover.go)).
+2. **`kit.LoadKit(path)`** — parses manifest and auto-discovers subdirectories ([loader.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/loader.go)):
 
    | Directory | Content |
    |-----------|---------|
@@ -251,30 +251,32 @@ flowchart LR
    | `fm/` | Form YAML definitions |
    | `cn/` | Connectors |
    | `md/` | Modules |
-   | `dd/` | Data definitions |
-   | `db/` | Kit SQLite databases (through KitDatabaseManager) |
+   | `dd/` | Data definitions (YAML). Loader discovers `dd/`, not `db/`. |
+   | `tp/` | Go HTML templates (`*.gohtml`). Not trigger YAML. |
 
-3. **`Orchestrator.LoadAllKits`** — initializes PG manager, kit DB manager, library service, AI client, RAG manager, memory sessions, then calls `loadKitsFromDisk` ([registry.go](../internal/orchestrator/registry.go)).
+3. **`Orchestrator.LoadAllKits`** — initializes PG manager, kit DB manager, library service, AI client, RAG manager, memory sessions, then calls `loadKitsFromDisk` ([registry.go](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/registry.go)).
 
 ### Flow ID convention
 
-Kit flows use `{namespace}.{kit-name}/{flow-basename}`:
+Canonical internal ID is `{ns}-{name}:{flow}` (dots in the kit directory become dashes). Slash alias `{ns}.{name}/{flow}` is also accepted. HTTP is `/fl/{ns}.{name}/{flow}`:
 
 ```
-sn.core/fl/assistant.lua  →  sn.core/assistant
+sn.core-agent/fl/assistant.lua  →  sn-core-agent:assistant
+HTTP: GET /fl/sn.core-agent/assistant
+slash alias: sn.core-agent/assistant
 ```
 
-Legacy system flows under project `fl/` (without kit prefix) use bare IDs.
+Colon IDs in HTTP (`/fl/{ns}-{name}:{flow}`) are a legacy fallback.
 
 ### Kit lifecycle
 
-[KitLifecycle](../internal/kit/lifecycle.go) coordinates per-kit reload, disable, and enable. It is wired in bootstrap and exposed through `/hl/kt/{ns}/{name}/rl|off|on`. Design details: [specs/kitlife.md](https://github.com/ndx-au/sentinel/blob/main/specs/kitlife.md).
+[KitLifecycle](https://github.com/ndx-au/sentinel/blob/main/internal/kit/lifecycle.go) coordinates per-kit reload, disable, and enable. It is wired in bootstrap and exposed through `/hl/kt/{ns}/{name}/rl|off|on`. Design details: [specs/kitlife.md](https://github.com/ndx-au/sentinel/blob/main/specs/kitlife.md).
 
 ---
 
 ## Flow execution path
 
-[internal/flows/manager.go](../internal/flows/manager.go) bridges the HTTP API to gopher-lua execution and state persistence.
+[internal/flows/manager.go](https://github.com/ndx-au/sentinel/blob/main/internal/flows/manager.go) bridges the HTTP API to gopher-lua execution and state persistence.
 
 ```mermaid
 sequenceDiagram
@@ -298,7 +300,7 @@ sequenceDiagram
 |------|---------------|---------|
 | `SetLuaStateSetup` | `orch.RegisterLuaState(L)` | Global `sn.*` primitives (including HTTP, JSON, and DB schema) |
 | `SetLuaFlowSetup` | Per-flow closures | Kit DB, CMS, WebSocket APIs scoped to flow's kit |
-| `SetCtxSetup` | Bootstrap closure | `ctx.secret`, `ctx.pg`, `ctx.project_config`, `ctx.keyhole` |
+| `SetCtxSetup` | Bootstrap closure | `ctx.secret`, `ctx.pg`, `ctx.project_config`, `ctx.keyhole`, `ctx.cache` |
 | `SetTriggerSync` | `FlowTriggerSync` | Sync Lua `triggers` table on flow load |
 | `SetTriggerHelperRegistrar` | `triggers.RegisterTriggerHelpers` | Trigger helper functions in VM |
 | `SetEventBus` | EventBus instance | `sentinel.emit()` from flows |
@@ -308,7 +310,7 @@ sequenceDiagram
 
 ### Lua VM pool security
 
-[internal/luavm/pool.go](../internal/luavm/pool.go):
+[internal/luavm/pool.go](https://github.com/ndx-au/sentinel/blob/main/internal/luavm/pool.go):
 
 - `SkipOpenLibs: true` — only safe standard libraries are opened manually.
 - One `LState` per execution — gopher-lua states are **not goroutine-safe**.
@@ -316,14 +318,15 @@ sequenceDiagram
 
 ### Flow lifecycle hooks
 
-Each flow script can define:
+Required hooks (`VerifyHooks`): `setup`, `main`, `cleanup`. Optional: `failed` (auto no-op), `timeout()`.
 
 | Function | When called |
 |----------|-------------|
-| `setup()` | Before `main`, once per execution |
-| `main()` | Primary work |
-| `cleanup()` | After successful `main` |
-| `failed(err)` | On error (if defined) |
+| `setup()` | Before `main`, once per execution (required) |
+| `main()` | Primary work (required) |
+| `failed(err)` | On setup/main error (optional; auto no-op) |
+| `timeout()` | When execution hits the deadline (optional) |
+| `cleanup()` | Always last, including after `failed` on error (required) |
 
 Triggers (cron, webhook, event, form, manual) all converge on the same execution path through FlowManager.
 
@@ -331,15 +334,17 @@ Triggers (cron, webhook, event, form, manual) all converge on the same execution
 
 ## HTTP gateway (`internal/api`)
 
-[internal/api/gateway.go](../internal/api/gateway.go) is the harness HTTP surface.
+[internal/api/gateway.go](https://github.com/ndx-au/sentinel/blob/main/internal/api/gateway.go) is the harness HTTP surface.
 
 ### Middleware chain
 
 Order in `setupMiddleware()`:
 
 ```
-stripTrailingSlash → CORS → requestID → recoverer → auth → IP filter (optional)
+requestLimits → stripTrailingSlash → CORS (only if origins set) → requestID → recoverer → auth → IP filter (optional)
 ```
+
+`requestLimits` is first. CORS middleware is installed only when `corsOrigins` is non-empty. Harness bootstrap currently passes `nil`, so CORS is unwired. There is no `api.cors_origins` config field.
 
 | Middleware | Behavior |
 |------------|----------|
@@ -347,17 +352,17 @@ stripTrailingSlash → CORS → requestID → recoverer → auth → IP filter (
 | `ipFilterEngine` | Per-service path rules (harness vs wp-proxy) |
 | Public keys | Loaded from `{SRE}/.sentinel/pub-keys/*.pub` for dashboard/agent signatures |
 
-MCP reuses harness auth through `Gateway.HTTPAuthMiddleware()` ([harness_mcp.go](../cmd/sentinel/commands/harness_mcp.go)).
+MCP reuses harness auth through `Gateway.HTTPAuthMiddleware()` ([harness_mcp.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_mcp.go)).
 
 ### Response contract
 
-**Always HTTP 200.** Errors appear in the JSON body:
+JSON `writeError` uses HTTP 200 with:
 
 ```json
-{"ok": false, "err": "CODE", "msg": "human-readable message"}
+{"ok": false, "err": "CODE", "code": "CODE", "msg": "human-readable message", "req_id": "..."}
 ```
 
-This is an architecture lock — do not return 4xx/5xx for application errors.
+Detect failure with `ok === false` / `err`. This is **not** always HTTP 200: OPTIONS 204 (if CORS is wired), WS disabled 503, form HTML 4xx/5xx/302, CMS HTML render 4xx/5xx, git handlers 4xx/5xx. Do not return 4xx/5xx from JSON `writeError` for application errors.
 
 ### Dependency injection
 
@@ -375,7 +380,7 @@ Routes are registered in `setupRoutes()`. Prefixes follow the brevity regime (`/
 
 ## Trigger engine
 
-Package: [internal/triggers/](../internal/triggers/)
+Package: [internal/triggers/](https://github.com/ndx-au/sentinel/tree/main/internal/triggers)
 
 | Component | Responsibility |
 |-----------|----------------|
@@ -387,13 +392,13 @@ Package: [internal/triggers/](../internal/triggers/)
 
 Trigger types: **cron**, **webhook**, **event**, **manual**, **form**.
 
-Flow-defined triggers (Lua table) and YAML/config triggers both land in the same registry. `FlowTriggerSync` prevents import cycles between `flows` and `triggers` packages through interfaces.
+Flow-defined triggers live in Lua (`triggers = { cron()/webhook()/event() }`). `FlowTriggerSync` prevents import cycles between `flows` and `triggers` packages through interfaces.
 
 ---
 
 ## Form system
 
-Package: [internal/forms/](../internal/forms/)
+Package: [internal/forms/](https://github.com/ndx-au/sentinel/tree/main/internal/forms)
 
 `FormSystem` is a coordinator implementing `core.Component`:
 
@@ -429,13 +434,17 @@ Cross-reference [The `.sentinel/` directory](/sentinel-directory) for operator-f
 
 `data_dir` defaults relative to SRE root through `.sentinel/config.json`. State DB encryption uses SQLCipher when `state.encrypt_db` is enabled.
 
-Kit-scoped SQLite databases live under `{ns}.{name}/db/` and are managed by `kit.KitDatabaseManager`.
+Kit-scoped SQLite databases live at `{projectRoot}/.sentinel/data/{ns}.{name}.db` and are managed by `kit.KitDatabaseManager`. The loader discovers data definitions from kit `dd/`, not `db/`.
+
+Triggers are Lua tables (`triggers = { cron()/webhook()/event() }`), not YAML under `tp/`. `tp/` is Go HTML templates.
+
+`ctx.cache` (page invalidation) and `ctx.fs` (FS Control) exist on the flow context.
 
 ---
 
 ## Hot reload
 
-[ProjectWatcher](../internal/orchestrator/project_watcher.go) uses fsnotify with debouncing (default 100ms) when started through `StartProjectWatcher`.
+[ProjectWatcher](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/project_watcher.go) uses fsnotify with debouncing (default 100ms) when started through `StartProjectWatcher`.
 
 Monitored changes inside kit directories:
 
@@ -460,7 +469,7 @@ SRE-wide reload is also available through `POST /hl/reload` and `SIGUSR1` to the
 
 ### Dashboard BFF
 
-[internal/dashboard/server.go](../internal/dashboard/server.go):
+[internal/dashboard/server.go](https://github.com/ndx-au/sentinel/blob/main/internal/dashboard/server.go):
 
 - Discovers running harness instances (port scan).
 - Proxies REST to harness. Maintains local SQLCipher DB for UI preferences.
@@ -469,11 +478,11 @@ SRE-wide reload is also available through `POST /hl/reload` and `SIGUSR1` to the
 
 ### MCP server
 
-[internal/mcp/](../internal/mcp/) — optional sidecar enabled with `sentinel harness start --mcp`. Listens on API port + 100 by default. See [MCP Agent Integration](/mcp-agent-integration).
+[internal/mcp/](https://github.com/ndx-au/sentinel/tree/main/internal/mcp) — optional sidecar enabled with `sentinel harness start --mcp`. Listens on API port + 100 by default. See [MCP Agent Integration](/mcp-agent-integration).
 
 ### Marketplace
 
-[internal/marketplace/](../internal/marketplace/):
+[internal/marketplace/](https://github.com/ndx-au/sentinel/tree/main/internal/marketplace):
 
 - `LicenseManager` — Ed25519 license verification. Gates flow execution in prod.
 - `Installer` — kit download with signature verification.
@@ -482,15 +491,15 @@ SRE-wide reload is also available through `POST /hl/reload` and `SIGUSR1` to the
 
 ### Docker orchestrator
 
-[internal/docker/](../internal/docker/) manages compose stacks from templates in [internal/static/docker-templates/](../internal/static/docker-templates/). Exposed through `/docker` API routes and dashboard.
+[internal/docker/](https://github.com/ndx-au/sentinel/tree/main/internal/docker) manages compose stacks from templates in [internal/static/docker-templates/](https://github.com/ndx-au/sentinel/tree/main/internal/static/docker-templates). Exposed through `/docker` API routes and dashboard.
 
 ### FS Control
 
-[internal/fsaccess/](../internal/fsaccess/) — policy enforcer for file connector writes. Policies stored in state DB. Exposed through `/fs/pl` API and `ctx.fs` Lua binding.
+[internal/fsaccess/](https://github.com/ndx-au/sentinel/tree/main/internal/fsaccess) — policy enforcer for file connector writes. Policies stored in state DB. Exposed through `/fs/pl` API and `ctx.fs` Lua binding.
 
 ### Git sync
 
-[internal/git/](../internal/git/) — when `sentinel.yaml` sets `git.sync: auto`, `GitSyncManager` runs periodic pull/push and emits events on the EventBus.
+[internal/git/](https://github.com/ndx-au/sentinel/tree/main/internal/git) — when `sentinel.yaml` sets `git.sync: auto`, `GitSyncManager` runs periodic pull/push and emits events on the EventBus.
 
 ---
 
@@ -511,7 +520,7 @@ sentinel dashboard start --sre-location ../SRE/test
 
 Override with `$SENTINEL_TEST_SRE`. **Never** add kit directories or flows under this repo.
 
-Unit tests use `t.TempDir()` or [internal/testutil](../internal/testutil/).
+Unit tests use `t.TempDir()` or [internal/testutil](https://github.com/ndx-au/sentinel/tree/main/internal/testutil).
 
 ### Code conventions
 
@@ -522,11 +531,11 @@ Unit tests use `t.TempDir()` or [internal/testutil](../internal/testutil/).
 | Logging | slog-style: `logger.Error("msg", "key", val, "error", err)` |
 | API naming | Brevity regime: two-char routes and query params |
 | Route changes | Require explicit approval before modifying router table |
-| Docs sync | Update `system-specs/` and relevant `docs/` when behavior changes |
+| Docs sync | Update harness `system-specs/` and the public guides in ndx-au/sentinel-docs when behavior changes |
 
 ### Changing routes
 
-Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maintainers. Update `system-specs/api.yaml`, [15-HARNESS-HTTP-ROUTES.md](/harness-http-routes), and `sre-url-map.md` together.
+Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maintainers. Update harness `system-specs/api.yaml`, [Harness HTTP Routes](/harness-http-routes), and harness `sre-url-map.md` together.
 
 ---
 
@@ -536,13 +545,13 @@ Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maint
 |----------|---------|
 | [CLAUDE.md](https://github.com/ndx-au/sentinel/blob/main/CLAUDE.md) | Agent rules, package layout summary, common mistakes |
 | [specs/kitlife.md](https://github.com/ndx-au/sentinel/blob/main/specs/kitlife.md) | Kit enable/disable and reload design |
-| [system-specs/](../system-specs/) | Machine-readable API, configuration, trigger, Lua contracts |
+| [system-specs/](https://github.com/ndx-au/sentinel/tree/main/system-specs) | Machine-readable API, configuration, trigger, Lua contracts |
 | [sre-url-map.md](https://github.com/ndx-au/sentinel/blob/main/sre-url-map.md) | URL construction cheat sheet |
 | [sre4agents.md](https://github.com/ndx-au/sentinel/blob/main/sre4agents.md) | Full SRE development reference |
 | `.claude/skills/sn-go-*` | Per-subsystem harness skills (lua, triggers, forms, configuration, security, dashboard, …) |
-| [16-SENTINEL-DIRECTORY.md](/sentinel-directory) | On-disk artifact inventory |
-| [18-MCP-AGENT-INTEGRATION.md](/mcp-agent-integration) | MCP server setup |
-| [10-ADVERSARIAL-TESTING.md](/adversarial-testing) | Probe runner for harness QA |
+| [The .sentinel/ directory](/sentinel-directory) | On-disk artifact inventory |
+| [MCP Agent Integration](/mcp-agent-integration) | MCP server setup |
+| [Adversarial Testing](/adversarial-testing) | Probe runner for harness QA |
 
 ---
 
@@ -550,15 +559,15 @@ Before modifying routes in `gateway.setupRoutes()`, pause and confirm with maint
 
 | Concern | Primary file |
 |---------|--------------|
-| CLI entry | [cmd/sentinel/main.go](../cmd/sentinel/main.go) |
-| Harness wiring | [cmd/sentinel/commands/harness_bootstrap.go](../cmd/sentinel/commands/harness_bootstrap.go) |
-| Harness runtime loop | [cmd/sentinel/commands/harness_start.go](../cmd/sentinel/commands/harness_start.go) |
-| App container | [internal/app/app.go](../internal/app/app.go) |
-| HTTP gateway | [internal/api/gateway.go](../internal/api/gateway.go) |
-| Flow execution | [internal/flows/manager.go](../internal/flows/manager.go) |
-| Kit loading | [internal/orchestrator/registry.go](../internal/orchestrator/registry.go) |
-| Kit discovery | [internal/kit/discover.go](../internal/kit/discover.go), [loader.go](../internal/kit/loader.go) |
-| Hot reload | [internal/orchestrator/project_watcher.go](../internal/orchestrator/project_watcher.go) |
-| Lua pool | [internal/luavm/pool.go](../internal/luavm/pool.go) |
-| Configuration | [internal/config/config.go](../internal/config/config.go) |
-| Dashboard | [internal/dashboard/server.go](../internal/dashboard/server.go) |
+| CLI entry | [cmd/sentinel/main.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/main.go) |
+| Harness wiring | [cmd/sentinel/commands/harness_bootstrap.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_bootstrap.go) |
+| Harness runtime loop | [cmd/sentinel/commands/harness_start.go](https://github.com/ndx-au/sentinel/blob/main/cmd/sentinel/commands/harness_start.go) |
+| App container | [internal/app/app.go](https://github.com/ndx-au/sentinel/blob/main/internal/app/app.go) |
+| HTTP gateway | [internal/api/gateway.go](https://github.com/ndx-au/sentinel/blob/main/internal/api/gateway.go) |
+| Flow execution | [internal/flows/manager.go](https://github.com/ndx-au/sentinel/blob/main/internal/flows/manager.go) |
+| Kit loading | [internal/orchestrator/registry.go](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/registry.go) |
+| Kit discovery | [internal/kit/discover.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/discover.go), [loader.go](https://github.com/ndx-au/sentinel/blob/main/internal/kit/loader.go) |
+| Hot reload | [internal/orchestrator/project_watcher.go](https://github.com/ndx-au/sentinel/blob/main/internal/orchestrator/project_watcher.go) |
+| Lua pool | [internal/luavm/pool.go](https://github.com/ndx-au/sentinel/blob/main/internal/luavm/pool.go) |
+| Configuration | [internal/config/config.go](https://github.com/ndx-au/sentinel/blob/main/internal/config/config.go) |
+| Dashboard | [internal/dashboard/server.go](https://github.com/ndx-au/sentinel/blob/main/internal/dashboard/server.go) |

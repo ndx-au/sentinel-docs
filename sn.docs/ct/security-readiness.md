@@ -41,7 +41,7 @@ Protect all traffic with TLS and make sure that certificates are valid.
 The dashboard stores privileged harness credentials and relies on trusted ingress.
 It does not provide a general login or role-based access system for end users.
 
-The harness can listen on all interfaces. The security closure fixes the dashboard listener to IPv4 loopback. It has no public bind flag. For remote access, use authenticated ingress or a controlled tunnel that can reach loopback in the dashboard network namespace. A separate container cannot reach this listener through the usual container address.
+The harness can listen on all interfaces. The dashboard binds `127.0.0.1` only. It has no public bind flag. For remote access, use authenticated ingress or a controlled tunnel that can reach loopback in the dashboard network namespace. A separate container cannot reach this listener through the usual container address.
 An empty dashboard whitelist allows all peers.
 A production build does not automatically enable TLS or make these listeners private.
 Apply explicit firewall rules and authenticated ingress.
@@ -80,7 +80,7 @@ Dispatch examines the operator pause state.
 Retrieved documents, tool results, persistent memory, and skill twins remain untrusted data.
 Their instructions cannot grant authority.
 These controls do not guarantee resistance to prompt injection or the safety of an allowed action.
-The harness has no general mechanism that binds a specific action to human approval.
+Bind high-impact native actions to human approval with `.sentinel/execution-policy.json` and `sentinel approvals runtime|grant|revoke`.
 Recovery hooks have independent five-second limits.
 Host calls must honour cancellation.
 Deployment controls must enforce quotas for running jobs, heap use, and networks.
@@ -98,13 +98,13 @@ It does not cover all encoded, split, short, or unregistered values.
 Store connector and provider credentials in the vault.
 Protect the master passphrase and recovery material separately.
 
-State encryption is optional.
+State encryption is optional. `state.encrypt_db` (`EncryptDB`) defaults to false.
 It needs a SQLCipher build with CGO support.
 The baseline corrects ignored SQLCipher key parameters.
 Before use, it makes sure that the database format and key are correct.
 Whether an older database remained plaintext after an encryption request is unknown until assessment.
 Portable builds without CGO cannot provide SQLCipher coverage.
-The dashboard's fixed embedded database key does not replace access controls for the OS, files, or volumes.
+The dashboard SQLite store uses the fixed passphrase `sentinel-dashboard-v1`. That key does not replace access controls for the OS, files, or volumes.
 
 Preserve existing database files and backups.
 Plan an offline migration with review.
@@ -164,15 +164,16 @@ The reviewed copy converter preserves fail-closed startup. Follow the
 [offline migration runbook](/sqlcipher-offline-migration) and separate
 [rollout checklist](/sqlcipher-rollout-checklist). Conversion does not approve
 installation. Native CGO/SQLCipher release validation and matching runtime keys
-are required. The security closure also binds MCP sessions to authenticated
+are required. The harness also binds MCP sessions to authenticated
 identity and permission profile and extends scoped AI checks to streaming and retries.
 Native AI stream callbacks wait for full validation, with 4 MiB and 16,384-chunk
 limits. Kit and host APIs still require trusted operators and deployment isolation.
 
-## First-release security branch: management and file controls
+## First-release security cycle: management and file controls
 
-The following applies to the unreleased security remediation branch; upgrade all
-participating clients before rollout. It is not a statement about older releases.
+These controls landed in the first-release security cycle and are in the current
+harness. Upgrade all participating clients before rollout. They are not a
+statement about older releases.
 
 The dashboard accepts a local Host authority (`localhost`, a loopback IP, and the
 actual port), rejects foreign browser origins and does not grant CORS access.
@@ -208,7 +209,7 @@ bounds, not a distributed user quota or complete network denial-of-service prote
 Enforce connection/rate limits and OS resource budgets at deployment ingress too.
 
 
-## First-release branch: metadata and native HTTP
+## First-release security cycle: metadata and native HTTP
 
 Flow inspection has no execution host APIs. Keep metadata and top-level declarations
 free of network, files, secrets and model calls; perform work in execution hooks.
@@ -230,7 +231,7 @@ address-translation ranges; they pin checked public DNS answers and inherit neit
 proxy settings nor a cookie jar. Custom network routing still requires deployment
 egress controls. Private-service automation remains an operator responsibility.
 
-The unreleased branch now initializes an approval runtime and binds private
+The harness initializes an approval runtime and binds private
 execution identity before registration, asynchronous execution and both form entry
 paths. MCP-started flows begin with agent restrictions. Model calls during trigger
 registration are refused before the provider. Remaining SQL resource identity,
@@ -260,7 +261,7 @@ covers an authorized send and denied recipient mutation. This does not establish
 real relay configuration, live delivery or operational confidentiality.
 
 
-## First-release branch: execution policy and operator approval
+## First-release security cycle: execution policy and operator approval
 
 An optional owner-managed `.sentinel/execution-policy.json` is read at startup.
 Keep it a regular file, at most 1 MiB, writable only by the owner on Unix. Invalid,
@@ -278,8 +279,8 @@ a matching restricted grant deny. Broad automatic grants need careful review;
 persistent code and control-plane effects remain under assessment.
 
 A required native action waits up to five minutes, or the earlier synchronous
-caller deadline, for a local operator's exact approval. Use the local `approvals
-runtime`, `approvals grant` and `approvals revoke` CLI commands against the existing
+caller deadline, for a local operator's exact approval. Use `sentinel approvals
+runtime`, `sentinel approvals grant` and `sentinel approvals revoke` against the existing
 instance state and key configuration. Review the complete action file, canonical
 source, authenticated actor and execution ID before granting. Tickets are single
 use and bind the runtime, actor, execution, source digest, operation, arguments and
@@ -309,10 +310,10 @@ uncommitted writes. Schema names are single portable database labels, not paths;
 quoted SQL identifiers are escaped. These checks do not make arbitrary SQL a kit
 isolation boundary. Do not grant unrestricted raw SQL to an agent as a substitute
 for reviewed operations and database permissions; backend/file-access review remains
-open on the first-release branch.
+open after the first-release security cycle.
 
 
-## First-release branch: MCP credential audiences
+## First-release security cycle: MCP credential audiences
 
 Credentials listed in `mcp.clients` are MCP-only by default. Use separate bearer
 credentials or signing keys for agents and operators. An agent credential cannot
@@ -342,7 +343,7 @@ control of the separate operator credential and the service restart procedure.
 No customer installation or running service is changed automatically by this work.
 
 
-## First-release branch: persistent executable changes
+## First-release security cycle: persistent executable changes
 
 A restricted execution must have both an applicable filesystem grant and a
 single-use exact approval before it writes, appends to or deletes executable
@@ -365,7 +366,7 @@ previous Lua context is restored afterward. Test evidence for that callback uses
 an isolated Lua VM and a transaction double, not a live PostgreSQL server.
 
 
-## First-release branch: agent usage budgets
+## First-release security cycle: agent usage budgets
 
 Managed model calls retain budget policies for their source aliases and delegated
 ancestors. Until the usage ledger records delegation ancestry, each applicable
@@ -392,7 +393,7 @@ and separate instances can exceed locally observed usage. These controls are not
 hard monetary spending limit; use the provider and deployment controls appropriate
 to the service as well.
 
-## First-release branch: raw database access
+## First-release security cycle: raw database access
 
 Restricted `sn.db` SQLite query and execution operations, and PostgreSQL handle
 query and execution operations, require an applicable grant and a separate,

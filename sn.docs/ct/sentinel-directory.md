@@ -14,7 +14,7 @@ Machine-local harness state for one SRE. **Gitignored** (see repo `.gitignore`).
 
 Paths below assume default `data_dir: ".sentinel"` in configuration (see `system-specs/config.yaml`). Override with `SENTINEL_DATA_DIR` or `data_dir` in `.sentinel/config.json` — all `{data_dir}/…` paths move with it.
 
-**Separate from SRE `.sentinel/`:** the dashboard CLI also uses `~/.sentinel/dashboard.db` (and related keys) for operator-console metadata when not scoped to a project attach path.
+**Separate from SRE `.sentinel/`:** the dashboard CLI uses `~/.sentinel/dashboard.db` and `~/.sentinel/dashboard-{port}.pid` (loopback bind `127.0.0.1:9090`) for operator-console metadata. Marketplace login tokens live in the SRE path `{sre-root}/.sentinel/auth.json`.
 
 ---
 
@@ -23,6 +23,7 @@ Paths below assume default `data_dir: ".sentinel"` in configuration (see `system
 ```
 {sre-root}/.sentinel/
   config.json              # Harness infra config (required)
+  auth.json                # Project-scoped SKM tokens (not ~/.sentinel/auth.json)
   state.db                 # Harness state SQLite (+ optional SQLCipher)
   vault.db                 # Secrets SQLite (created when vault passphrase set)
   cms.db                   # Markdown parse cache (bbolt) — rename to md-cache.db proposed
@@ -34,7 +35,7 @@ Paths below assume default `data_dir: ".sentinel"` in configuration (see `system
   git-deploy-key           # Optional deploy key material
   git-keys/                # Additional git SSH keys
   docker-templates/        # Seeded compose templates (from embedded assets)
-  archive/                 # Rotated DB archives (logging.retention)
+  archive/                 # Rotated DB archives (logging.rotation.archive_path)
   backups/                 # Backup manager artifact retention
   data/
     {ns}.{name}.db         # Per-kit SQLite (sn.db)
@@ -52,19 +53,20 @@ The repository root can also contain **`storage-points.local.json`** (gitignored
 
 | Path | Engine / format | Created by | Purpose | Depends on | Restore / notes |
 |------|-----------------|------------|---------|------------|-----------------|
-| **config.json** | JSON | `sentinel sre init`, first harness start | `api.port`, tokens, TLS, logging, marketplace, `data_dir`, websocket, rate limits | Harness, dashboard (read/write some keys) | Back up manually. No auto-rebuild. Wrong edit can block startup. |
+| **config.json** | JSON | `sentinel sre init`, first harness start | `api.port`, tokens, TLS, `log`, `logging.rotation`, marketplace, smtp, ip_filters, mcp, `data_dir`, websocket | Harness, dashboard (read/write some keys) | Back up manually. No auto-rebuild. Wrong edit can block startup. |
+| **auth.json** | JSON | `sentinel login` | Project-scoped marketplace tokens | `sentinel login` / `logout` / `register` | Gitignored. Not `~/.sentinel/auth.json`. |
 | **state.db** | SQLite + WAL. Optional **SQLCipher** | `init`, harness start | Executions, logs index, triggers metadata, backup plans/runs, RAG tables (`sentinel_rag_*`), storage point registry rows, and other state | Core harness, backup manager, RAG | `/bk` file backup. `encrypt_db` needs passphrase. **Do not Litestream** (sn2 policy). |
 | **vault.db** | SQLite + WAL. **AES-256-GCM values** | `init` (if passphrase), first secret write | Encrypted secrets, including flow secrets and Postgres URLs | Vault API `/sc`, `ctx.secret`, pgmanager | File backup. Wrong passphrase = empty DB appearance. Not SQLCipher file encryption. |
 | **cms.db** | **bbolt** | `init`, harness start (`OpenContentCache`) | Parsed markdown cache for kits’ `md/` / CMS API — **not** a full CMS product | `internal/cms` builder, watcher, `/cm` handlers, forms/pages using CMS vars | Safe to delete → cold rebuild from `md/` on next start. Misnamed. **proposed: `md-cache.db`**. |
 | **harness-{port}.pid** | text | `sentinel harness start --daemon` | CLI/service discovery (`sentinel ps`, stop) | Process management only | Regenerated. Safe to remove if process dead. |
-| **marketplace-instance.json** | JSON | First marketplace / phone-home use | Stable Ed25519 instance identity for SKM | `internal/marketplace` | Do not delete casually if licensed instance bound to ID. |
+| **marketplace-instance.json** | JSON | First occupy / marketplace use | Stable Ed25519 instance identity for SKM | `internal/marketplace` | Do not delete casually if licensed instance bound to ID. |
 | **crash/** | files | Safety subsystem on panic | Last-known crash context for debugging | `internal/safety` | Optional retention cleanup. |
 | **certs/** | PEM | TLS enable / `sentinel` PKI helpers | CA + server certs for HTTPS harness | TLS listeners | Regenerable. Protect private keys. |
 | **pub-keys/** | PEM/text | Dashboard key registration | Verify dashboard `X-Sn-Sig` to harness | Dashboard attach | Re-register from dashboard if lost. |
 | **git-deploy-key** | SSH private key | Git sync setup | Deploy key for `sentinel.yaml` git configuration | `internal/git` | Regenerate through git tooling. Permissions 0600. |
 | **git-keys/** | SSH keys | Optional multi-key git | Extra git remotes | Git subsystem | Same as deploy key. |
 | **docker-templates/** | YAML/files | Dashboard seed on attach | Local copies of embedded Docker stacks | Docker handlers | Safe to re-seed from harness. |
-| **archive/** | `.db` snapshots | Log retention / rotation configuration | Archived DB copies per `logging.retention` | Configuration `archive_path` | Optional git sync if `include_backups` in sentinel.yaml git configuration. |
+| **archive/** | `.db` snapshots | Log rotation configuration | Archived DB copies per `logging.rotation.archive_path` | Configuration `logging.rotation.archive_path` | Optional git sync if `include_backups` in sentinel.yaml git configuration. |
 | **backups/** | Archives and dumps, including tar.gz | Backup manager runs | Local retention before optional upload to storage points | `/bk` API, cron plans | Can re-download from object storage if uploaded. |
 | **data/{ns}.{name}.db** | SQLite + WAL | Kit first DB use / schema apply | Kit-isolated `sn.db.*` data | Kit flows, `KitDatabaseManager` | Kit backup through `/bk` or care plans. **Litestream candidate (sn2, edge only)**. |
 | **data/pg_connections.json** | JSON | Dashboard / API add connection | Names + vault secret refs for Postgres pools | `ctx.pg`, pgmanager | Recreate from dashboard. Secrets in vault. |

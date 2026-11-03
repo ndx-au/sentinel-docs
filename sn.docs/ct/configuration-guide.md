@@ -64,6 +64,13 @@ description: My Sentinel automation project
 # Optional. A brief description of what this project does.
 # Displayed in the dashboard overview and health endpoint.
 
+public_url: https://harness.example.com
+# Optional. Browser-facing harness origin. Used by the dashboard for kit
+# catalog images and kit UI launch links.
+
+default_kit: sn.docs
+# Optional. Kit that owns GET /* page routes when keyhole is blocked.
+
 # ── Editor Extensions ───────────────────────────────────────────────
 # Maps file extensions to syntax highlighting modes for editors and IDEs.
 # This is advisory metadata used by tools that integrate with Sentinel.
@@ -111,11 +118,37 @@ git:
 hotreload:
   yaml: full
   # How YAML file changes (kit.yaml, form definitions, page definitions)
-  # are handled. Options:
+  # are handled. This is an object, not `hotreload: true`. Options:
   #   full - Reload everything: re-parse manifests, re-register forms,
   #          re-discover pages, rebuild navigation (may briefly interrupt)
   #   safe - Only reload files that can be safely updated without
   #          affecting running executions (conservative approach)
+
+# ── Request limits ──────────────────────────────────────────────────
+# Optional webhook and manual trigger body/file limits
+# (max_body_size, max_file_size, max_file_count).
+# Omit the block to use parser defaults. There is no
+# limits.rate_limit_rps or limits.max_concurrent_flows field.
+
+# ── WordPress / content-plane profiles ──────────────────────────────
+# Present when the SRE uses those profiles. Omit otherwise.
+
+wp_central:
+  enabled: false
+  port: 8800
+  # Dedicated WordPress ingress port (default 8800).
+
+wp_preview:
+  enabled: false
+
+wp_edge:
+  enabled: false
+
+data_plane:
+  enabled: false
+  graphile_port: 1880
+  # Graphile/ccms host port (default 1880), separate from harness 8080
+  # and wpcms ingress.
 ```
 
 ### What Does NOT Belong in sentinel.yaml
@@ -240,8 +273,29 @@ The following is the complete configuration schema with every field documented, 
     "url": "https://kits.ndx.au",
     "license_url": "https://license.ndx.au",
     "license_key": "",
+    "registration_enabled": true,
     "telemetry_enabled": true,
     "next_check": ""
+  },
+  "smtp": {
+    "enabled": false,
+    "host": "",
+    "port": 0,
+    "username": "",
+    "password": "",
+    "from": "",
+    "to": [],
+    "license_notices": false
+  },
+  "ip_filters": {
+    "rules": []
+  },
+  "mcp": {
+    "risk_classes": [],
+    "disabled": [],
+    "max_log_chars": 0,
+    "aliases": false,
+    "clients": []
   }
 }
 ```
@@ -312,7 +366,7 @@ Controls the Lua virtual machine pool that executes flows.
 |-------|------|---------|-------------|
 | `lua.pool_size` | int | `10` | Maximum number of Lua VM instances (LStates) in the pool. Each concurrent flow execution requires one VM instance. If all instances are in use, new execution requests queue until one becomes available. Increase this for projects with many concurrent flows. Minimum: 1. |
 | `lua.registry_size` | int | `256` | Initial registry size for new Lua VM instances. The registry is where Lua stores references to tables, functions, and userdata. Larger values use more memory per VM. They can improve performance for flows with many Lua objects. Minimum: 1. |
-| `lua.execution_timeout` | int | `30` | Default execution timeout in seconds. If a flow's `main()` function does not return within this time, the execution is terminated and the `failed(err)` callback is invoked. Individual flows can override this. Minimum: 1. |
+| `lua.execution_timeout` | int | `30` | Default execution timeout in seconds. If a flow's `main()` function does not return within this time, the execution is terminated and the `failed(err)` callback is invoked. There is no `flows.overrides.timeout_ms` in `sentinel.yaml`. Minimum: 1. |
 
 #### ws -- WebSocket Bus
 
@@ -355,9 +409,37 @@ Controls integration with the Sentinel Kit Marketplace (SKM) for installing, upd
 |-------|------|---------|-------------|
 | `marketplace.url` | string | `"https://kits.ndx.au"` | Kit catalog / device login (SKM). |
 | `marketplace.license_url` | string | `"https://license.ndx.au"` | Occupy/register HQ ([ndxHQ](https://github.com/ndx-au/ndxHQ)). |
-| `marketplace.license_key` | string | `""` | Activated license key (for example `sk_free_...` or `sk_ent_...`). Set automatically by `sentinel license activate`. Can also be set through `SENTINEL_LICENSE_KEY` environment variable. |
-| `marketplace.telemetry_enabled` | bool | `true` | Allow sending anonymized system information (OS, architecture, Sentinel version) with phone-home requests. No project data or secrets are ever included. |
-| `marketplace.next_check` | string | `""` | ISO 8601 timestamp for an optional check-in schedule. Occupy uses an in-memory heartbeat and does not write this field. |
+| `marketplace.license_key` | string | `""` | Activated license key (`sk_ce_...`, `sk_free_...`, or `sk_ent_...`). Set automatically by `sentinel license activate`. Can also be set through `SENTINEL_LICENSE_KEY` environment variable. |
+| `marketplace.registration_enabled` | bool | `true` | Allow `sentinel register` occupy against license HQ. |
+| `marketplace.telemetry_enabled` | bool | `true` | Allow sending anonymized system information (OS, architecture, Sentinel version) with occupy requests. No project data or secrets are ever included. |
+| `marketplace.next_check` | string | `""` | ISO 8601 timestamp for an optional check-in schedule. Occupy uses an in-memory heartbeat (~15s retry) and does not write this field. |
+
+#### smtp -- Native harness mailer
+
+Harness mailer for license and ops notices. This is not Lua `sn.cn.smtp`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `smtp.enabled` | bool | `false` | Enable the native harness mailer. |
+| `smtp.host` | string | `""` | SMTP host. |
+| `smtp.port` | int | `0` | SMTP port. |
+| `smtp.username` | string | `""` | SMTP username. |
+| `smtp.password` | string | `""` | SMTP password. Prefer environment or vault over the file. |
+| `smtp.from` | string | `""` | From address. |
+| `smtp.to` | string[] | `[]` | Recipient list. |
+| `smtp.license_notices` | bool | `false` | Send license/occupy notices through this mailer. |
+
+#### mcp -- Harness MCP sidecar
+
+Used when `sentinel harness start --mcp` is set. Empty `risk_classes` means the CLI default (`read,validate`) unless `--mcp-risk` overrides it.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mcp.risk_classes` | string[] | `[]` | Ceiling risk classes: `read`, `validate`, `execute`, `write`, `admin`. |
+| `mcp.disabled` | string[] | `[]` | Tool names to skip even when their risk class is enabled. |
+| `mcp.max_log_chars` | int | `0` | Cap on text payloads from logs/diffs/source reads (`0` = MCP default). |
+| `mcp.aliases` | bool | `false` | Also register `sentinel_*` tool names. |
+| `mcp.clients` | object[] | `[]` | Per-identity overlays (`name`, `match`, `risk_classes`, allow/deny lists). |
 
 ---
 
@@ -387,17 +469,17 @@ Allowlisted mappings:
 | `SENTINEL_STATE_PASSPHRASE` | `state.state_passphrase` | `another_passphrase_32_chars_min` |
 | `SENTINEL_DATA_DIR` | `data_dir` | `.sentinel` |
 | `SENTINEL_PORT` | `api.port` | `9000` |
-| `SENTINEL_DEBUG` | (flag override) | `1` |
 | `SENTINEL_LOG_LEVEL` | `log.level` | `debug` |
 | `SENTINEL_LOG_FORMAT` | `log.format` | `json` |
 | `SENTINEL_MARKETPLACE_URL` | `marketplace.url` | `https://custom-marketplace.example.com` |
-| `SENTINEL_LICENSE_KEY` | `marketplace.license_key` | `sk_free_abc123...` |
+| `SENTINEL_LICENSE_URL` | `marketplace.license_url` | `https://license.ndx.au` |
+| `SENTINEL_LICENSE_KEY` | `marketplace.license_key` | `sk_ce_abc123...` |
 | `HARNESS_URL` | (CLI `--host` default, with `SENTINEL_HOST`) | `http://127.0.0.1:8080` |
 | `SENTINEL_HOST` | (CLI `--host` default) | `http://prod-harness:8080` |
 | `SENTINEL_API_KEY` | (CLI `--token` default) | `token_abc123...` |
 | `SENTINEL_API_TOKEN` | (CLI `--token` alias) | same as API key |
 
-**Not loaded into harness configuration:** `SENTINEL_API`, `HARNESS_URL`, `SENTINEL_API_KEY`, `SENTINEL_API_TOKEN`, and any other non-allowlisted `SENTINEL_*` vars.
+**Not loaded into harness configuration:** `SENTINEL_API`, `HARNESS_URL`, `SENTINEL_HOST`, `SENTINEL_API_KEY`, `SENTINEL_API_TOKEN`, `SENTINEL_DEBUG`, and any other non-allowlisted `SENTINEL_*` vars. There is no `SENTINEL_PROJECT_DIR` or `SENTINEL_SRE_LOCATION`.
 
 **Blocked (startup error):** `SENTINEL_API`
 
@@ -736,16 +818,17 @@ The Sentinel Kit Marketplace (SKM) is the distribution platform for published ki
 **Initial setup:**
 
 1. Authenticate: `sentinel login`.
-2. Activate a license: `sentinel license activate sk_free_<key>`.
-3. Install kits: `sentinel sre kit install <kit-id>`.
+2. Activate a license: `sentinel license activate sk_ce_<key>` (also `sk_free_` / `sk_ent_`).
+3. Occupy: `sentinel register`.
+4. Install kits: `sentinel sre kit install <kit-id>`.
 
 **Telemetry:**
 
-When `telemetry_enabled` is `true`, the harness includes basic system information (OS, architecture, Sentinel version, kit count) with phone-home verification requests. No project data, secrets, flow content, or personally identifiable information is ever sent. Set to `false` to disable.
+When `telemetry_enabled` is `true`, the harness includes basic system information (OS, architecture, Sentinel version, kit count) with occupy requests. No project data, secrets, flow content, or personally identifiable information is ever sent. Set to `false` to disable.
 
-**Optional check-in:**
+**Occupy:**
 
-Occupy heartbeats stay in memory (~60s). `marketplace.next_check` is reserved for a real optional check-in schedule and is not written by occupy. Leave it empty unless you are configuring optional check-in separately.
+There is no 7-day phone-home or 48-hour grace window. Occupy retries about every 15 seconds. Production executions are gated by a live occupy lease. `sentinel register` is the occupy path. `marketplace.next_check` is reserved for an optional check-in schedule and is not written by occupy.
 
 **Private marketplace:**
 
@@ -953,7 +1036,7 @@ curl --cacert .sentinel/certs/ca.crt \
 # 5. Verify auth rejection
 curl -H "Authorization: Bearer invalid_token" \
   https://localhost:8443/hl
-# Should return: {"ok":false,"err":"UNAUTHORIZED","msg":"..."}
+# Returns: {"ok":false,"err":"AUTH.REQUIRED","msg":"..."}
 ```
 
 ### Post-Deployment
@@ -1031,7 +1114,7 @@ If the harness takes a long time to start, investigate with debug logging:
 Common causes:
 - Many kits with large CMS content directories (many .md files to parse).
 - Database migrations running on first start after an upgrade.
-- Network connectivity issues when phone-home is enabled.
+- Network connectivity issues when occupy cannot reach license HQ.
 - Large flow files that take time to parse and register.
 
 ---

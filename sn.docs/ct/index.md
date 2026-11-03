@@ -64,7 +64,7 @@ For developers building external integrations against the Sentinel HTTP API:
 | # | Document | Time | What You Will Learn |
 |---|----------|------|---------------------|
 | 6 | [HTTP API Reference](/api-reference) | 45 min | All REST endpoints, authentication, flow execution, execution history and logs, trigger management, forms, secrets, webhooks, git operations, error codes |
-|  | [Harness HTTP routes](/harness-http-routes) | 10 min | Canonical `/hl/*`, `/kt/*`, gateway/keyhole behavior, dashboard proxy mapping — complements `system-specs/api.yaml` |
+|  | [Harness HTTP routes](/harness-http-routes) | 10 min | Canonical `/hl/*`, `/kt/*`, `/fcms`, gateway/keyhole behavior, dashboard proxy mapping — complements harness `system-specs/api.yaml` |
 |  | [MCP Agent Integration](/mcp-agent-integration) | 15 min | Connect Cursor and other MCP clients to a running harness. Bind/listen flags, tools, debugging |
 |  | [The `.sentinel/` directory](/sentinel-directory) | 15 min | Gitignored harness artifacts — what each file is, what depends on it, backup/restore notes |
 |  | [fcms — file CMS (operator guide)](/sentinel-cms) | 25 min | **fcms** plane: `ct/` content, `/fcms` JSON (legacy `/cm`), `/fcms/render` HTML (legacy `/ct`), `cms.db` |
@@ -74,9 +74,9 @@ For developers building external integrations against the Sentinel HTTP API:
 
 | Plane | Guide | Notes |
 |-------|-------|--------|
-| **fcms** | [17-SENTINEL-CMS.md](/sentinel-cms) | File CMS — technical writing, agent docs |
-| **ccms** | [24-CONTENT-PLANES.md](/content-planes) | Collection CMS — Postgres + Graphile. Collections dashboard |
-| **wpcms** | [14-WORDPRESS.md](/wordpress) | WordPress platform — dedicated ingress port |
+| **fcms** | [fcms operator guide](/sentinel-cms) | File CMS — technical writing, agent docs (`/fcms`, `/fcms/render`) |
+| **ccms** | [Content planes](/content-planes) | Collection CMS — Postgres + Graphile **:1880**. Collections dashboard |
+| **wpcms** | [WordPress](/wordpress) | WordPress platform — ingress default **8800** |
 
 ### System Administrators
 
@@ -84,7 +84,8 @@ For anyone deploying, configuring, securing, or monitoring Sentinel in productio
 
 | # | Document | Time | What You Will Learn |
 |---|----------|------|---------------------|
-| 7 | [Configuration Guide](/configuration-guide) | 30 min | Two-layer configuration system, sentinel.yaml and .sentinel/config.json schemas, environment variables, three security layers, deployment checklist, performance tuning |
+| 7 | [Configuration Guide](/configuration-guide) | 30 min | Two-layer configuration system, sentinel.yaml and .sentinel/config.json schemas, environment variables, deployment checklist |
+|  | [Security readiness](/security-readiness) | 20 min | Signed requests, approvals, FS Control, SQLCipher opt-in, occupy, dashboard loopback |
 | 8 | [Edge Deployment Guide](/edge-deployment) | 15 min | Cloudflare + Caddy + Sentinel architecture, Full (Strict) SSL, Caddyfile reverse proxy, production deployment checklist |
 
 ### CLI Users
@@ -161,7 +162,7 @@ These task-oriented links take you directly to the section you need:
 - **Call an external API** -- [Lua API: HTTP Client](/lua-api#http-client-snhttp).
 - **Store data in a database** -- [Lua API: Database](/lua-api#database-sndb).
 - **Build a CMS/blog kit** -- [Kit Development: CMS Kits](/kit-development#cms-kits).
-- **Run or proxy a CMS site (`/cm`, `/ct`)** -- [Sentinel CMS operator guide](/sentinel-cms).
+- **Run or proxy a CMS site (`/fcms`, `/fcms/render`)** -- [Sentinel CMS operator guide](/sentinel-cms).
 - **Query CMS content from a flow** -- [Lua API: CMS](/lua-api#cms-sncms).
 - **Use WebSockets from a flow** -- [Lua API: WebSocket Bus](/lua-api#websocket-bus-snws).
 - **Push real-time updates to the dashboard** -- [API Reference: WebSocket](/api-reference#websocket).
@@ -192,7 +193,7 @@ These task-oriented links take you directly to the section you need:
 - **Activate a license** -- [Licensing: Issue and Activate](/licensing#issuing-a-license).
 - **Configure marketplace** -- [Configuration Guide: Marketplace](/configuration-guide#marketplace).
 - **Understand occupy licensing** -- [Licensing](/licensing).
-- **Set up OAuth for SKM** -- OAuth Setup Requirements.
+- **Register a CE or Enterprise lease** -- [Licensing](/licensing) and `sentinel register`.
 
 ---
 
@@ -207,8 +208,8 @@ Sentinel follows a **1:1 deployment model**. One harness instance runs one SRE p
                  +------------------------------+
                  |    Dashboard UI              |
                  |    (standalone process)      |
-                 |    http://localhost:9090     |
-                 |    BFF proxy to harness      |
+                 |    http://127.0.0.1:9090     |
+                 |    loopback BFF process      |
                  +-------------+----------------+
                                |
                           REST API
@@ -240,16 +241,16 @@ Sentinel follows a **1:1 deployment model**. One harness instance runs one SRE p
                                |
          +---------------------+---------------------+
          |                     |                     |
-    sn.core-agent/        acme.billing/         acme.blog/
-    (starter kit)         (your kit)            (CMS kit)
+    acme.main/            acme.billing/         acme.blog/
+    (your kit)            (your kit)            (CMS kit)
 ```
 
 **Key points about this architecture:**
 
-- The **Dashboard** is a separate process that proxies requests to the harness. It provides a web UI for managing flows, viewing executions, browsing kits, and editing files. It runs on port 9090 by default.
-- The **Harness** is the core engine running on port 8080 by default. It hosts the REST API, executes Lua flows in a sandboxed VM, manages triggers, and handles all state.
-- The **SRE directory** is just a folder on disk. The harness reads it, discovers kits and flows automatically, and watches for changes when hot-reload is enabled.
-- **No external dependencies.** The harness embeds SQLite for state and bbolt for caching. It also embeds an encrypted vault and a Lua VM.
+- The **Dashboard** is a separate process that proxies requests to the harness. It provides a web UI for managing flows, viewing executions, browsing kits, and editing files. It binds **loopback only** on port 9090 by default (`127.0.0.1:9090`).
+- The **Harness** is the core engine on port 8080 by default. It hosts the REST API, executes Lua flows in a sandboxed VM, manages triggers, and handles all state. The API listen address is all interfaces (`:8080`); firewall unused exposure.
+- The **SRE directory** is a folder on disk. The harness reads it, discovers kits and flows automatically, and watches for changes when hot-reload is enabled.
+- **No external dependencies for core orchestration.** The harness embeds SQLite for state and bbolt for caching. It also embeds an encrypted vault and a Lua VM. Optional stacks (WordPress, Graphile ccms, managed RAG) need Docker.
 
 ---
 
@@ -261,7 +262,7 @@ For engineers modifying the Go harness (`internal/*`, `cmd/sentinel/*`):
 |---|----------|------|---------------------|
 | 20 | [Harness Internals](/internals) | 45 min | Bootstrap wiring, package map, flow execution path, gateway middleware, kit discovery, hot reload, build/test conventions |
 
-The code is the source of truth. This document lists the key files and subsystems. [Harness HTTP Routes](/harness-http-routes) and `system-specs/api.yaml` contain the API route catalogs.
+The code is the source of truth. This document lists the key files and subsystems. [Harness HTTP Routes](/harness-http-routes) and the harness repo `system-specs/api.yaml` contain the API route catalogs.
 
 ---
 
@@ -272,9 +273,9 @@ These are the fundamental building blocks of every Sentinel project. Each is exp
 | Concept | What It Is |
 |---------|-----------|
 | **SRE** (Sentinel Runtime Environment) | The project folder containing all your kits, configuration, and state. One SRE = one project. It is the unit of deployment and the root of your git repository. |
-| **Flow** | A Lua script that performs work. Flows have a lifecycle of `setup()`, `main()`, `cleanup()`, and `failed(err)` functions. They run in a sandboxed VM with access to the Sentinel API. Discovered automatically from `fl/` directories inside kits. |
-| **Kit** | A self-contained module directory (for example `sn.core-agent/`, `acme.billing/`) with a `kit.yaml` manifest. Kits contain flows, connectors, modules, forms, pages, databases, and assets. They are the unit of organization and reuse. |
-| **Trigger** | A rule that causes a flow to execute. Five types: **cron** (schedule), **webhook** (HTTP POST), **event** (internal message), **manual** (API/dashboard), and **form** (user submission). Defined in YAML files inside `tp/` directories. |
+| **Flow** | A Lua script that performs work. Registration requires `setup()`, `main()`, and `cleanup()`. `failed(err)` and `timeout()` are optional. Flows run in a sandboxed VM with access to the Sentinel API. Discovered automatically from `fl/` directories inside kits. |
+| **Kit** | A self-contained module directory (for example `acme.billing/`) with a `kit.yaml` manifest. Kits contain flows, connectors, modules, forms, pages, templates, and assets. Starter kits such as `sn.core-agent/` come from [ndx-au/sre-init](https://github.com/ndx-au/sre-init) when you pass `--starter-kits` or `--with-bundle core`. |
+| **Trigger** | A rule that causes a flow to execute. Five types: **cron** (schedule), **webhook** (HTTP POST), **event** (internal message), **manual** (API/dashboard), and **form** (user submission). Defined in the flow Lua `triggers = { cron()/webhook()/event() }` table. `tp/` holds Go HTML templates, not triggers. |
 | **Execution** | A single run of a flow, identified by an execution ID. Tracks status (`queued`, `running`, `completed`, `failed`), timing, logs, return value, and errors. |
 | **Secret** | An encrypted key-value pair stored in the vault (`.sentinel/vault.db`). Used for API keys, passwords, tokens, and other sensitive data. Encrypted with AES-256-GCM. |
 | **Connector** | A reusable Lua module that wraps an external service or protocol (for example HTTP, SMTP, file I/O). Lives in `cn/` directories inside kits. |
@@ -289,8 +290,8 @@ Sentinel uses two configuration files. This separation keeps infrastructure secr
 
 | File | Location | Git-tracked? | Contains |
 |------|----------|-------------|----------|
-| `sentinel.yaml` | SRE root | Yes | Project identity: `name`, `description`, `version`, `git` configuration, `hotreload` toggle. This is your project's public configuration. |
-| `.sentinel/config.json` | `.sentinel/` directory | No (gitignored) | Machine-specific infrastructure: `api.port`, `log.level`, `tls.*` configuration, `marketplace.*` credentials. This varies per deployment. |
+| `sentinel.yaml` | SRE root | Yes | Project identity: `name`, `description`, `version`, `public_url`, `default_kit`, `git`, `hotreload.yaml`, optional `wp_*` and `data_plane` (Graphile **1880**). |
+| `.sentinel/config.json` | `.sentinel/` directory | No (gitignored) | Machine-specific infrastructure: `api.port`, `log.level`, `tls.*`, `marketplace.*`, `smtp`, `mcp`, `ip_filters`. This varies per deployment. |
 
 **Rule of thumb:** If a setting changes between machines (ports, paths, credentials), it goes in `.sentinel/config.json`. If it defines project behavior (name, version, features), it goes in `sentinel.yaml`.
 
@@ -300,36 +301,40 @@ See the [Configuration Guide](/configuration-guide) for complete schemas and exa
 
 ## Security
 
-Sentinel implements **three independent security layers** that can be enabled individually or together:
+Production controls include more than bearer tokens and TLS. See [Security readiness](/security-readiness) for the live set:
 
-1. **Authentication** -- Bearer token protection for API endpoints.
-2. **Encryption at Rest** -- SQLCipher for the state database, AES-256-GCM for the secret vault.
-3. **Transport Encryption** -- Native TLS/SSL support or reverse proxy through Caddy/nginx.
+1. **Authentication** -- Bearer tokens, plus Ed25519 dashboard signatures (`X-Sn-Sig`).
+2. **Encryption at rest** -- AES-256-GCM for the vault. SQLCipher for the state database is **opt-in** (`state.encrypt_db`, default false).
+3. **Transport** -- Native TLS or a reverse proxy (Caddy/nginx).
+4. **Execution policy** -- `.sentinel/execution-policy.json` and `sentinel approvals grant` for restricted native actions.
+5. **FS Control** -- rooted filesystem access through `ctx.fs`.
+6. **Occupy lease** -- production flow start requires a live license lease. Health (`/hl`) still answers.
 
-See [Configuration Guide: Security](/configuration-guide#security-configuration) for setup instructions and [Edge Deployment](/edge-deployment) for production TLS architecture.
+See [Configuration Guide: Security](/configuration-guide#security-configuration) and [Edge Deployment](/edge-deployment) for TLS.
 
 ---
 
 ## System Specifications
 
-Machine-readable YAML specification files live in the `system-specs/` directory at the repository root. These are authoritative and designed for code generation, tooling, and AI consumption.
+Machine-readable YAML specification files live in the **harness** repository (`github.com/ndx-au/sentinel`, directory `system-specs/`). They are not part of this docs SRE. They are designed for code generation, tooling, and AI consumption.
 
 | Spec File | What It Defines |
 |-----------|----------------|
-| `api.yaml` | All HTTP endpoints, request/response shapes, query parameters |
-| `lua-api.yaml` | Complete Lua API surface available inside flows |
+| `api.yaml` | HTTP endpoints, request/response shapes, query parameters |
+| `lua-api.yaml` | Lua API surface available inside flows |
 | `kits.yaml` | Kit directory structure and kit.yaml manifest schema |
 | `forms.yaml` | Form YAML definitions, field types, and submission events |
 | `triggers.yaml` | Trigger types, configuration options, and scheduling rules |
 | `cli-commands.yaml` | CLI commands, subcommands, flags, and arguments |
 | `config.yaml` | Configuration schemas for both sentinel.yaml and config.json |
 | `security.yaml` | Authentication, encryption, TLS, and audit logging specs |
-| `errors.yaml` | All error codes, messages, and HTTP response shapes |
+| `errors.yaml` | Error codes, messages, and HTTP response shapes |
 | `file-structure.yaml` | Project layout conventions and directory purposes |
 | `connectors.yaml` | Built-in connector APIs and extension points |
 | `modules.yaml` | Built-in module APIs and extension points |
 | `logging.yaml` | Logging system configuration and output formats |
 | `docker.yaml` | Docker integration and container management |
+| `mcp.yaml` | MCP sidecar tools, resources, and prompts |
 | `README.yaml` | Spec directory metadata and index |
 
 ---
@@ -341,7 +346,7 @@ Machine-readable YAML specification files live in the `system-specs/` directory 
 - **CLI help** -- `sentinel --help` or `sentinel [command] --help` for any command.
 - **Error codes** -- See [API Reference: Error Codes](/api-reference#error-codes) for a complete list.
 - **Troubleshooting** -- See [Troubleshooting and FAQ](/troubleshooting-faq) for common issues.
-- **Specifications** -- Parse `system-specs/*.yaml` for authoritative, machine-readable definitions.
+- **Specifications** -- Parse `system-specs/*.yaml` in the harness repository for machine-readable definitions.
 - **Version** -- Run `sentinel version` to check your installed version.
 
 ---
@@ -350,13 +355,14 @@ Machine-readable YAML specification files live in the `system-specs/` directory 
 
 | Resource | Purpose |
 |----------|---------|
-| `sre4agents.md` | Full SRE development reference for AI agents |
-| `sre-url-map.md` | URL construction cheat sheet with complete routing table |
-| `docs/20-INTERNALS.md` | Harness Go code architecture (contributors) |
-| `system-specs/` | Machine-readable YAML specifications (authoritative) |
+| [sre4agents.md](https://github.com/ndx-au/sentinel/blob/main/sre4agents.md) | Full SRE development reference for AI agents (harness repo) |
+| [sre-url-map.md](https://github.com/ndx-au/sentinel/blob/main/sre-url-map.md) | URL construction cheat sheet (harness repo) |
+| [Harness Internals](/internals) | Harness Go code architecture (contributors) |
+| [system-specs/](https://github.com/ndx-au/sentinel/tree/main/system-specs) | Machine-readable YAML specifications (harness repo) |
+| [Security readiness](/security-readiness) | Shared-responsibility controls, SQLCipher, approvals |
 
 ---
 
-Current documentation version: **Sentinel v0.3.1+**
+Unreleased source prints `sentinel version v0.1.1-dev`. Release builds substitute the git tag. sre-init currently requires harness `>=0.3.0`.
 
 **Ready to build?** Start with the [Getting Started guide](/getting-started), or jump to a specific task using the quick links above.

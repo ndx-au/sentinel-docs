@@ -12,7 +12,7 @@ status: stable
 
 Offline, fixture-driven retrieval benchmarks for the harness RAG stack. Live PG-backed eval against a running SRE is optional. **CI gates on embedded fixtures** in `internal/rag/testdata/retrieval_eval_fixtures.json`.
 
-Architecture reference: [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) (AI-S04). Operator path for enabling RAG: [`21-AGENTIC-AI-OPERATOR.md`](/agentic-ai-operator).
+Architecture reference (harness repo): [`specs/agentic-ai.md`](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md) (AI-S04). Operator path for enabling RAG: [Agentic AI operator guide](/agentic-ai-operator).
 
 ---
 
@@ -79,7 +79,7 @@ AI tool-loop failure classes (`not_found`, `timeout`, `runtime`) are documented 
 
 - Fixtures: `internal/ai/testdata/tool_loop_error_fixtures.json`.
 - CI: `go test ./internal/ai -count=1 -run TestToolLoopErrorGoldenFixtures`.
-- Lua API: [`02-LUA-API.md` — Tool-loop error classes](/lua-api#tool-loop-error-classes).
+- Lua API: [Lua API — Tool-loop error classes](/lua-api#tool-loop-error-classes).
 
 ---
 
@@ -88,11 +88,13 @@ AI tool-loop failure classes (`not_found`, `timeout`, `runtime`) are documented 
 Fixture CI does not require a running harness. To validate RAG against a real SRE (PostgreSQL + embeddings configured in `.sentinel/config.json`):
 
 ```bash
-./build.ps1   # or ./build.sh
-.\sentinel.exe -p /path/to/sre harness start
+./build.sh
+sentinel harness start -p /path/to/sre
 ```
 
-Example local target (sibling of harness repo): `E:\_CODE\SRE\test` with kits `sn.roadmap-fixtures`, `sn.core-rag`, `sn.eg-rag-chat`. Run `sn-roadmap-fixtures:rag_guard_smoke` or inspect `/rag` overview evaluation panel.
+Windows-only alternative: `./build.ps1` then `.\sentinel.exe harness start -p /path/to/sre`.
+
+Example local target (sibling of the harness repo): `$SRE` or `/home/$USER/sre/test` with kits `sn.roadmap-fixtures`, `sn.core-rag`, `sn.eg-rag-chat`. Run `sn-roadmap-fixtures:rag_guard_smoke` or inspect `/rag` overview evaluation panel.
 
 If PG or embedding providers are not configured, skip live smoke — fixture CI remains the release gate.
 

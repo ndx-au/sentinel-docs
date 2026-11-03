@@ -39,11 +39,13 @@ The following sections cover the local-development bootstrap path for a managed 
 
 - Docker Desktop or a working Docker Engine on the local machine.
 - A Sentinel build with dev features enabled for local work.
-- An SRE initialized with `--wp-central`.
+- An SRE initialized with `--wp-central` (kits come from **sre-init**, not from the harness source tree).
 - A vault passphrase configured if the local project encrypts the vault.
 - An S3-compatible bucket storage point configured for WordPress media publication.
 
-Example dev build:
+The WordPress kits are installed by `sentinel sre init --wp-central` / `--wp-edge` from **sre-init**. Do not copy kit directories out of a harness checkout.
+
+Example harness binary build (optional, local-dev):
 
 ```bash
 go build -tags dev -o sentinel ./cmd/sentinel
@@ -57,10 +59,11 @@ Create a new SRE with the `wp-central` project profile:
 sentinel sre init ./my-central --wp-central
 ```
 
-This currently scaffolds:
+This currently scaffolds (from **sre-init**, not the harness tree):
 
 - `sentinel.yaml` with a `wp_central` block.
 - `sn.wp-central/`.
+- `sn.wp-preview/` (`--wp-central` also installs the preview kit).
 - `docker-compose.wp-central.yaml`.
 
 The generated compose file is for development. It currently uses floating `wordpress:latest` and `mariadb:latest` images.
@@ -76,7 +79,7 @@ sentinel harness start -p ./my-central --force-reset --wp-port 8800
 Default ports:
 
 - Harness: `http://127.0.0.1:8080`.
-- Dashboard: `http://127.0.0.1:9090`.
+- Dashboard: `http://127.0.0.1:9090` (loopback only).
 - WordPress ingress: `http://127.0.0.1:8800`.
 
 The dedicated WordPress ingress port can be set in either place:
@@ -141,29 +144,29 @@ Use the Application Password for Sentinel automation.
 
 Store the WordPress integration credentials in the Sentinel vault so flows can retrieve them through `ctx.secret(...)`.
 
-Recommended secret names:
+Harness WordPress REST vault keys:
 
-- `wp_central_username`.
-- `wp_central_app_password`.
+- `wp:sn.wp-central:user`
+- `wp:sn.wp-central:pass`
 
 Example:
 
 ```bash
-sentinel secret set wp_central_username sentinel-sync -p ./my-central
-sentinel secret set wp_central_app_password --interactive -p ./my-central
+sentinel sre secret set wp:sn.wp-central:user sentinel-sync -p ./my-central
+sentinel sre secret set wp:sn.wp-central:pass -p ./my-central
 ```
 
 If you prefer stdin:
 
 ```bash
-printf '%s' 'your application password here' | sentinel secret set wp_central_app_password --stdin -p ./my-central
+printf '%s' 'your application password here' | sentinel sre secret set wp:sn.wp-central:pass --stdin -p ./my-central
 ```
 
 Lua flows can then retrieve them with:
 
 ```lua
-local user = ctx.secret("wp_central_username")
-local pass = ctx.secret("wp_central_app_password")
+local user = ctx.secret("wp:sn.wp-central:user")
+local pass = ctx.secret("wp:sn.wp-central:pass")
 ```
 
 Do not hardcode these values into `sentinel.yaml`, flow source, or git-tracked configuration files.
@@ -212,7 +215,7 @@ If that succeeds, Sentinel has the credential shape it needs for local integrati
 
 ## Operator Checklist
 
-- Initialize the SRE with `sentinel sre init --wp-central`.
+- Initialize the SRE with `sentinel sre init --wp-central` (installs `sn.wp-central` and `sn.wp-preview` from sre-init).
 - Start the harness and dashboard.
 - Bring up the `wp-central` compose stack.
 - Complete the first-run install at `/wp-admin/install.php`.
@@ -290,7 +293,7 @@ The webhook HMAC secret must be configured in two places:
 2. **Edge side**: Store the same secret in each edge node's Sentinel vault:
 
    ```bash
-   sentinel secret set wp_webhook_secret 'your-shared-secret' -p ./my-edge
+   sentinel sre secret set wp_webhook_secret 'your-shared-secret' -p ./my-edge
    ```
 
 The edge `webhook_ingest` flow verifies every incoming payload by computing `HMAC-SHA256(body, wp_webhook_secret)` and comparing it to the `X-SN-Signature` header. Mismatched signatures are rejected.
@@ -338,10 +341,10 @@ To bring up a new edge node:
 2. **Configure secrets** in the edge vault:
 
    ```bash
-   sentinel secret set wp_central_origin http://your-central:8800 -p ./my-edge
-   sentinel secret set wp_central_username sentinel-sync -p ./my-edge
-   sentinel secret set wp_central_app_password --interactive -p ./my-edge
-   sentinel secret set wp_webhook_secret --interactive -p ./my-edge
+   sentinel sre secret set wp_central_origin http://your-central:8800 -p ./my-edge
+   sentinel sre secret set wp:sn.wp-central:user sentinel-sync -p ./my-edge
+   sentinel sre secret set wp:sn.wp-central:pass -p ./my-edge
+   sentinel sre secret set wp_webhook_secret -p ./my-edge
    ```
 
 3. **Sync templates** from the central dispatch folder to the edge kit's `tp/`, `pb/`, and `pg/` directories.

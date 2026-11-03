@@ -27,13 +27,20 @@ The fundamental operating model is:
 
 Every command uses a project directory. If you omit `-p`, the command uses the current directory. Always specify `-p` with an absolute path.
 
+**Command groups:**
+
+- Top-level: `harness`, `dashboard`, `wp-proxy`, `run`, `logs`, `ps`, `db`, `audit`, `backup`, `login`, `logout`, `register`, `license`, `upgrade`, `mcp`, `ccms`, `lib`, `docs`, `approvals`, `version`.
+- Under `sentinel sre`: `init`, `secret`, `config`, `doctor`, `flow`, `connector`, `module`, `storage`, `bundle`, `kit`, `test`.
+
+There is no `sentinel start`. Use `sentinel harness start`.
+
 ---
 
 ## Installation
 
 ### Building from Source
 
-Sentinel is written in Go. You need Go 1.25 or later installed on your system.
+Sentinel is written in Go. You need Go 1.26.10 or later installed on your system.
 
 **Development build** (includes debug mode support):
 
@@ -67,19 +74,15 @@ After building, the binary is available as `./sentinel` (or `./sentinel.exe` on 
 
 ```bash
 ./sentinel version
-# Output: sentinel version v0.1.1-dev (or similar)
+# Output: sentinel version v0.1.1-dev
 ```
 
 ### Build Script
 
-The repository includes a convenience build script:
+The repository includes a convenience build script. `./build.sh` calls `scripts/build.py` and builds both binaries: `sndev` (dev tags) and `snprod` (stripped production). There is no `-r` flag.
 
 ```bash
-# Development build
 ./build.sh
-
-# Release build
-./build.sh -r
 ```
 
 ---
@@ -128,14 +131,18 @@ Keep secrets out of command arguments. Process listings can expose those argumen
 | `SENTINEL_STATE_PASSPHRASE` | Passphrase for encrypting the state database (SQLCipher). Only used when `state.encrypt_db` is `true` in config. | (none) | If empty and `encrypt_db` is true, the vault passphrase is used as fallback. |
 | `SENTINEL_DATA_DIR` | Override the data directory path. | `.sentinel` | Normally set in `.sentinel/config.json`. The environment variable overrides the file value. |
 | `SENTINEL_PORT` | Override the API listen port. | `8080` | Equivalent to the `api.port` configuration field. |
-| `SENTINEL_DEBUG` | Enable debug mode. Set to `1` or `true`. | (disabled) | Equivalent to `--debug` flag. |
 | `SENTINEL_LOG_LEVEL` | Set the minimum log level: `debug`, `info`, `warn`, or `error`. | `info` | Overrides `log.level` in configuration file. |
 | `SENTINEL_LOG_FORMAT` | Set the log output format: `json` or `text`. | `text` | Overrides `log.format` in configuration file. |
 
+`SENTINEL_DEBUG` is not an allowlisted harness environment variable. Use the `--debug` flag or `SENTINEL_LOG_LEVEL=debug`.
+
 ### CLI and Remote Access Variables
+
+These variables are CLI/client only. The harness process ignores them.
 
 | Variable | Purpose | Default | Notes |
 |----------|---------|---------|-------|
+| `HARNESS_URL` | URL of the harness API for remote CLI commands. | (none) | Preferred client default. Combined with `SENTINEL_HOST` for `--host`. |
 | `SENTINEL_HOST` | URL of the harness API for remote CLI commands. | `http://localhost:8080` | Used by commands like `run`, `logs`, `status` when operating against a remote harness. |
 | `SENTINEL_API_KEY` | Bearer token for authenticating CLI requests to the harness. | (none) | Stored here instead of command-line arguments to avoid exposure in process listings. |
 
@@ -147,12 +154,7 @@ Keep secrets out of command arguments. Process listings can expose those argumen
 | `SENTINEL_LICENSE_URL` | Override occupy/register HQ. | `https://license.ndx.au` | ndxHQ |
 | `SENTINEL_LICENSE_KEY` | License key for marketplace access. Alternative to storing it in config. | (none) | Overrides `marketplace.license_key` in configuration file. |
 
-### Application Variables
-
-| Variable | Purpose | Default | Notes |
-|----------|---------|---------|-------|
-| `SENTINEL_PROJECT_DIR` | Default project root directory. | `.` | Equivalent to the `-p` flag default. |
-| `SENTINEL_SRE_LOCATION` | SRE directory path for dashboard auto-discovery. | (none) | Used by the dashboard to locate harness instances. |
+There is no `SENTINEL_PROJECT_DIR` or `SENTINEL_SRE_LOCATION` variable. Use `-p` / `--project` for the SRE path. Use `dashboard start --sre-location` for dashboard filesystem access.
 
 ### Precedence Rules
 
@@ -185,11 +187,13 @@ A Git repository can contain multiple SREs in subfolders. The command creates re
 |------|---------|-------------|
 | `-p`, `--project` | `.` | Path to the SRE directory (relative to cwd). Defaults to current directory, meaning repo root = SRE root (1:1 mode). |
 | `--minimal` | `false` | Skip the interactive wizard but still create the standard scaffold. |
-| `--starter-kits` | `true` | Install the bundled starter kits into the project scaffold. |
-| `--wp-central` | `false` | Add the `sn.wp-central` project profile and install the `sn.wp-central` starter kit. Suppresses default starter kits and skips the interactive wizard. |
+| `--starter-kits` | `false` | Install starter kits from sre-init into the project scaffold. Off by default. |
+| `--wp-central` | `false` | Add the `sn.wp-central` project profile and install `sn.wp-central` and `sn.wp-preview`. Suppresses default starter kits and skips the interactive wizard. |
 | `--wp-edge` | `false` | Add the `sn.wp-edge` project profile and install the `sn.wp-edge` starter kit. Suppresses default starter kits and skips the interactive wizard. |
 | `--with-kit` | none | After scaffold creation, install one or more marketplace kits. Accepts comma-separated values and repeated flags. |
 | `--with-bundle` | none | After scaffold creation, install one or more bundles. Resolves from SKM with local fallback. Accepts comma-separated values and repeated flags. |
+| `--with-local <path>` | none | Use a local sre-init checkout instead of fetching from GitHub. |
+| `--force` | `false` | Overwrite existing scaffold files without prompting. |
 | `--no-input` | `false` | Use all defaults without prompting. In interactive mode, the init command asks for project name, description, and whether to enable vault encryption. |
 
 The wizard **name** field is metadata only -- it populates `sentinel.yaml` but does not affect directory names. The SRE directory is determined solely by the `-p`/`--project` flag.
@@ -199,7 +203,8 @@ The wizard **name** field is metadata only -- it populates `sentinel.yaml` but d
 ```
 repo-root/                         # Where init is run (cwd)
   CLAUDE.md                        # AI assistant orientation (repo-level)
-  .claude/skills/                  # SRE guidance skills (repo-level)
+  AGENTS.md                        # Agent orientation (repo-level)
+  .env.example                     # Operator/client env template (repo-level)
   .gitignore                       # Ignores .sentinel/ and _data/ (repo-level)
   .gitattributes                   # Line ending normalization (repo-level)
 
@@ -208,23 +213,14 @@ repo-root/                         # Where init is run (cwd)
     sentinel.yaml.md               # Skill twin for AI agent context
     .sentinel/                     # Machine-local data (gitignored)
       config.json                  # Infrastructure configuration
-    tests/                         # Test directory
-    sn.core-agent/                 # Base agent starter kit (if --starter-kits)
-    sn.core-rag/                   # Base RAG starter kit
-    sn.tools-http/                 # Tool connector starter kit
-    sn.supervisor/                 # Supervisor starter kit
-    sn.eg-support/                 # Example support kit
-    sn.eg-itops/                   # Example IT ops kit
-    sn.eg-rag-chat/                # Example retrieval-backed chat kit
-    sn.example-support/            # Legacy example support compatibility kit
-    sn.example-itops/              # Legacy example IT ops compatibility kit
+      harness.env.example          # systemd EnvironmentFile template
 ```
 
-The command skips existing repository files (CLAUDE.md, .gitignore, .gitattributes, .claude/skills/). A second SRE can reuse them without overwriting them.
+Default init does **not** create `tests/` and does **not** install starter kits. Pass `--starter-kits` (or `--with-bundle core`) to install kits from sre-init. Skills under `.claude/skills/` are copied only when kits are installed.
 
-The default starter kits exclude `sn.wp-central/` and `sn.wp-edge/`.
+The command skips existing repository files (CLAUDE.md, AGENTS.md, .gitignore, .gitattributes). A second SRE can reuse them without overwriting them.
 
-For WordPress profiles, use `--wp-central`, `--wp-edge`, or `--with-bundle wp-central|wp-edge`.
+For WordPress profiles, use `--wp-central`, `--wp-edge`, or `--with-bundle wp-central|wp-edge`. `--wp-central` also installs `sn.wp-preview`.
 
 The `--wp-central` and `--wp-edge` flags suppress default starter kits and skip the wizard.
 
@@ -274,9 +270,9 @@ The generated `sentinel.yaml` also includes `wp_central.port: 8800`, which is th
 - If vault encryption is enabled during init, you will need to set `SENTINEL_VAULT_PASSPHRASE` before starting the harness.
 - Run `sentinel sre validate` after modifying starter kits or adding new kits.
 
-### start
+### harness start
 
-Start the harness API server. The harness discovers all kits in the project directory, loads flows, registers triggers, initializes databases, and begins serving HTTP requests.
+Start the harness API server. The harness discovers all kits in the project directory, loads flows, registers triggers, initializes databases, and begins serving HTTP requests. There is no `sentinel start` command.
 
 ```bash
 ./sentinel harness start [flags]
@@ -286,16 +282,17 @@ Start the harness API server. The harness discovers all kits in the project dire
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port <int>` | `8080` | HTTP port for the API server. Ports 8080-8090 are within the dashboard's auto-discovery range. |
+| `--port <int>` | `8080` | HTTP port for the API server. The gateway binds all interfaces (`:PORT`). Ports 8080-8090 are within the dashboard's auto-discovery range. |
+| `--wp-central` | `false` | Enable the wp-central WordPress reverse proxy. |
 | `--wp-port <int>` | (from `sentinel.yaml`, default `8800`) | Dedicated `sn.wp-central` WordPress ingress port. Only applies when `wp_central.enabled` is true. Overrides `wp_central.port` for that run. |
-| `-d`, `--daemon` | `false` | Run the harness as a background process. The parent waits for the child to become healthy (up to 10s) before exiting. PID file: `{SRE}/.sentinel/harness-{port}.pid`. |
+| `-d`, `--daemon` | `false` | Run the harness as a background process. The parent waits for the child to become healthy (up to 30s) before exiting. PID file: `{SRE}/.sentinel/harness-{port}.pid`. |
 | `--drop-web-cache` | `false` | Clear all web caches (CMS content cache, template cache) on startup. Useful for content changes that hot reload did not detect. |
 | `--compose-up <value>` | (none) | Start Docker Compose stacks before the harness. Use `all` to start all stacks, or provide a comma-separated list of stub names. |
 | `--mcp` | `false` | Start an MCP (Model Context Protocol) server alongside the harness for AI agent tooling. |
 | `--mcp-bind <addr>` | `127.0.0.1` | MCP bind address. Use `127.0.0.1` (default) for localhost-only, or `0.0.0.0` / `::` to accept remote clients on trusted networks. |
 | `--mcp-listen <int>` | API port + 100 | MCP HTTP listen port (for example API `8080` → MCP `8180`). |
 | `--mcp-port <int>` | (alias) | Deprecated alias for `--mcp-listen`. |
-| `--mcp-risk <list>` | `read,validate` | Comma-separated risk classes (`read`,`validate`,`execute`,`write`,`admin`) or `all`. Ceiling for every MCP client. |
+| `--mcp-risk <list>` | `""` (effective `read,validate`) | Comma-separated risk classes (`read`,`validate`,`execute`,`write`,`admin`) or `all`. Flag default is empty. Effective ceiling is read+validate unless you override it. |
 | `--mcp-aliases` | `false` | Also register `sentinel_*` tool names (canonical names only by default). |
 
 **MCP server:** When `--mcp` is set, MCP clients attach through streamable HTTP at `http://<mcp-bind>:<mcp-listen>/`. Default risk profile is read+validate only. Pass `--mcp-risk all` for execute/write/admin tools. Canonical tool names only unless `--mcp-aliases` / `mcp.aliases`. `flow_run` waits for completion by default. Production mode requires the same auth as the harness API (Bearer token or Ed25519 signature). See **[MCP Agent Integration](/mcp-agent-integration)** for Cursor/Hermes setup, auth, resources, prompts, and the full tool list.
@@ -314,7 +311,7 @@ Press Ctrl+C to stop
 
 **Daemon mode:**
 
-When `--daemon` is set, the process forks into the background. The parent polls the child's health endpoint for up to 10s, then exits with a success/warning message. The PID file at `{SRE}/.sentinel/harness-{port}.pid` is used by `stop`, `restart`, `reload`, and `status` commands to locate the instance. If the PID file already exists and the process is dead, it is auto-cleaned. If the process is alive, the start command will fail unless `--force-reset` is specified.
+When `--daemon` is set, the process forks into the background. The parent polls the child's health endpoint for up to 30s, then exits with a success/warning message. The PID file at `{SRE}/.sentinel/harness-{port}.pid` is used by `stop`, `restart`, `reload`, and `status` commands to locate the instance. If the PID file already exists and the process is dead, it is auto-cleaned. If the process is alive, the start command will fail unless `--force-reset` is specified.
 
 **Examples:**
 
@@ -329,7 +326,7 @@ When `--daemon` is set, the process forks into the background. The parent polls 
 ./sentinel harness start -p /home/user/my-project --compose-up all
 
 # Start wp-central with a dedicated WordPress ingress port
-./sentinel harness start -p /home/user/my-central --compose-up wp-central --wp-port 8800
+./sentinel harness start -p /home/user/my-central --wp-central --compose-up wp-central --wp-port 8800
 
 # Start with cache clearing and debug logging
 ./sentinel harness start -p /home/user/my-project --drop-web-cache --debug
@@ -487,12 +484,12 @@ Show all running Sentinel services (harness, dashboard, wp-proxy) in a unified t
 ./sentinel ps
 ```
 
-### doctor
+### sre doctor
 
 Run pre-flight diagnostics: configuration validation, kit checks, database accessibility, port availability, and running instance health.
 
 ```bash
-./sentinel doctor
+./sentinel sre doctor
 ```
 
 ### ccms (collection CMS)
@@ -549,7 +546,7 @@ Start the web dashboard server.
 | `--sre-location <path>` | (none) | Optional local SRE path for dashboard features that need filesystem access. |
 | `--port <int>` | `9090` | HTTP port for the dashboard web server. |
 | `--harness <host:port>` | (none) | Explicit harness address. Overrides the positional argument if both are provided. |
-| `--daemon` | `false` | Run the dashboard in the background. PID is written to `~/.sentinel/dashboard.pid`. |
+| `--daemon` | `false` | Run the dashboard in the background. PID is written to `~/.sentinel/dashboard-{port}.pid` (for example `dashboard-9090.pid`). The dashboard binds loopback only (`127.0.0.1`). |
 
 **Discovery behavior:**
 
@@ -585,6 +582,24 @@ Display the dashboard status. The output includes whether it runs, its listen po
 
 ```bash
 ./sentinel dashboard status
+```
+
+### dashboard restart
+
+Stop the dashboard and start a fresh process (new PID) on the same port.
+
+```bash
+./sentinel dashboard restart [--port <int>]
+```
+
+PID file: `~/.sentinel/dashboard-{port}.pid`.
+
+### dashboard reload
+
+Send SIGUSR1 to the dashboard. It re-reads configuration and reconnects to the harness without a new PID.
+
+```bash
+./sentinel dashboard reload [--port <int>]
 ```
 
 ### dashboard attach
@@ -738,15 +753,10 @@ If the harness is offline, lists all kits with "unknown" status.
 List all kits discovered in the project directory. The harness scans the project root for directories matching the `{namespace}.{name}` pattern that contain a `kit.yaml` manifest file.
 
 ```bash
-./sentinel sre kit list [flags]
+./sentinel sre kit list
 ```
 
-**Flags:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--json` | `false` | Output the list as JSON instead of a formatted table. |
-| `--filter <prefix>` | (none) | Filter kits by namespace prefix. Example: `--filter sn` shows only kits in the `sn` namespace. |
+`--json` is a global flag. `kit list` has no `--filter` flag.
 
 **Example output:**
 
@@ -871,10 +881,10 @@ Flows are the core executable units in Sentinel -- Lua scripts that perform busi
 
 ### flow run
 
-Execute a flow manually. This is an alias for the top-level `sentinel run` command, placed under `flow` for discoverability.
+Execute a flow manually. This is an alias for the top-level `sentinel run` command, placed under `sre flow` for discoverability.
 
 ```bash
-./sentinel flow run <flow-id> [flags]
+./sentinel sre flow run <flow-id> [flags]
 ```
 
 | Flag | Description |
@@ -887,8 +897,8 @@ Execute a flow manually. This is an alias for the top-level `sentinel run` comma
 **Examples:**
 
 ```bash
-./sentinel flow run sn.core/assistant --param user=test
-./sentinel run sn.core/assistant --params-json '{"message":"hello"}'
+./sentinel sre flow run sn.core-agent/hello --param user=test
+./sentinel run sn.core-agent/hello --params-json '{"message":"hello"}'
 ```
 
 ### flow list
@@ -896,7 +906,7 @@ Execute a flow manually. This is an alias for the top-level `sentinel run` comma
 List all flows discovered within a specific kit. Flows are auto-discovered from the `fl/` directory inside each kit.
 
 ```bash
-./sentinel flow list --kit <kit-id>
+./sentinel sre flow list --kit <kit-id>
 ```
 
 **Example output:**
@@ -920,8 +930,8 @@ Related presets:
 
 ```bash
 ./sentinel sre flow new assistant --kit sn.my-kit --preset agent
-./sentinel connector new lookup --kit sn.my-kit --preset tool
-./sentinel module new knowledge --kit sn.my-kit --preset rag
+./sentinel sre connector new lookup --kit sn.my-kit --preset tool
+./sentinel sre module new knowledge --kit sn.my-kit --preset rag
 ```
 
 ### run
@@ -936,7 +946,7 @@ Execute a flow immediately. This triggers the flow's `main()` function and retur
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `flow-id` | Yes | The fully-qualified flow identifier in `{namespace}-{name}:{flow}` format. Example: `sn-core-agent:assistant`. |
+| `flow-id` | Yes | HTTP path is `/fl/{ns}.{name}/{flow}` (for example `/fl/sn.core-agent/hello`). CLI also accepts the colon form `sn-core-agent:hello`. |
 
 **Flags:**
 
@@ -949,13 +959,16 @@ Execute a flow immediately. This triggers the flow's `main()` function and retur
 
 ```bash
 # Run a flow synchronously
-./sentinel run sn-core-agent:assistant
+./sentinel run sn.core-agent/hello
 
 # Run with parameters
-./sentinel run sn-core-agent:assistant --params-json '{"message": "Hello, world!"}'
+./sentinel run sn.core-agent/hello --params-json '{"message": "Hello, world!"}'
 
 # Run asynchronously (returns execution ID)
-./sentinel run sn-core-agent:assistant --async
+./sentinel run sn.core-agent/hello --async
+
+# Colon form is also accepted
+./sentinel run sn-core-agent:hello
 ```
 
 ---
@@ -969,7 +982,7 @@ Sentinel includes a built-in encrypted vault for storing sensitive values like A
 List all secrets stored in the vault. By default, only metadata (name, creation date, last updated date) is shown -- values are not displayed.
 
 ```bash
-./sentinel secret ls [flags]
+./sentinel sre secret ls [flags]
 ```
 
 **Flags:**
@@ -991,7 +1004,7 @@ github_token      2026-02-08T00:00:00Z     2026-02-08T00:00:00Z
 Create a new secret or update an existing one.
 
 ```bash
-./sentinel secret set <name> [value] [flags]
+./sentinel sre secret set <name> [value] [flags]
 ```
 
 **Arguments:**
@@ -999,32 +1012,31 @@ Create a new secret or update an existing one.
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `name` | Yes | The secret name. Used to retrieve the value in Lua through `ctx.secret("name")`. |
-| `value` | No | The secret value. If omitted, the command enters interactive mode (prompting for the value with masked input) or reads from stdin with `--stdin`. |
+| `value` | No | The secret value. If omitted, the command prompts with masked input, or reads from stdin with `--stdin`. There is no `--interactive` flag. |
 
 **Flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--stdin` | `false` | Read the secret value from standard input. Useful for piping from files or other commands. |
-| `--interactive` | `false` | Prompt for the value with masked input (dots instead of characters). |
-| `--description <string>` | (none) | Optional description of the secret's purpose. |
-| `--tags <string>` | (none) | Comma-separated tags for organizing secrets (for example `prod,api,stripe`). |
+| `-d`, `--description <string>` | (none) | Optional description of the secret's purpose. |
+| `-t`, `--tags <string>` | (none) | Comma-separated tags for organizing secrets (for example `prod,api,stripe`). |
 
 **Examples:**
 
 ```bash
 # Set directly (value visible in process listing -- avoid in production)
-./sentinel secret set slack_token xoxb-1234567890
+./sentinel sre secret set slack_token xoxb-1234567890
 
-# Interactive mode (value is masked)
-./sentinel secret set api_key --interactive
+# Prompted mode (value is masked when the value argument is omitted)
+./sentinel sre secret set api_key
 # Enter value for api_key: ••••••••••••••
 
 # From file
-./sentinel secret set api_key --stdin < /path/to/secret.txt
+./sentinel sre secret set api_key --stdin < /path/to/secret.txt
 
 # With metadata
-./sentinel secret set stripe_key --description "Stripe live API key" --tags "prod,payments"
+./sentinel sre secret set stripe_key -d "Stripe live API key" -t "prod,payments"
 ```
 
 ### secret rm
@@ -1032,7 +1044,7 @@ Create a new secret or update an existing one.
 Delete a secret from the vault.
 
 ```bash
-./sentinel secret rm <name> [flags]
+./sentinel sre secret rm <name> [flags]
 ```
 
 **Flags:**
@@ -1045,10 +1057,10 @@ Delete a secret from the vault.
 
 ```bash
 # With confirmation prompt
-./sentinel secret rm slack_token
+./sentinel sre secret rm slack_token
 
 # Skip confirmation (for scripts)
-./sentinel secret rm slack_token --yes
+./sentinel sre secret rm slack_token --yes
 ```
 
 ---
@@ -1184,6 +1196,19 @@ Shows a summary of total plans, enabled plans, running jobs, and recent failures
 - `sentinel db backup` is kit-scoped SQLite backup tooling.
 - `sentinel backup` is the harness-managed subsystem for scheduled PostgreSQL and folder backups.
 
+### sre storage
+
+Export and import storage-point registrations and credentials.
+
+```bash
+./sentinel sre storage export [output-file]
+./sentinel sre storage export --id <id>
+./sentinel sre storage export --stub <stub>
+./sentinel sre storage import <json-file>
+```
+
+`--id` and `--stub` are mutually exclusive on export. Export writes secrets into the JSON bundle. Restrict the file permissions.
+
 ---
 
 ## Testing Commands
@@ -1291,7 +1316,7 @@ Authenticate with the SKM using the OAuth 2.0 Device Code Flow. This is the same
 2. A verification URL and a user code are displayed.
 3. Your default browser opens to the verification URL automatically.
 4. You enter the code in the browser and approve the authorization.
-5. The CLI polls for completion and stores the resulting tokens at `~/.sentinel/auth.json`.
+5. The CLI polls for completion and stores the resulting tokens at `{SRE}/.sentinel/auth.json` (project-scoped, not `~/.sentinel/auth.json`).
 
 **Example output:**
 
@@ -1304,7 +1329,7 @@ Login successful!
 
 ### logout
 
-Remove stored marketplace authentication tokens from `~/.sentinel/auth.json`.
+Remove stored marketplace authentication tokens from `{SRE}/.sentinel/auth.json`.
 
 ```bash
 ./sentinel logout
@@ -1322,8 +1347,20 @@ The command parses and verifies the Ed25519 signature on the key, then stores it
 
 **License key formats:**
 
-- `sk_free_...` -- Community tier (free).
+- `sk_ce_...` -- Community Edition.
+- `sk_free_...` -- Legacy community / CE prefix.
 - `sk_ent_...` -- Enterprise tier.
+
+### register
+
+Occupy this harness with Sentinel HQ (`license.ndx.au`). Community Edition and Enterprise both occupy. Requires prior `sentinel login`. This is the occupy path.
+
+```bash
+./sentinel register
+./sentinel register --migrate
+```
+
+Online registration can be disabled with `marketplace.registration_enabled=false` in `.sentinel/config.json`.
 
 **Example output:**
 
@@ -1353,19 +1390,33 @@ Remove the stored license key from the configuration. This does not revoke the l
 
 ---
 
+## Approvals
+
+Issue or revoke local exact-action approvals. Requires local operator access (not `--host` remote mode) and an initialized harness `state.db`.
+
+```bash
+./sentinel approvals runtime
+./sentinel approvals grant --actor <actor> --flow <sre-relative.lua> --execution <id> --action-file <file>
+./sentinel approvals revoke <approval-id>
+```
+
+`grant` requires `--actor`, `--flow` (canonical SRE-relative Lua source path), `--execution`, and `--action-file`. `--ttl` defaults to 2 minutes (maximum 10 minutes).
+
+---
+
 ## Configuration Commands
 
-Read and write `.sentinel/config.json` (per-machine infrastructure configuration).
+Read and write `.sentinel/config.json` (per-machine infrastructure configuration). These commands live under `sentinel sre`.
 
 ### config get
 
 Retrieve a configuration value by its dot-notation key path.
 
 ```bash
-./sentinel config get <key>
-./sentinel config get api.port        # prints: 8080
-./sentinel config get log.level       # prints: info
-./sentinel config get tls --json      # prints: {"enabled": false, ...}
+./sentinel sre config get <key>
+./sentinel sre config get api.port        # prints: 8080
+./sentinel sre config get log.level       # prints: info
+./sentinel sre config get tls --json      # prints: {"enabled": false, ...}
 ```
 
 ### config set
@@ -1373,15 +1424,15 @@ Retrieve a configuration value by its dot-notation key path.
 Set a configuration value. Auto-coerces the value to int, bool, or string. Validates the resulting configuration after write.
 
 ```bash
-./sentinel config set <key> <value>
+./sentinel sre config set <key> <value>
 ```
 
 **Examples:**
 
 ```bash
-./sentinel config set api.port 9000
-./sentinel config set log.level debug
-./sentinel config set tls.enabled true
+./sentinel sre config set api.port 9000
+./sentinel sre config set log.level debug
+./sentinel sre config set tls.enabled true
 ```
 
 ### config list
@@ -1389,7 +1440,7 @@ Set a configuration value. Auto-coerces the value to int, bool, or string. Valid
 Show the full configuration as formatted JSON.
 
 ```bash
-./sentinel config list
+./sentinel sre config list
 ```
 
 ### config path
@@ -1397,7 +1448,7 @@ Show the full configuration as formatted JSON.
 Print the resolved path to `.sentinel/config.json`.
 
 ```bash
-./sentinel config path
+./sentinel sre config path
 ```
 
 ---
@@ -1528,7 +1579,7 @@ Display help information for any command. Every command and subcommand supports 
 
 ### version
 
-Display the Sentinel version string and build information.
+Display the Sentinel version string. The unreleased development value is `v0.1.1-dev`. Output is `sentinel version %s` only.
 
 ```bash
 ./sentinel version
@@ -1594,17 +1645,17 @@ This walkthrough covers creating a new project, adding a kit with a flow, and ru
 # Step 1: Build the binary (if not already done)
 go build -tags dev -o sentinel ./cmd/sentinel
 
-# Step 2: Initialize a new project
+# Step 2: Initialize a new project (no starter kits unless you pass --starter-kits)
 ./sentinel sre init my-project
 # Follow the interactive prompts or use --no-input for defaults
 
-# Step 3: Start the harness and dashboard together
+# Step 3: Start the harness (dashboard is a separate process)
 ./sentinel harness start -p my-project
-# Harness: http://localhost:8080
-# Dashboard: http://localhost:9090
+# Harness: http://localhost:8080 (listens on all interfaces; firewall it)
+# Dashboard (loopback only): ./sentinel dashboard start --port 9090
 
 # Step 4: Open the dashboard in your browser
-# Navigate to http://localhost:9090 to see the UI
+# Navigate to http://127.0.0.1:9090 to see the UI (loopback only)
 
 # Step 5: Create a new kit
 ./sentinel sre kit new acme.hello --desc "Hello world example" -p my-project
@@ -1615,6 +1666,7 @@ go build -tags dev -o sentinel ./cmd/sentinel
 # Step 7: The harness hot-reloads automatically when files change.
 # Run the flow:
 ./sentinel run acme.hello/greet -p my-project
+# HTTP equivalent: POST /fl/acme.hello/greet/run
 ```
 
 ### Adding and Using Secrets
@@ -1622,12 +1674,12 @@ go build -tags dev -o sentinel ./cmd/sentinel
 Secrets allow your flows to access sensitive values like API keys without hardcoding them.
 
 ```bash
-# Step 1: Set a secret (interactive mode for safety)
-./sentinel secret set stripe_api_key --interactive -p my-project
+# Step 1: Set a secret (omit the value to prompt with masked input)
+./sentinel sre secret set stripe_api_key -p my-project
 # Enter value for stripe_api_key: ••••••••••••••
 
 # Step 2: Verify the secret was stored
-./sentinel secret ls -p my-project
+./sentinel sre secret ls -p my-project
 
 # Step 3: Use in a Lua flow
 # In your .lua file:
@@ -1716,8 +1768,8 @@ curl -H "Authorization: Bearer <your-token>" https://localhost:8443/hl
 | `project not found` | The `-p` path does not point to a valid SRE directory. | Make sure that the directory exists and contains `sentinel.yaml`. |
 | `vault locked` | The vault is encrypted but `SENTINEL_VAULT_PASSPHRASE` is not set. | Set the environment variable before starting the harness. |
 | `port already in use` | Another process is listening on the requested port. | Use a different `--port` value, or use `--force-reset` to kill the conflicting Sentinel process. |
-| `invalid flow ID` | The flow identifier does not match `{namespace}-{name}:{flow}` format. | Use the correct format, for example `acme-billing:process-payment`. |
-| `secret not found` | The requested secret does not exist in the vault. | Create it with `sentinel secret set`. |
+| `invalid flow ID` | The flow identifier does not match `{ns}.{name}/{flow}` or `{ns}-{name}:{flow}`. | Use the HTTP form `/fl/acme.billing/process-payment` or the colon form `acme-billing:process-payment`. |
+| `secret not found` | The requested secret does not exist in the vault. | Create it with `sentinel sre secret set`. |
 | `flow timeout` | The flow's `main()` function exceeded the execution timeout. | Increase `lua.execution_timeout` in `.sentinel/config.json` (default: 30 seconds). |
 | `debug mode is disabled in production builds` | A release build has `api.debug_mode: true` in config. | Set `api.debug_mode` to `false` and configure `api.tokens` with at least one authentication token. |
 | `api.tokens cannot be empty in production mode` | `api.debug_mode` is `false` but no tokens are configured. | Add at least one token to `api.tokens` in `.sentinel/config.json`, or set `api.debug_mode` to `true` for development. |

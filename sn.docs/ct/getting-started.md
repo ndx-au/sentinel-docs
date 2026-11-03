@@ -24,7 +24,7 @@ You write workflow logic in Lua. Sentinel runs the workflows and manages their t
 
 - **Real code, not YAML pipelines or visual nodes.** Your flows are Lua scripts with full programming constructs: loops, conditionals, error handling, string manipulation, HTTP calls. You are not limited to what a UI builder exposes.
 - **Git-native by design.** Your entire project lives in a plain directory that you commit to Git. There is no separate database of workflow definitions, no export/import dance, no configuration drift. Git is the source of truth.
-- **Single binary deployment.** The `sentinel` binary embeds Lua, SQLite, an encrypted vault, a web server, a cron scheduler, and a WebSocket bus. You copy the binary to a host and point it at an SRE folder.
+- **Single binary deployment.** The `sentinel` binary embeds Lua, SQLite, an encrypted vault, a web server, and a cron scheduler. A WebSocket bus is available when `ws.enabled` is true in `.sentinel/config.json`. You copy the binary to a host and point it at an SRE folder.
 - **AI-first architecture.** Every code file gets an auto-generated `.md` "skill twin" that provides persistent context for AI agents. The HTTP API uses a brevity regime (short two-character endpoints like `/fl`, `/ex`, `/lg`) optimized for token-efficient consumption by language models. Sentinel is designed to be operated by humans and AI agents equally well.
 - **Kit-based modularity.** Logic is organized into "kits" -- self-contained directories with their own flows, forms, databases, connectors, and web pages. Kits are the unit of reuse: you can share them, install them from a marketplace, or compose multiple kits in one project.
 
@@ -43,7 +43,7 @@ The harness is the `sentinel` binary itself. It is the engine that does all the 
 - Executes Lua flows in a sandboxed virtual machine when triggered.
 - Manages an encrypted secret vault for API keys and credentials.
 - Maintains an SQLite database of execution history, logs, and state.
-- Provides a WebSocket bus for real-time events.
+- Provides a WebSocket bus for real-time events when `ws.enabled` is true (default is false).
 
 You do not modify the harness. It is a compiled binary that you download or build once.
 
@@ -58,7 +58,7 @@ A Git repository can contain multiple SREs in subfolders. The default model plac
 
 When the harness starts, it scans the SRE directory, discovers all kits, registers all flows and triggers, and begins serving the API. Everything the harness needs is in this folder.
 
-New projects from `sentinel sre init` contain repository files (`CLAUDE.md`, `.gitignore`, `.gitattributes`, operator `README.md`) and a minimal `sentinel.yaml`. They contain **no kits by default**. Starter content comes from [ndx-video/sre-init](https://github.com/ndx-au/sre-init). Installation flags include `--with-bundle core`, `--starter-kits`, and `--with-local ../sre-init` for offline use. The WordPress profiles `--wp-central` / `--wp-edge` skip the wizard and install only WordPress kits. Marketplace installation uses `--with-kit` / `--with-bundle` when SKM is configured.
+New projects from `sentinel sre init` contain repository files (`CLAUDE.md`, `.gitignore`, `.gitattributes`, operator `README.md`, `AGENTS.md`) and a minimal `sentinel.yaml`. They contain **no kits by default**. `--starter-kits` defaults to **false**. Starter content comes from [ndx-au/sre-init](https://github.com/ndx-au/sre-init). Installation flags include `--with-bundle core`, `--starter-kits`, `--with-local <path>` for a local sre-init checkout, and `--force`. The WordPress profiles `--wp-central` / `--wp-edge` skip the wizard. `--wp-central` installs `sn.wp-central` and `sn.wp-preview`. Marketplace installation uses `--with-kit` / `--with-bundle` when SKM is configured.
 
 ### Kits
 
@@ -68,12 +68,13 @@ Kit directories follow a `{namespace}.{name}` naming convention. For example, `s
 
 ### Flows
 
-Flows are Lua scripts that do actual work. Every flow has up to four lifecycle functions:
+Flows are Lua scripts that do actual work. Registration requires three lifecycle functions. Two more hooks are optional:
 
-- `setup()` -- runs first, for initialization (optional).
+- `setup()` -- runs first, for initialization (required).
 - `main()` -- the primary logic (required).
-- `cleanup()` -- runs after main completes, even on success (optional).
-- `failed(err)` -- runs only if main throws an error (optional).
+- `cleanup()` -- runs last, after success or failure (required).
+- `failed(err)` -- runs if setup or main throws an error (optional; auto no-op if omitted).
+- `timeout()` -- runs if the execution deadline is reached (optional).
 
 Flows are discovered automatically from `fl/` directories inside kits. You do not need to register them anywhere -- just create a `.lua` file in the right place and restart (or let hot-reload pick it up).
 
@@ -97,11 +98,13 @@ Because the SRE is a plain folder, you simply `git init`, commit your files, and
 - **MacOS** -- Fully supported for development. Works on both Intel and Apple Silicon.
 - **Windows** -- Supported for development. Use `sentinel.exe` instead of `sentinel` in all commands. Not recommended for production.
 
-**Not required:**
+**Not required for core orchestration:**
 - No Docker, no container runtime.
 - No database server (SQLite is embedded).
 - No message broker (triggers are built in).
 - No language runtime (Lua VM is embedded in the binary).
+
+Docker is required for optional managed stacks (WordPress `--wp-central`, ccms Graphile, managed RAG).
 
 ---
 
@@ -114,12 +117,13 @@ This walkthrough takes you from zero to a running Sentinel instance with an exec
 Download the pre-built binary for your platform, or build from source:
 
 ```bash
-# If building from source (requires Go 1.25+):
+# If building from source (requires Go 1.26.10+):
 go build -tags dev -o sentinel ./cmd/sentinel
 
 # Verify it works:
 ./sentinel version
-# Output: vX.Y.Z-dev (build YYYY-MM-DD)
+# Output: sentinel version v0.1.1-dev
+# Release builds substitute the git tag. There is no build-date suffix.
 ```
 
 On Windows, the binary is `sentinel.exe`. All subsequent examples use `sentinel` -- substitute `sentinel.exe` on Windows.
@@ -142,9 +146,10 @@ sentinel sre init
 **SRE-level files** (written to the path specified by `-p`/`--project`, defaults to `.`):
 - `sentinel.yaml` -- The project manifest. Contains the project name, description, and version. This file is git-tracked and defines your project's identity.
 - `.sentinel/config.json` -- Machine-local configuration (API port, log level, TLS configuration). This is gitignored because it varies per deployment.
-- `.sentinel/vault.db` -- The encrypted secret vault (created on first use).
-- Bundled starter kits such as `sn.core-agent/`, `sn.core-rag/`, `sn.tools-http/`, `sn.supervisor/`, `sn.eg-support/`, `sn.eg-itops/`, `sn.eg-rag-chat/`, plus the legacy `sn.example-support/` and `sn.example-itops/` compatibility kits.
-- Optional WordPress profiles: `sentinel sre init --wp-central` installs `sn.wp-central/`, and `sentinel sre init --wp-edge` installs `sn.wp-edge/`. Profile flags (`--wp-central`, `--wp-edge`) suppress default starter kits and skip the interactive wizard.
+- `.sentinel/harness.env.example` and `.env.example` -- operator env templates.
+- `.sentinel/vault.db` -- The encrypted secret vault (created at init if a passphrase is set, otherwise on first secret write).
+- No kits unless you pass `--starter-kits`, `--with-bundle`, `--with-kit`, `--wp-central`, or `--wp-edge`. The `core` bundle from sre-init includes kits such as `sn.core-agent/`.
+- Optional WordPress profiles: `sentinel sre init --wp-central` installs `sn.wp-central/` and `sn.wp-preview/`. `sentinel sre init --wp-edge` installs `sn.wp-edge/`. Profile flags skip the interactive wizard.
 - Optional post-init provisioning: `sentinel sre init ... --with-kit acme.foo,acme.bar` and `sentinel sre init ... --with-bundle core,wp-central`.
 - `sentinel sre init --wp-central` also seeds `docker-compose.wp-central.yaml` so a local managed WordPress stack can be started with `sentinel harness start --compose-up wp-central`.
 - That development compose file uses floating `:latest` WordPress and MariaDB images and persists the WordPress stack under `./_data/wp-central/`.
@@ -171,8 +176,10 @@ sentinel harness start
 3. It scans the SRE directory for kit directories (any folder matching the `{namespace}.{name}` pattern with a `kit.yaml` file).
 4. For each discovered kit, it loads flows from `fl/`, registers connectors from `cn/`, loads modules from `md/`, and indexes forms from `fm/`.
 5. It parses trigger definitions and schedules cron jobs, registers webhook endpoints, and subscribes to event channels.
-6. It starts the HTTP API server on the configured port (default 8080).
-7. It starts the WebSocket bus for real-time event streaming.
+6. It starts the HTTP API server on the configured port (default 8080). The process listens on all interfaces (`:8080`). Firewall unused exposure.
+7. If `ws.enabled` is true, it starts the WebSocket bus for real-time event streaming.
+
+A new project without kits reports zero kits and zero flows until you create or install some.
 
 Example output:
 
@@ -180,8 +187,8 @@ Example output:
 Sentinel vX.Y.Z starting...
   Project: my-project
   API:     http://localhost:8080
-  Kits:    6 loaded (starter kits)
-  Flows:   6+ registered
+  Kits:    0 loaded
+  Flows:   0 registered
   Triggers: 0 active
 Press Ctrl+C to stop
 ```
@@ -210,9 +217,9 @@ You can also use the longer form:
 sentinel dashboard start localhost:8080
 ```
 
-Open your browser to `http://localhost:9090` to see the dashboard.
+Open your browser to `http://127.0.0.1:9090` to see the dashboard. The dashboard binds **loopback only** (`127.0.0.1`). Remote operators need a tunnel into that namespace.
 
-The dashboard is optional. Everything it does can also be done through the REST API or CLI. But it is very useful for development, debugging, and demonstration.
+The dashboard is optional. Everything it does can also be done through the REST API or CLI. It is useful for development, debugging, and demonstration.
 
 Recent operator pages beyond flows include:
 - `/storage` for S3-compatible storage points.
@@ -233,9 +240,15 @@ For multimodal retrieval, operators typically:
 3. Select that provider in `/rag` as the `Embedding Provider`.
 4. Choose the embedding model and initialize or backfill the corpus.
 
-### 5. Create Your First Flow
+### 5. Create a Kit and Your First Flow
 
-Create a file at `my-project/sn.core-agent/fl/hello.lua` with the following content:
+Default init does not install kits. Create a kit, then add a flow:
+
+```bash
+sentinel sre kit new acme.main --desc "Main automation kit"
+```
+
+Create `acme.main/fl/hello.lua` with the following content:
 
 ```lua
 -- hello.lua: A simple greeting flow
@@ -248,7 +261,7 @@ function setup()
 end
 
 function main(params)
-    -- main(params) is where your logic lives. This is the only required function.
+    -- main(params) is where your logic lives.
     -- The ctx global provides logging, secrets, execution metadata, and more.
     -- The params argument is a Lua table containing trigger data passed to this execution.
     ctx.log("info", "Hello from Sentinel!")
@@ -280,22 +293,24 @@ If hot-reload is enabled in your `sentinel.yaml` (it is by default for new proje
 **Through the REST API:**
 
 ```bash
-curl -X POST http://localhost:8080/fl/sn-core-agent:hello/run \
+curl -X POST http://localhost:8080/fl/acme.main/hello/run \
   -H "Content-Type: application/json" \
   -d '{"name": "Alice"}'
 ```
 
+The canonical HTTP path is `/fl/{ns}.{name}/{flow}`. The colon form `acme-main:hello` is a legacy alias.
+
 The response will include an execution ID:
 
 ```json
-{"ok": true, "eid": "exec_abc123", "fid": "sn-core-agent:hello", "st": "completed"}
+{"ok": true, "eid": "exec_abc123", "fid": "acme-main:hello", "st": "completed"}
 ```
 
 **Through the Dashboard:**
 
-1. Open `http://localhost:9090`.
+1. Open `http://127.0.0.1:9090`.
 2. Navigate to the Flows section.
-3. Find `sn-core-agent:hello`.
+3. Find `acme.main/hello` (internal ID `acme-main:hello`).
 4. Enter parameters: `{"name": "Alice"}`.
 5. Click Run.
 
@@ -327,16 +342,17 @@ A flow is an executable Lua script that performs work. Flows are the fundamental
 
 **Lifecycle functions:**
 
-Every flow can define up to four functions. Only `main()` is required:
+Registration requires `setup`, `main`, and `cleanup`. `failed` and `timeout` are optional:
 
 | Function | When It Runs | Required? | Typical Use |
 |----------|-------------|-----------|-------------|
-| `setup()` | First, before main | No | Initialize state, validate preconditions, acquire resources |
+| `setup()` | First, before main | Yes | Initialize state, validate preconditions, acquire resources |
 | `main()` | After setup | Yes | Core business logic |
-| `cleanup()` | After main, always | No | Release resources, send completion notifications |
-| `failed(err)` | Only if main errors | No | Error alerting, rollback, incident logging |
+| `cleanup()` | Last, after success or failure | Yes | Release resources, send completion notifications |
+| `failed(err)` | If setup or main errors | No | Error alerting, rollback, incident logging |
+| `timeout()` | If the execution deadline is reached | No | Deadline-specific cleanup |
 
-The execution order is: `setup()` then `main()` then `cleanup()`. If `main()` throws an error, `failed(err)` runs before `cleanup()`.
+The execution order is: `setup()` then `main()` then `cleanup()`. If setup or main throws an error, `failed(err)` runs before `cleanup()`.
 
 **The `ctx` global:**
 
@@ -355,15 +371,15 @@ ctx.trigger_type            -- How this flow was triggered ("manual", "cron", "w
 
 **Sandbox restrictions:**
 
-Flows run in a sandboxed Lua VM. You cannot access the filesystem directly, spawn processes, or use `os.execute()`. All external interaction goes through the Sentinel API (`sn.*` namespaces). This is a security feature -- it means a flow cannot compromise the host system.
+Flows run in a sandboxed Lua VM. The `os` library is not loaded. You cannot spawn processes. Filesystem access goes through `ctx.fs` and is subject to FS Control (rooted paths, approvals). Other external interaction goes through `sn.*` APIs. See [Security readiness](/security-readiness).
 
 **Auto-discovery:**
 
 Flows are discovered automatically from `fl/` directories inside kits. The flow ID is derived from the kit directory and filename:
 
 ```
-sn.core-agent/fl/hello.lua      --> Flow ID: sn-core-agent:hello
-acme.billing/fl/invoice.lua     --> Flow ID: acme-billing:invoice
+acme.main/fl/hello.lua          --> HTTP /fl/acme.main/hello  (internal ID acme-main:hello)
+acme.billing/fl/invoice.lua     --> HTTP /fl/acme.billing/invoice (internal ID acme-billing:invoice)
 ```
 
 You do not need to register flows in `kit.yaml` or any configuration file. Just create the `.lua` file in the right directory.
@@ -399,11 +415,11 @@ acme.billing/
     new-invoice.yaml
   pg/                # Pages -- YAML-defined web UI pages
     dashboard.yaml
-  tp/                # Trigger definitions (YAML)
-    schedules.yaml
+  tp/                # Go HTML templates (kit pages / fcms render)
+    home.gohtml
   pb/                # Public assets (CSS, JS, images)
     styles.css
-  dd/                # Data definitions (schemas, seed data)
+  dd/                # Data definitions (SQL schema for kit SQLite)
     schema.sql
 ```
 
@@ -482,7 +498,7 @@ Secrets are encrypted key-value pairs for storing sensitive data like API keys, 
 
 ```bash
 # Via CLI
-sentinel secret set stripe_api_key sk-live-abc123
+sentinel sre secret set stripe_api_key sk-live-abc123
 
 # Via API
 curl -X POST http://localhost:8080/sc/stripe_api_key \
@@ -517,10 +533,10 @@ Inside flows, you have access to a rich set of APIs through the `ctx` and `sn` g
 | `sn.json.*` | JSON encoding/decoding | `sn.json.enc(table)`, `sn.json.dec(string)` |
 | `sn.crypto.*` | Cryptography | `sn.crypto.hmac(alg, key, data)`, `sn.crypto.sha256(data)` |
 | `sn.time.*` | Time utilities | `sn.time.now()`, `sn.time.format()` |
-| `sn.cms.*` | CMS content access | `sn.cms.list(collection)`, `sn.cms.get(collection, slug)` |
+| `sn.cms.*` | CMS content access | `sn.cms.get(slug)`, `sn.cms.list(prefix?)` |
 | `sn.sleep(n)` | Pause execution | `sn.sleep(5)` -- sleep 5 seconds (max 300) |
 | `sn.md.*` | Built-in modules | AI helpers, session management, routing |
-| `sn.cn.*` | Built-in connectors | HTTP, SMTP, file operations |
+| `sn.cn.*` | Built-in connectors | `sn.cn.sn.http.exec`, `sn.cn.sn.smtp.exec`, `sn.cn.sn.file.exec` |
 | `sentinel.emit()` | Event emission | `sentinel.emit("order.created", {id = 123})` |
 
 See the [Lua API Reference](/lua-api) for complete documentation of every function.
@@ -560,28 +576,25 @@ repo-root/                          # Git repository root (where init runs)
     config.json                     #   - API port, log level, TLS settings
     vault.db                        #   - Encrypted secret storage (AES-256-GCM)
     state.db                        #   - Execution history, logs, audit trail
-    cms.db                          #   - Markdown parse cache (bbolt; see docs/16-SENTINEL-DIRECTORY.md)
+    cms.db                          #   - Markdown parse cache (bbolt; see /sentinel-directory)
     certs/                          #   - TLS certificates (if configured)
     data/
       uploads/                      #   - Form file uploads
-      sn.core.db                    #   - Per-kit SQLite database
+      acme.main.db                  #   - Per-kit SQLite ({ns}.{name}.db)
 
-  sn.core-agent/                    # Starter agent kit
-  sn.core-rag/                      # Starter RAG kit
-  sn.tools-http/                    # Starter tool connector kit
-  sn.supervisor/                    # Starter supervisor kit
+  acme.main/                        # A kit you create (none are installed by default)
     kit.yaml                        #   Kit manifest
     kit.yaml.md                     #   Skill twin for manifest
     fl/                             #   Flows directory
-      assistant.lua                 #     Example flow
-      assistant.lua.md              #     Skill twin for the flow
+      hello.lua                     #     Example flow
+      hello.lua.md                  #     Skill twin for the flow
     cn/                             #   Connectors directory (reusable service wrappers)
     md/                             #   Modules directory (shared Lua libraries)
     fm/                             #   Forms directory (YAML form definitions)
     pg/                             #   Pages directory (web UI definitions)
     pb/                             #   Public assets (CSS, JS, images)
-    tp/                             #   Trigger definitions (YAML)
-    dd/                             #   Data definitions (schemas, seed data)
+    tp/                             #   Go HTML templates
+    dd/                             #   Data definitions (SQL schema)
 ```
 
 For a **multi-SRE repo** (for example `sentinel sre init -p central --wp-central` then `sentinel sre init -p edge --wp-edge`):
@@ -619,16 +632,23 @@ Key observations:
 ### Create a New Kit
 
 ```bash
-sentinel sre kit new --namespace acme --name billing --description "Billing and invoicing workflows"
+sentinel sre kit new acme.billing --desc "Billing and invoicing workflows"
 ```
 
 This creates the `acme.billing/` directory with a `kit.yaml` manifest and the standard subdirectory structure. You can then start adding flows to `acme.billing/fl/`.
 
 ### Add a Cron-Triggered Flow
 
-Create `sn.core-agent/fl/daily-report.lua`:
+Create `acme.main/fl/daily-report.lua`:
 
 ```lua
+triggers = {
+    cron("0 8 * * *"),
+}
+
+function setup()
+end
+
 function main(params)
     ctx.log("info", "Generating daily report...")
 
@@ -646,15 +666,25 @@ function main(params)
 
     return { orders = rows[1].total }
 end
+
+function cleanup()
+end
 ```
 
-Then define the trigger directly in the flow using `triggers = { cron("0 8 * * *") }` (daily at 8 AM).
+Cron expressions are 5-field (`Minute Hour Dom Month Dow`). The `triggers = {}` table is parsed at load time. Do not call `cron()` inside `setup()`.
 
 ### Set Up a Webhook Receiver
 
-Create `sn.core-agent/fl/github-webhook.lua`:
+Create `acme.main/fl/github-webhook.lua`:
 
 ```lua
+triggers = {
+    webhook("github"),
+}
+
+function setup()
+end
+
 function main(params)
     local event_type = params.event
     local payload = params.payload and sn.json.dec(params.payload)
@@ -667,6 +697,9 @@ function main(params)
     end
 
     return { ok = true, event = event_type }
+end
+
+function cleanup()
 end
 ```
 
@@ -681,11 +714,11 @@ curl -X POST http://localhost:8080/wh/github \
 
 ### Create a Web Form
 
-1. Define the form in `sn.core-agent/fm/feedback.yaml`:
+1. Define the form in `acme.main/fm/feedback.yaml`:
 
 ```yaml
 name: feedback
-stub: user-feedback
+stub: kf.acme.main.feedback
 fields:
   - name: email
     type: email
@@ -702,13 +735,16 @@ fields:
     required: false
 ```
 
-2. Create a flow that handles submissions in `sn.core-agent/fl/feedback-handler.lua`:
+2. Create a flow that handles submissions in `acme.main/fl/feedback-handler.lua`:
 
 ```lua
+function setup()
+end
+
 function main(params)
-    local email = ctx.fm.feedback.email
-    local rating = ctx.fm.feedback.rating
-    local comments = ctx.fm.feedback.comments
+    local email = ctx.fm.kf.acme.main.feedback.email
+    local rating = ctx.fm.kf.acme.main.feedback.rating
+    local comments = ctx.fm.kf.acme.main.feedback.comments
 
     ctx.log("info", "Feedback received from " .. (email or "unknown"))
 
@@ -720,9 +756,12 @@ function main(params)
 
     return { ok = true, message = "Thank you for your feedback!" }
 end
+
+function cleanup()
+end
 ```
 
-3. Access the form at `http://localhost:8080/kt/sn/core-agent/fm/feedback`.
+3. Access the form at `http://localhost:8080/kt/acme/main/fm/feedback`.
 
 ---
 
@@ -736,7 +775,7 @@ Use this table to select the next guide for your task:
 | Build complex kits with forms, pages, and databases | [Kit Development Guide](/kit-development) |
 | Master workflow patterns (webhooks, events, error handling) | [Workflows and Patterns](/workflows-and-patterns) |
 | Understand all HTTP API endpoints for integration | [HTTP API Reference](/api-reference) |
-| Configure security, TLS, and production deployment | [Configuration Guide](/configuration-guide) |
+| Configure security, TLS, and production deployment | [Configuration Guide](/configuration-guide) and [Security readiness](/security-readiness) |
 | Deploy to production with Cloudflare and Caddy | [Edge Deployment Guide](/edge-deployment) |
 | Learn all CLI commands and flags | [CLI Reference](/cli-reference) |
 | Set up automated testing and probes | [Adversarial Testing](/adversarial-testing) |
@@ -754,8 +793,8 @@ Use this table to select the next guide for your task:
                                   v
                   +-------------------------------+
                   |       Dashboard UI            |
-                  |    http://localhost:9090      |
-                  |   (separate process, BFF)     |
+                  |    http://127.0.0.1:9090      |
+                  |   (loopback BFF process)      |
                   +---------------+---------------+
                                   |
                              REST API
@@ -789,7 +828,7 @@ Use this table to select the next guide for your task:
                                   |
               +-------------------+-------------------+
               |                   |                   |
-         sn.core-agent/     acme.billing/       acme.blog/
+         acme.main/         acme.billing/       acme.blog/
          kit.yaml            kit.yaml            kit.yaml
          fl/ cn/ md/         fl/ cn/ md/         fl/ md/ pg/
          fm/ pg/ pb/         fm/                 fm/ pb/
@@ -804,7 +843,7 @@ Use this table to select the next guide for your task:
 - **Health check** -- `curl http://localhost:8080/hl` returns a structured status of all subsystems.
 - **CLI help** -- `sentinel --help` or `sentinel [command] --help` for any subcommand.
 - **Real-time logs** -- View in the dashboard or stream through `curl http://localhost:8080/ex/{id}/lg`.
-- **System specs** -- Machine-readable YAML files in `system-specs/` define every API, schema, and convention.
+- **System specs** -- Machine-readable YAML files live in the harness repo (`github.com/ndx-au/sentinel`, directory `system-specs/`). They are not in this docs tree.
 - **Troubleshooting** -- See [Troubleshooting and FAQ](/troubleshooting-faq) for common issues and solutions.
 - **Documentation hub** -- Return to the [Documentation Index](/index) for the full list of guides.
 
