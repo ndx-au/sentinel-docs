@@ -9,3 +9,5 @@ cms_render_cache_ttl_sec: 600
 branding:
   title: Sentinel Docs
   favicon: /pb/favicon.ico
+
+cms_theme: showcase

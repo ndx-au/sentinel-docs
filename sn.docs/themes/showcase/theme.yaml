@@ -1,0 +1,6 @@
+templates:
+  docs.gohtml: atlas.xsl
+  atlas: atlas.xsl
+  folio: folio.xsl
+  console: console.xsl
+  docs: atlas.xsl
