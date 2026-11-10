@@ -56,34 +56,73 @@ Absorbs Headgres collection-CMS value into the harness (one binary).
 
 ```text
 {ns}.{name}/
-  kit.yaml
+  kit.yaml            # optional ccms_theme: <theme-name>
   dd/                 # ordered SQL migrations (lexicographic)
     001_*.sql
+  collections/        # identity, publication, GraphQL overrides
+    pages.yaml
   forms/
     draft/*.md        # not shippable
-    pub/*.md          # MD + YAML frontmatter → schema/table/columns
+    pub/*.md          # MD + YAML frontmatter; prefer collection: name
                       # (skill twins `*.md.md` are ignored by form discovery)
-  tp/                 # optional gohtml white-label
+  themes/<name>/      # optional XSLT themes (ccms.list/detail/form/saved)
+  tp/                 # optional legacy gohtml white-label
   fl/                 # OPTIONAL after-save plugins only
 ```
+
+### Collection descriptor
+
+```yaml
+name: pages
+title: Pages
+source:
+  schema: public
+  table: pages
+keys:
+  - name: id
+    type: bigint
+fields:
+  - name: title
+    column: title
+    expose: public
+  - name: published
+    column: published
+    expose: editor
+publication:
+  public: false          # true enables anonymous /ccms/.../collections/...
+  row_policy: published
+```
+
+`forms/pub` means shippable form, **not** anonymous access. Public browse requires
+`publication.public: true`, an enabled kit, and `data_plane.public_graphile_url`.
 
 ### Form frontmatter
 
 ```yaml
 name: pages
-table: pages
+collection: pages       # preferred; binds to collections/pages.yaml
+table: pages            # legacy adapter when collection: is absent
 schema: public
 title: Pages
-template: form.gohtml   # optional kit tp/
+template: form.gohtml   # optional kit tp/ editor
+list_template: list.gohtml  # optional kit tp/ list
 fields:
   - column: slug
     type: text
     required: true
 ```
 
+### Themes
+
+- Kit setting `ccms_theme` (separate from fcms `cms_theme`).
+- Manifest slots: `ccms.list`, `ccms.detail`, `ccms.form`, `ccms.saved`.
+- Presentation XML is internal (`urn:ndx:sentinel:ccms:1`); not a public XML API.
+- An explicit broken theme fails visibly; it does not fall back to an unrelated layout.
+
 ### Writes and validation
 
 - Editor submit: harness → **Graphile HTTP** (no superuser SQL bypass).
+- Public reads use **`public_graphile_url` only** (never the editor/owner peer).
 - `sentinel ccms validate` — L0 structure + L1 live catalog.
 - `sentinel ccms migrate` — conscious apply of `dd/*.sql` (never on harness start / kit install).
 - Production: **dump/backup before migrate**.
@@ -105,7 +144,9 @@ Graphile stays on **1880** unless you override `SENTINEL_GRAPHILE_PORT`.
 data_plane:
   enabled: true
   graphile_port: 1880
-  database_url: postgres://sentinel:sentinel@127.0.0.1:15432/sentinel_ccms
+  graphile_url: http://127.0.0.1:1880
+  public_graphile_url: http://127.0.0.1:1881   # scoped anonymous-read peer
+  database_url: postgres://OWNER:ENCODED_PASSWORD@DB_HOST:5432/CCMS_DB # migrate/catalog only; prefer env
 ```
 
 ```bash
@@ -123,16 +164,18 @@ sentinel ccms install-refkit -p ./sre   # sn.ccms-pages-posts
 
 ### HTTP
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/ccms/status` | Data plane + migrations + form count |
-| GET | `/ccms/forms` | Live pub form catalog |
-| GET/POST | `/ccms/{ns}/{name}/forms/{form}` | Editor render / Graphile submit |
-| GET | `/ccms/{ns}/{name}/forms/{form}/list` | Minimal list surface |
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/ccms/status` | harness | Data plane + migrations + form count |
+| GET | `/ccms/forms` | harness | Live pub form catalog |
+| GET/POST | `/ccms/{ns}/{name}/forms/{form}` | harness | Editor render / Graphile submit |
+| GET | `/ccms/{ns}/{name}/forms/{form}/list` | harness | Editor list surface |
+| GET | `/ccms/{ns}/{name}/collections/{collection}` | anonymous if published | Public list HTML |
+| GET | `/ccms/{ns}/{name}/collections/{collection}/{key}` | anonymous if published | Public detail HTML |
 
 ### Dashboard
 
-**Collections** (sidebar → `/collections`) replaces Headgres-studio. It provides plane descriptions, data plane status, migration lists, and a catalog of public forms. Catalog links open harness editors. It does not need a second studio binary.
+**Collections** (sidebar → `/collections`) replaces Headgres-studio. It provides plane descriptions, data plane status, migration lists, and a catalog of public forms. Catalog links currently open harness editors at the attached origin; the dashboard session is not forwarded. Dedicated BFF editor routes are deferred; see [CCMS XML themes](/ccms-xml-themes) for the verified scope and remaining contract work.
 
 ### Lua
 
