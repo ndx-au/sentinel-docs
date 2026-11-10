@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-10-27T07:17:37Z"
+  at: "2026-11-10T00:30:05Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -89,6 +89,9 @@ sources:
   - id: agentic-ai-uat
     resource: ../sn.docs/ct/agentic-ai-uat.md
     title: Agentic AI — UAT trail
+  - id: ccms-xml-themes
+    resource: ../sn.docs/ct/ccms-xml-themes.md
+    title: CCMS XML views and XSLT themes
   - id: security-readiness
     resource: ../sn.docs/ct/security-readiness.md
     title: Security readiness and shared responsibility
@@ -180,6 +183,9 @@ toc:
   - title: Agentic AI — UAT trail
     path: ../sn.docs/ct/agentic-ai-uat.md
     type: Playbook
+  - title: CCMS XML views and XSLT themes
+    path: ../sn.docs/ct/ccms-xml-themes.md
+    type: Guide
   - title: Security readiness and shared responsibility
     path: ../sn.docs/ct/security-readiness.md
     type: Guide
@@ -19511,34 +19517,73 @@ Absorbs Headgres collection-CMS value into the harness (one binary).
 
 ```text
 {ns}.{name}/
-  kit.yaml
+  kit.yaml            # optional ccms_theme: <theme-name>
   dd/                 # ordered SQL migrations (lexicographic)
     001_*.sql
+  collections/        # identity, publication, GraphQL overrides
+    pages.yaml
   forms/
     draft/*.md        # not shippable
-    pub/*.md          # MD + YAML frontmatter → schema/table/columns
+    pub/*.md          # MD + YAML frontmatter; prefer collection: name
                       # (skill twins `*.md.md` are ignored by form discovery)
-  tp/                 # optional gohtml white-label
+  themes/<name>/      # optional XSLT themes (ccms.list/detail/form/saved)
+  tp/                 # optional legacy gohtml white-label
   fl/                 # OPTIONAL after-save plugins only
 ```
+
+#### Collection descriptor
+
+```yaml
+name: pages
+title: Pages
+source:
+  schema: public
+  table: pages
+keys:
+  - name: id
+    type: bigint
+fields:
+  - name: title
+    column: title
+    expose: public
+  - name: published
+    column: published
+    expose: editor
+publication:
+  public: false          # true enables anonymous /ccms/.../collections/...
+  row_policy: published
+```
+
+`forms/pub` means shippable form, **not** anonymous access. Public browse requires
+`publication.public: true`, an enabled kit, and `data_plane.public_graphile_url`.
 
 #### Form frontmatter
 
 ```yaml
 name: pages
-table: pages
+collection: pages       # preferred; binds to collections/pages.yaml
+table: pages            # legacy adapter when collection: is absent
 schema: public
 title: Pages
-template: form.gohtml   # optional kit tp/
+template: form.gohtml   # optional kit tp/ editor
+list_template: list.gohtml  # optional kit tp/ list
 fields:
   - column: slug
     type: text
     required: true
 ```
 
+#### Themes
+
+- Kit setting `ccms_theme` (separate from fcms `cms_theme`).
+- Manifest slots: `ccms.list`, `ccms.detail`, `ccms.form`, `ccms.saved`.
+- Presentation XML is internal (`urn:ndx:sentinel:ccms:1`); not a public XML API.
+- An explicit broken theme fails visibly; it does not fall back to an unrelated layout.
+
 #### Writes and validation
 
 - Editor submit: harness → **Graphile HTTP** (no superuser SQL bypass).
+- Public reads use **`public_graphile_url` only** (never the editor/owner peer).
 - `sentinel ccms validate` — L0 structure + L1 live catalog.
 - `sentinel ccms migrate` — conscious apply of `dd/*.sql` (never on harness start / kit install).
 - Production: **dump/backup before migrate**.
@@ -19560,7 +19605,9 @@ Graphile stays on **1880** unless you override `SENTINEL_GRAPHILE_PORT`.
 data_plane:
   enabled: true
   graphile_port: 1880
-  database_url: postgres://sentinel:sentinel@127.0.0.1:15432/sentinel_ccms
+  graphile_url: http://127.0.0.1:1880
+  public_graphile_url: http://127.0.0.1:1881   # scoped anonymous-read peer
+  database_url: postgres://OWNER:ENCODED_PASSWORD@DB_HOST:5432/CCMS_DB # migrate/catalog only; prefer env
 ```
 
 ```bash
@@ -19578,16 +19625,18 @@ sentinel ccms install-refkit -p ./sre   # sn.ccms-pages-posts
 
 #### HTTP
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/ccms/status` | Data plane + migrations + form count |
-| GET | `/ccms/forms` | Live pub form catalog |
-| GET/POST | `/ccms/{ns}/{name}/forms/{form}` | Editor render / Graphile submit |
-| GET | `/ccms/{ns}/{name}/forms/{form}/list` | Minimal list surface |
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/ccms/status` | harness | Data plane + migrations + form count |
+| GET | `/ccms/forms` | harness | Live pub form catalog |
+| GET/POST | `/ccms/{ns}/{name}/forms/{form}` | harness | Editor render / Graphile submit |
+| GET | `/ccms/{ns}/{name}/forms/{form}/list` | harness | Editor list surface |
+| GET | `/ccms/{ns}/{name}/collections/{collection}` | anonymous if published | Public list HTML |
+| GET | `/ccms/{ns}/{name}/collections/{collection}/{key}` | anonymous if published | Public detail HTML |
 
 #### Dashboard
 
-**Collections** (sidebar → `/collections`) replaces Headgres-studio. It provides plane descriptions, data plane status, migration lists, and a catalog of public forms. Catalog links open harness editors. It does not need a second studio binary.
+**Collections** (sidebar → `/collections`) replaces Headgres-studio. It provides plane descriptions, data plane status, migration lists, and a catalog of public forms. Catalog links currently open harness editors at the attached origin; the dashboard session is not forwarded. Dedicated BFF editor routes are deferred; see [CCMS XML themes](/ccms-xml-themes) for the verified scope and remaining contract work.
 
 #### Lua
 
@@ -20271,6 +20320,114 @@ go test ./internal/scaffold -count=1 -run Preset
 - [RAG retrieval evaluation](/rag-evaluation).
 - [AI provider extension](/ai-provider-extension).
 - [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).
+
+# CCMS XML views and XSLT themes
+
+<!-- ndx-ste-mode: description -->
+
+## CCMS XML views and XSLT themes
+
+CCMS presents authorized collection data through a stable XML envelope and optional
+kit-local XSLT themes. PostgreSQL and Graphile remain the data authority. There is
+no per-collection XSD or DTD.
+
+### Presentation contract
+
+- Namespace: `urn:ndx:sentinel:ccms:1`
+- Root: `{urn:ndx:sentinel:ccms:1}document` with `version="1"`, `view`, and `audience` (the prefix is not significant)
+- Views: `list`, `detail`, `new`, `edit`, `saved`, `error`
+- Field names are XML attribute values (spaces and odd identifiers stay intact)
+- Field metadata may include `column` for form control names (HTTP posts use columns)
+- Collection-level `actions` carry `submit` and `list` hrefs for editors
+- Distinct states: value, empty string, null (`<cc:null/>`), omitted
+- Exact numeric lexemes are retained on reads; booleans are `true`/`false`
+- XML-illegal text is reversibly base64 encoded with `encoding="utf8-b64"`; byte values use `encoding="base64"`
+- Add `xmlns:cc="urn:ndx:sentinel:ccms:1"` to XSLT and use explicit `cc:` paths, such as `//cc:collection/cc:rows/cc:row`
+
+XML is internal. Public and editor HTML pages do not require clients to fetch XML.
+
+### Kit configuration
+
+```yaml
+# kit.yaml
+ccms_theme: catalog
+```
+
+```yaml
+# themes/catalog/theme.yaml
+templates:
+  ccms.list: list.xsl
+  ccms.detail: detail.xsl
+  ccms.form: form.xsl
+  ccms.saved: saved.xsl
+```
+
+If `ccms_theme` is unset, legacy Go templates / built-in HTML remain. If it is set
+and broken, rendering fails with a visible theme error (no silent layout fallback).
+
+Reference kit `sn.ccms-pages-posts` ships two themes: `catalog` (default) and
+`cards`. Switch with `ccms_theme: cards` after `sentinel ccms install-refkit`.
+
+### Collection bindings
+
+Prefer kit `collections/*.yaml` for source identity, keys, exposure and optional
+GraphQL overrides. Forms may still declare `schema`/`table`; the adapter maps them
+without auto-publishing. Publication for anonymous browse requires
+`publication.public: true` plus `data_plane.public_graphile_url`.
+
+### Publication boundary
+
+Anonymous browse uses only:
+
+- `GET /ccms/{ns}/{name}/collections/{collection}`
+- `GET /ccms/{ns}/{name}/collections/{collection}/{key}`
+
+Requirements: `collections/*.yaml` with `publication.public: true`, kit enabled,
+`data_plane.enabled: true`, and `data_plane.public_graphile_url` configured.
+Editor, status, and forms catalog routes stay authenticated.
+
+### Protected editors
+
+Authenticated editors stay on:
+
+- `GET+POST /ccms/{ns}/{name}/forms/{form}`
+- `GET /ccms/{ns}/{name}/forms/{form}/list`
+
+Themed editors round-trip through the same XML model. Validation and Graphile
+failures re-render the form with submitted values and `data-ccms-error` markers.
+A missing row on update surfaces as `CCMS.STALE` (no generic optimistic locking).
+Dashboard Collections deep-links to the harness origin. These links require harness
+authentication; the dashboard session is not forwarded to that origin. Dedicated
+`/collections/edit/...` BFF routes are deferred.
+
+### Verified scope and remaining work
+
+Acceptance on 2026-11-10 used fresh PostgreSQL 17 and digest-pinned PostGraphile
+v4, production gateway authentication, both reference themes, and real Chromium
+create/edit/validation/navigation checks. A 125-record fixture traversed cursor
+pages without duplicates or truncation. Migration repeated as a skip; JSON CLI
+output is machine-readable.
+
+Public lists accept `limit=1..100` (default 20) and an opaque `cursor`; editors
+use cursor pages of up to 100 records. Follow the rendered Next action.
+Publication filtering occurs in Graphile before pagination, with stable primary-key
+ordering. A separately configured URL must still use a database role with the
+intended read-only grants and row policy; URL configuration does not create them.
+
+The proven runtime slice is the pages/posts refkit with a single `id` key, text
+fields and checkboxes. The wider #37 contract remains open: schema-derived
+GraphQL metadata/custom mappings, non-id/compound-key execution, fully typed
+nullable/default/JSON/array editor controls and complete relation support still
+need implementation and acceptance. Descriptor/type helpers alone do not prove
+those end-to-end capabilities.
+
+### Known limits
+
+- No file uploads, delete/bulk edit, or public XML export in v1
+- Declared relation expansion remains unverified; no arbitrary joins
+- List-template Gohtml path remains for kits without `ccms_theme`
+
+Related: [Content planes](/content-planes), [Harness HTTP routes](/harness-http-routes).
 
 # Security readiness and shared responsibility
 
