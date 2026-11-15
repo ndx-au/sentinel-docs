@@ -104,6 +104,15 @@ nullable/default/JSON/array editor controls and complete relation support still
 need implementation and acceptance. Descriptor/type helpers alone do not prove
 those end-to-end capabilities.
 
+On 2026-11-15, adapter-level acceptance also passed against a non-public schema
+with smart-comment names, compound keys, exact decimal reads, custom mutations
+and generated-column inputs omitted by Graphile. The adapter can resolve live
+introspection or a rooted, audience-labelled exported schema; metadata is not
+cached. HTTP handlers have not adopted it yet, so these capabilities are not
+available end to end. GraphQL introspection cannot identify SQL-generated
+columns that the peer still advertises as writable; omit those inputs in Graphile
+or explicitly restrict the descriptor.
+
 ## Known limits
 
 - No file uploads, delete/bulk edit, or public XML export in v1
