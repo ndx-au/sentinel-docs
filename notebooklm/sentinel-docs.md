@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-11-02T06:02:32Z"
+  at: "2026-11-20T04:07:20Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -89,6 +89,9 @@ sources:
   - id: agentic-ai-uat
     resource: ../sn.docs/ct/agentic-ai-uat.md
     title: Agentic AI — UAT trail
+  - id: ccms-xml-themes
+    resource: ../sn.docs/ct/ccms-xml-themes.md
+    title: CCMS XML views and XSLT themes
   - id: security-readiness
     resource: ../sn.docs/ct/security-readiness.md
     title: Security readiness and shared responsibility
@@ -180,6 +183,9 @@ toc:
   - title: Agentic AI — UAT trail
     path: ../sn.docs/ct/agentic-ai-uat.md
     type: Playbook
+  - title: CCMS XML views and XSLT themes
+    path: ../sn.docs/ct/ccms-xml-themes.md
+    type: Guide
   - title: Security readiness and shared responsibility
     path: ../sn.docs/ct/security-readiness.md
     type: Guide
@@ -767,6 +773,8 @@ sentinel dashboard start localhost:8080
 
 Open your browser to `http://127.0.0.1:9090` to see the dashboard. The dashboard binds **loopback only** (`127.0.0.1`). Remote operators need a tunnel into that namespace.
 
+![Operations console with the harness online and shortcuts to Flows and Executions](/img/dashboard-home-v1.webp)
+
 The dashboard is optional. Everything it does can also be done through the REST API or CLI. It is useful for development, debugging, and demonstration.
 
 Recent operator pages beyond flows include:
@@ -859,8 +867,12 @@ The response will include an execution ID:
 1. Open `http://127.0.0.1:9090`.
 2. Navigate to the Flows section.
 3. Find `acme.main/hello` (internal ID `acme-main:hello`).
-4. Enter parameters: `{"name": "Alice"}`.
-5. Click Run.
+4. Open the flow.
+5. Click **Run** on the flow editor toolbar.
+
+![Flows page with hello selected and the flow ID acme-main:hello in the inspector](/img/flows-hello-inspector-v1.webp)
+
+![Flow editor toolbar for hello.lua with the Run button](/img/flow-editor-run-v1.webp)
 
 #### 7. View Execution Results
 
@@ -876,7 +888,9 @@ curl http://localhost:8080/ex/exec_abc123/lg
 
 **Through the Dashboard:**
 
-Click on the execution in the Executions panel to see status, timing, logs, and the returned value.
+Click the execution in the Executions panel. The inspector shows the status and timing. **Open Logs** shows the log lines for that run.
+
+![Executions ledger with the hello run selected and a success status in the inspector](/img/execution-success-v1.webp)
 
 ---
 
@@ -15839,11 +15853,11 @@ Storage points register S3-compatible buckets for binary files such as images, v
 
 ### Overview
 
-A storage point is a registration of an external S3-compatible storage endpoint with Sentinel. Each storage point has a unique short name called a "stub" that serves as a URL prefix in CMS templates. When the CMS template renderer encounters a stub-prefixed path in content, it automatically expands it to the full public URL of the asset.
+A storage point is a registration of an external S3-compatible storage endpoint with Sentinel. Each storage point has a unique short name called a "stub". Lua flows can use the stub to refer to a bucket, and CMS applications can use it as a URL prefix in their content.
 
-Storage points serve two primary purposes:
+Storage points serve three purposes:
 
-1. **CMS URL Expansion** -- Each storage point has a stub (for example `img`, `vid`) that the CMS template renderer recognizes. At render time, a path like `/img/photo.jpg` is automatically expanded to the full public URL: `https://cdn.example.com/media/photo.jpg`. This means content authors write simple, portable paths in their markdown, and the system handles URL resolution.
+1. **CMS asset references** -- Authors can use paths like `/img/photo.jpg` in Markdown. For fcms pages that render these paths unchanged, configure the docs template or a reverse-proxy route to serve images from the bucket.
 
 2. **Object access** -- Lua `sn.st.*` can list points, get a point, `put` objects, `head` objects, and `resolve` public URLs. The vault stores credentials. You can manage separate backends for images, video, and downloads.
 
@@ -15871,7 +15885,7 @@ A **stub** is a short, unique string assigned to each storage point. It acts as 
 **How stubs work in practice:**
 - You create a storage point with stub `img` that points to your image bucket on S3.
 - In your CMS content, you write image paths as `/img/hero-banner.jpg`.
-- The CMS template renderer resolves `/img/` through the storage point with stub `img`. The full public URL is `https://cdn.example.com/media/hero-banner.jpg`.
+- Use the storage point's public URL and path prefix when wiring the template or proxy. The full public URL in this example is `https://cdn.example.com/media/hero-banner.jpg`.
 
 **Stub naming conventions:**
 - `img` -- Images (photos, illustrations, icons).
@@ -15891,7 +15905,7 @@ The stub appears at the root of the CMS base URL, making it easy to grep for ref
 
 #### URL Expansion
 
-URL expansion is the process by which the CMS template renderer converts a stub-prefixed path into a full public URL. Understanding this process helps you configure storage points correctly.
+Use `sn.st.resolve("img", "photo.jpg")` in Lua to resolve a storage point's public URL and path prefix. This documentation site's fcms template maps Markdown image paths under `/img/` to the shared public bucket.
 
 **Expansion formula:**
 ```
@@ -15998,7 +16012,11 @@ The table columns are:
 
    Credentials are stored in the encrypted vault, never in the database.
 
+   ![Add Storage Point dialog with the provider and bucket fields visible](/img/storage-point-editor-v1.webp)
+
 6. Click **Add Storage Point** to save. On success, the page reloads and the new entry appears in the table. On failure, a toast notification displays the error message.
+
+   ![Storage Points table showing the demo-media point, the /img/ stub, and the public URL](/img/storage-points-table-v1.webp)
 
 #### Editing a Storage Point
 
@@ -16028,7 +16046,7 @@ The test calls `POST /st/{id}/test`, which runs S3 **ListObjectsV2** (`MaxKeys=1
 3. Click **OK** to confirm. The storage point record is deleted from the database, and both vault credentials (`st:{id}:ak` and `st:{id}:sk`) are removed.
 4. The page reloads automatically.
 
-**Warning:** Deletion is permanent. If you have CMS content referencing this storage point's stub, those references will stop expanding correctly. Make sure to update any content that references the stub before deleting the storage point.
+**Warning:** Deletion is permanent. Lua flows and any CMS integration that looks up this stub in Sentinel will lose access to the registration.
 
 #### Closing the Modal
 
@@ -19798,34 +19816,73 @@ Absorbs Headgres collection-CMS value into the harness (one binary).
 
 ```text
 {ns}.{name}/
-  kit.yaml
+  kit.yaml            # optional ccms_theme: <theme-name>
   dd/                 # ordered SQL migrations (lexicographic)
     001_*.sql
+  collections/        # identity, publication, GraphQL overrides
+    pages.yaml
   forms/
     draft/*.md        # not shippable
-    pub/*.md          # MD + YAML frontmatter → schema/table/columns
+    pub/*.md          # MD + YAML frontmatter; prefer collection: name
                       # (skill twins `*.md.md` are ignored by form discovery)
-  tp/                 # optional gohtml white-label
+  themes/<name>/      # optional XSLT themes (ccms.list/detail/form/saved)
+  tp/                 # optional legacy gohtml white-label
   fl/                 # OPTIONAL after-save plugins only
 ```
+
+#### Collection descriptor
+
+```yaml
+name: pages
+title: Pages
+source:
+  schema: public
+  table: pages
+keys:
+  - name: id
+    type: bigint
+fields:
+  - name: title
+    column: title
+    expose: public
+  - name: published
+    column: published
+    expose: editor
+publication:
+  public: false          # true enables anonymous /ccms/.../collections/...
+  row_policy: published
+```
+
+`forms/pub` means shippable form, **not** anonymous access. Public browse requires
+`publication.public: true`, an enabled kit, and `data_plane.public_graphile_url`.
 
 #### Form frontmatter
 
 ```yaml
 name: pages
-table: pages
+collection: pages       # preferred; binds to collections/pages.yaml
+table: pages            # legacy adapter when collection: is absent
 schema: public
 title: Pages
-template: form.gohtml   # optional kit tp/
+template: form.gohtml   # optional kit tp/ editor
+list_template: list.gohtml  # optional kit tp/ list
 fields:
   - column: slug
     type: text
     required: true
 ```
 
+#### Themes
+
+- Kit setting `ccms_theme` (separate from fcms `cms_theme`).
+- Manifest slots: `ccms.list`, `ccms.detail`, `ccms.form`, `ccms.saved`.
+- Presentation XML is internal (`urn:ndx:sentinel:ccms:1`); not a public XML API.
+- An explicit broken theme fails visibly; it does not fall back to an unrelated layout.
+
 #### Writes and validation
 
 - Editor submit: harness → **Graphile HTTP** (no superuser SQL bypass).
+- Public reads use **`public_graphile_url` only** (never the editor/owner peer).
 - `sentinel ccms validate` — L0 structure + L1 live catalog.
 - `sentinel ccms migrate` — conscious apply of `dd/*.sql` (never on harness start / kit install).
 - Production: **dump/backup before migrate**.
@@ -19847,6 +19904,8 @@ Graphile stays on **1880** unless you override `SENTINEL_GRAPHILE_PORT`.
 data_plane:
   enabled: true
   graphile_port: 1880
+  graphile_url: http://127.0.0.1:1880
+  public_graphile_url: http://127.0.0.1:1881   # scoped anonymous-read peer
   database_url: postgres://sentinel:sentinel@127.0.0.1:15432/sentinel_ccms
 ```
 
@@ -19865,16 +19924,18 @@ sentinel ccms install-refkit -p ./sre   # sn.ccms-pages-posts
 
 #### HTTP
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/ccms/status` | Data plane + migrations + form count |
-| GET | `/ccms/forms` | Live pub form catalog |
-| GET/POST | `/ccms/{ns}/{name}/forms/{form}` | Editor render / Graphile submit |
-| GET | `/ccms/{ns}/{name}/forms/{form}/list` | Minimal list surface |
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/ccms/status` | harness | Data plane + migrations + form count |
+| GET | `/ccms/forms` | harness | Live pub form catalog |
+| GET/POST | `/ccms/{ns}/{name}/forms/{form}` | harness | Editor render / Graphile submit |
+| GET | `/ccms/{ns}/{name}/forms/{form}/list` | harness | Editor list surface |
+| GET | `/ccms/{ns}/{name}/collections/{collection}` | anonymous if published | Public list HTML |
+| GET | `/ccms/{ns}/{name}/collections/{collection}/{key}` | anonymous if published | Public detail HTML |
 
 #### Dashboard
 
-**Collections** (sidebar → `/collections`) replaces Headgres-studio. It provides plane descriptions, data plane status, migration lists, and a catalog of public forms. Catalog links open harness editors. It does not need a second studio binary.
+**Collections** (sidebar → `/collections`) replaces Headgres-studio. It provides plane descriptions, data plane status, migration lists, and a catalog of public forms. Catalog links currently open harness editors at the attached origin; a signed dashboard BFF edit path is planned for production-auth browsers.
 
 #### Lua
 
@@ -20588,6 +20649,90 @@ Dashboard: **http://127.0.0.1:9090**. Logs: `$HOME\.sentinel\`. Then follow the 
 - [RAG retrieval evaluation](/rag-evaluation).
 - [AI provider extension](/ai-provider-extension).
 - [Agentic AI spec](https://github.com/ndx-au/sentinel/blob/main/specs/agentic-ai.md).
+
+# CCMS XML views and XSLT themes
+
+<!-- ndx-ste-mode: description -->
+
+## CCMS XML views and XSLT themes
+
+CCMS presents authorized collection data through a stable XML envelope and optional
+kit-local XSLT themes. PostgreSQL and Graphile remain the data authority. There is
+no per-collection XSD or DTD.
+
+### Presentation contract
+
+- Namespace: `urn:ndx:sentinel:ccms:1`
+- Root: `cc:document` with `version="1"`, `view`, and `audience`
+- Views: `list`, `detail`, `new`, `edit`, `saved`, `error`
+- Field names are XML attribute values (spaces and odd identifiers stay intact)
+- Field metadata may include `column` for form control names (HTTP posts use columns)
+- Collection-level `actions` carry `submit` and `list` hrefs for editors
+- Distinct states: value, empty string, null (`<cc:null/>`), omitted
+- Exact integer/decimal lexemes; UUIDs are opaque; booleans are `true`/`false`
+
+XML is internal. Public and editor HTML pages do not require clients to fetch XML.
+
+### Kit configuration
+
+```yaml
+# kit.yaml
+ccms_theme: catalog
+```
+
+```yaml
+# themes/catalog/theme.yaml
+templates:
+  ccms.list: list.xsl
+  ccms.detail: detail.xsl
+  ccms.form: form.xsl
+  ccms.saved: saved.xsl
+```
+
+If `ccms_theme` is unset, legacy Go templates / built-in HTML remain. If it is set
+and broken, rendering fails with a visible theme error (no silent layout fallback).
+
+Reference kit `sn.ccms-pages-posts` ships two themes: `catalog` (default) and
+`cards`. Switch with `ccms_theme: cards` after `sentinel ccms install-refkit`.
+
+### Collection bindings
+
+Prefer kit `collections/*.yaml` for source identity, keys, exposure and optional
+GraphQL overrides. Forms may still declare `schema`/`table`; the adapter maps them
+without auto-publishing. Publication for anonymous browse requires
+`publication.public: true` plus `data_plane.public_graphile_url`.
+
+### Publication boundary
+
+Anonymous browse uses only:
+
+- `GET /ccms/{ns}/{name}/collections/{collection}`
+- `GET /ccms/{ns}/{name}/collections/{collection}/{key}`
+
+Requirements: `collections/*.yaml` with `publication.public: true`, kit enabled,
+`data_plane.enabled: true`, and `data_plane.public_graphile_url` configured.
+Editor, status, and forms catalog routes stay authenticated.
+
+### Protected editors
+
+Authenticated editors stay on:
+
+- `GET+POST /ccms/{ns}/{name}/forms/{form}`
+- `GET /ccms/{ns}/{name}/forms/{form}/list`
+
+Themed editors round-trip through the same XML model. Validation and Graphile
+failures re-render the form with submitted values and `data-ccms-error` markers.
+A missing row on update surfaces as `CCMS.STALE` (no generic optimistic locking).
+Dashboard Collections deep-links to the harness origin; dedicated
+`/collections/edit/...` BFF routes are deferred.
+
+### Known limits
+
+- No file uploads, delete/bulk edit, or public XML export in v1
+- Relations are declared and bounded; no arbitrary joins
+- List-template Gohtml path remains for kits without `ccms_theme`
+
+Related: [Content planes](/content-planes), [Harness HTTP routes](/harness-http-routes).
 
 # Security readiness and shared responsibility
 

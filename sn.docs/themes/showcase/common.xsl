@@ -9,7 +9,14 @@
 <xsl:template match="text"><xsl:value-of select="."/><xsl:if test="@hardbreak='true' or @softbreak='true'"><br/></xsl:if></xsl:template>
 <xsl:template match="emphasis"><xsl:choose><xsl:when test="@level='2'"><strong><xsl:apply-templates/></strong></xsl:when><xsl:otherwise><em><xsl:apply-templates/></em></xsl:otherwise></xsl:choose></xsl:template>
 <xsl:template match="link|autolink"><a href="{@destination}" title="{@title}"><xsl:apply-templates/></a></xsl:template>
-<xsl:template match="image"><img src="{@destination}" alt="{.}" title="{@title}" loading="lazy"/></xsl:template>
+<!-- Staging and production share the same public bucket for Markdown /img/ paths. -->
+<xsl:variable name="image-base-url" select="'https://sentinel-docs.s3.us-east-005.backblazeb2.com/'"/>
+<xsl:template match="image">
+  <xsl:variable name="src" select="if (starts-with(@destination, '/img/'))
+    then concat($image-base-url, substring-after(@destination, '/img/'))
+    else @destination"/>
+  <img src="{$src}" alt="{.}" title="{@title}" loading="lazy"/>
+</xsl:template>
 <xsl:template match="list"><xsl:choose><xsl:when test="@ordered='true'"><ol start="{@start}"><xsl:apply-templates/></ol></xsl:when><xsl:otherwise><ul><xsl:apply-templates/></ul></xsl:otherwise></xsl:choose></xsl:template>
 <xsl:template match="listitem"><li><xsl:apply-templates/></li></xsl:template>
 <xsl:template match="blockquote"><blockquote><xsl:apply-templates/></blockquote></xsl:template>

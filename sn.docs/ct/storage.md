@@ -14,11 +14,11 @@ Storage points register S3-compatible buckets for binary files such as images, v
 
 ## Overview
 
-A storage point is a registration of an external S3-compatible storage endpoint with Sentinel. Each storage point has a unique short name called a "stub" that serves as a URL prefix in CMS templates. When the CMS template renderer encounters a stub-prefixed path in content, it automatically expands it to the full public URL of the asset.
+A storage point is a registration of an external S3-compatible storage endpoint with Sentinel. Each storage point has a unique short name called a "stub". Lua flows can use the stub to refer to a bucket, and CMS applications can use it as a URL prefix in their content.
 
-Storage points serve two primary purposes:
+Storage points serve three purposes:
 
-1. **CMS URL Expansion** -- Each storage point has a stub (for example `img`, `vid`) that the CMS template renderer recognizes. At render time, a path like `/img/photo.jpg` is automatically expanded to the full public URL: `https://cdn.example.com/media/photo.jpg`. This means content authors write simple, portable paths in their markdown, and the system handles URL resolution.
+1. **CMS asset references** -- Authors can use paths like `/img/photo.jpg` in Markdown. For fcms pages that render these paths unchanged, configure the docs template or a reverse-proxy route to serve images from the bucket.
 
 2. **Object access** -- Lua `sn.st.*` can list points, get a point, `put` objects, `head` objects, and `resolve` public URLs. The vault stores credentials. You can manage separate backends for images, video, and downloads.
 
@@ -46,7 +46,7 @@ A **stub** is a short, unique string assigned to each storage point. It acts as 
 **How stubs work in practice:**
 - You create a storage point with stub `img` that points to your image bucket on S3.
 - In your CMS content, you write image paths as `/img/hero-banner.jpg`.
-- The CMS template renderer resolves `/img/` through the storage point with stub `img`. The full public URL is `https://cdn.example.com/media/hero-banner.jpg`.
+- Use the storage point's public URL and path prefix when wiring the template or proxy. The full public URL in this example is `https://cdn.example.com/media/hero-banner.jpg`.
 
 **Stub naming conventions:**
 - `img` -- Images (photos, illustrations, icons).
@@ -66,7 +66,7 @@ The stub appears at the root of the CMS base URL, making it easy to grep for ref
 
 ### URL Expansion
 
-URL expansion is the process by which the CMS template renderer converts a stub-prefixed path into a full public URL. Understanding this process helps you configure storage points correctly.
+Use `sn.st.resolve("img", "photo.jpg")` in Lua to resolve a storage point's public URL and path prefix. This documentation site's fcms template maps Markdown image paths under `/img/` to the shared public bucket.
 
 **Expansion formula:**
 ```
@@ -173,7 +173,11 @@ The table columns are:
 
    Credentials are stored in the encrypted vault, never in the database.
 
+   ![Add Storage Point dialog with the provider and bucket fields visible](/img/storage-point-editor-v1.webp)
+
 6. Click **Add Storage Point** to save. On success, the page reloads and the new entry appears in the table. On failure, a toast notification displays the error message.
+
+   ![Storage Points table showing the demo-media point, the /img/ stub, and the public URL](/img/storage-points-table-v1.webp)
 
 ### Editing a Storage Point
 
@@ -203,7 +207,7 @@ The test calls `POST /st/{id}/test`, which runs S3 **ListObjectsV2** (`MaxKeys=1
 3. Click **OK** to confirm. The storage point record is deleted from the database, and both vault credentials (`st:{id}:ak` and `st:{id}:sk`) are removed.
 4. The page reloads automatically.
 
-**Warning:** Deletion is permanent. If you have CMS content referencing this storage point's stub, those references will stop expanding correctly. Make sure to update any content that references the stub before deleting the storage point.
+**Warning:** Deletion is permanent. Lua flows and any CMS integration that looks up this stub in Sentinel will lose access to the registration.
 
 ### Closing the Modal
 

@@ -219,6 +219,8 @@ sentinel dashboard start localhost:8080
 
 Open your browser to `http://127.0.0.1:9090` to see the dashboard. The dashboard binds **loopback only** (`127.0.0.1`). Remote operators need a tunnel into that namespace.
 
+![Operations console with the harness online and shortcuts to Flows and Executions](/img/dashboard-home-v1.webp)
+
 The dashboard is optional. Everything it does can also be done through the REST API or CLI. It is useful for development, debugging, and demonstration.
 
 Recent operator pages beyond flows include:
@@ -311,8 +313,12 @@ The response will include an execution ID:
 1. Open `http://127.0.0.1:9090`.
 2. Navigate to the Flows section.
 3. Find `acme.main/hello` (internal ID `acme-main:hello`).
-4. Enter parameters: `{"name": "Alice"}`.
-5. Click Run.
+4. Open the flow.
+5. Click **Run** on the flow editor toolbar.
+
+![Flows page with hello selected and the flow ID acme-main:hello in the inspector](/img/flows-hello-inspector-v1.webp)
+
+![Flow editor toolbar for hello.lua with the Run button](/img/flow-editor-run-v1.webp)
 
 ### 7. View Execution Results
 
@@ -328,7 +334,9 @@ curl http://localhost:8080/ex/exec_abc123/lg
 
 **Through the Dashboard:**
 
-Click on the execution in the Executions panel to see status, timing, logs, and the returned value.
+Click the execution in the Executions panel. The inspector shows the status and timing. **Open Logs** shows the log lines for that run.
+
+![Executions ledger with the hello run selected and a success status in the inspector](/img/execution-success-v1.webp)
 
 ---
 
