@@ -12,8 +12,8 @@ Skills use two prefixes to separate SRE-level authoring from platform-wide orche
 
 | Prefix | Scope | Examples |
 |---|---|---|
-| `sre-*` | **Sentinel Runtime Environment** — authoring kits, flows, connectors, modules, triggers, forms, pages, content planes (`fcms`/`ccms`/`wpcms`), SRE config, and procedural tasks backed by Sentinel kits. | `sre-kit-author`, `sre-backup-monitor`, `sre-cms-publisher` |
-| `sn-*` | **Sentinel Platform** — meta-skills, invoking/observing a running harness via MCP, HTTP API, or webhooks, CLI operations, and cross-domain business orchestration. | `sn-skill-creator`, `sn-harness-ops`, `sn-webhook-triage` |
+| `sre-*` | **Sentinel Runtime Environment** — authoring kits, flows, connectors, modules, triggers, forms, pages, content planes (`fcms`/`ccms`/`wpcms`), SRE config, and procedural tasks backed by Sentinel kits. | `sre-kit-release` |
+| `sn-*` | **Sentinel Platform** — meta-skills, invoking/observing a running harness via MCP, HTTP API, or webhooks, CLI operations, and cross-domain business orchestration. | `sn-harness-deploy`, `sn-execution-triage`, `sn-kit-db-recovery` |
 
 ### Agent Skills vs. SRE Skill Twins
 
@@ -50,7 +50,7 @@ All skills follow the standard `SKILL.md` Agent Skills layout (a required `SKILL
 ### Using `npx skills` (if installed)
 
 ```bash
-npx skills add ndx-au/sentinel-docs --skill sn-skill-creator
+npx skills add ndx-au/sentinel-docs --skill sn-harness-deploy
 ```
 
 ### Manual Copy into Any Harness
@@ -70,7 +70,7 @@ Example:
 ```bash
 git clone https://github.com/ndx-au/sentinel-docs.git
 mkdir -p /path/to/your-project/.agents/skills
-cp -r sentinel-docs/skills/sn-skill-creator /path/to/your-project/.agents/skills/
+cp -r sentinel-docs/skills/sn-harness-deploy /path/to/your-project/.agents/skills/
 ```
 
 ---

@@ -6,7 +6,7 @@ tags: [sentinel, documentation, notebooklm]
 status: stable
 generated:
   by: "process:bundle_docs"
-  at: "2026-11-24T06:07:07Z"
+  at: "2026-11-24T06:28:52Z"
 sources:
   - id: index
     resource: ../sn.docs/ct/index.md
@@ -263,7 +263,7 @@ For developers building external integrations against the Sentinel HTTP API:
 | 6 | [HTTP API Reference](/api-reference) | 45 min | All REST endpoints, authentication, flow execution, execution history and logs, trigger management, forms, secrets, webhooks, git operations, error codes |
 |  | [Harness HTTP routes](/harness-http-routes) | 10 min | Canonical `/hl/*`, `/kt/*`, `/fcms`, gateway/keyhole behavior, dashboard proxy mapping — complements harness `system-specs/api.yaml` |
 |  | [MCP Agent Integration](/mcp-agent-integration) | 15 min | Connect Cursor and other MCP clients to a running harness. Bind/listen flags, tools, debugging |
-|  | [Agent Skills Library](/agent-skills) | 10 min | Public `sre-*` and `sn-*` Agent Skills library and `sn-skill-creator` meta-skill for cross-harness AI orchestration |
+|  | [Agent Skills Library](/agent-skills) | 10 min | Choose a skill for harness deployment, kit release, execution triage, database recovery, or skill authoring |
 |  | [The `.sentinel/` directory](/sentinel-directory) | 15 min | Gitignored harness artifacts — what each file is, what depends on it, backup/restore notes |
 |  | [fcms — file CMS (operator guide)](/sentinel-cms) | 25 min | **fcms** plane: `ct/` content, `/fcms` JSON (legacy `/cm`), `/fcms/render` HTML (legacy `/ct`), `cms.db` |
 |  | [Content planes (fcms / ccms / wpcms)](/content-planes) | 20 min | Pluralistic content model, Graphile **1880**, `dd/` migrations, dashboard Collections, ports |
@@ -20682,8 +20682,8 @@ Skills use two prefixes so agents and operators can immediately tell whether a s
 
 | Prefix | Scope | Examples |
 |---|---|---|
-| `sre-*` | **Sentinel Runtime Environment** — authoring kits, flows, connectors, modules, triggers, forms, content planes (`fcms`/`ccms`/`wpcms`), and kit-backed procedural automation. | `sre-kit-author`, `sre-backup-monitor` |
-| `sn-*` | **Sentinel Platform** — meta-skills, invoking/observing a running harness via MCP, HTTP API, or webhooks, CLI operations, and cross-domain business orchestration. | `sn-skill-creator`, `sn-webhook-triage` |
+| `sre-*` | **Sentinel Runtime Environment** — authoring kits, flows, connectors, modules, triggers, forms, content planes (`fcms`/`ccms`/`wpcms`), and kit-backed procedural automation. | `sre-kit-release` |
+| `sn-*` | **Sentinel Platform** — meta-skills, invoking/observing a running harness via MCP, HTTP API, or webhooks, CLI operations, and cross-domain business orchestration. | `sn-harness-deploy`, `sn-execution-triage`, `sn-kit-db-recovery` |
 
 #### Agent Skills vs. SRE Skill Twins
 
@@ -20727,7 +20727,7 @@ The foundational skill in the library is **`sn-skill-creator`** (`skills/sn-skil
 #### Using `npx skills`
 
 ```bash
-npx skills add ndx-au/sentinel-docs --skill sn-skill-creator
+npx skills add ndx-au/sentinel-docs --skill sn-harness-deploy
 ```
 
 #### Manual Installation
@@ -20745,7 +20745,7 @@ Clone `sentinel-docs` and copy the skill folder into your harness's skills direc
 ```bash
 git clone https://github.com/ndx-au/sentinel-docs.git
 mkdir -p /path/to/your-project/.agents/skills
-cp -r sentinel-docs/skills/sn-skill-creator /path/to/your-project/.agents/skills/
+cp -r sentinel-docs/skills/sn-harness-deploy /path/to/your-project/.agents/skills/
 ```
 
 ---

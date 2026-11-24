@@ -30,7 +30,7 @@ notebooklm/            generated index.md + sentinel-docs.md — not fcms conten
 
 ## Agent Skills Library
 
-Public, cross-harness Agent Skills (`SKILL.md` packages) for Sentinel live in [`skills/`](skills/README.md), including the Sentinel-specific meta-skill [`sn-skill-creator`](skills/sn-skill-creator/SKILL.md).
+Use the Sentinel Agent Skills to deploy a harness, release a kit revision, trace a flow execution, or verify a kit database restore. The library also includes `sn-skill-creator` for authors. [Skill catalog and installation](skills/README.md)
 
 Validate skills after any edit:
 

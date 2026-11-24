@@ -34,6 +34,8 @@ Old numeric filename (~/code/sentinel/docs/) → new slug (sn.docs/ct/). Maintai
 
 ## Additional guides
 
+- [Agent skills for Sentinel operators and authors](agent-skills.md)
+
 - [Security readiness and shared responsibility](security-readiness.md)
 
 - `sqlcipher-offline-migration.md` — verified offline copy conversion, recovery and operator boundaries.

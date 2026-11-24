@@ -1,6 +1,6 @@
 ---
 title: "Agent Skills Library"
-description: "Install and create public Sentinel Agent Skills (sre-* and sn-*) that pair AI agent workflows with deterministic Sentinel kits, MCP, HTTP API, and webhooks."
+description: "Choose and install an agent skill to deploy Sentinel, release a kit, diagnose a flow execution, restore kit SQLite data, or author a new skill."
 type: Guide
 tags: [agents, skills, mcp]
 status: stable
@@ -29,8 +29,8 @@ Skills use two prefixes so agents and operators can immediately tell whether a s
 
 | Prefix | Scope | Examples |
 |---|---|---|
-| `sre-*` | **Sentinel Runtime Environment** — authoring kits, flows, connectors, modules, triggers, forms, content planes (`fcms`/`ccms`/`wpcms`), and kit-backed procedural automation. | `sre-kit-author`, `sre-backup-monitor` |
-| `sn-*` | **Sentinel Platform** — meta-skills, invoking/observing a running harness via MCP, HTTP API, or webhooks, CLI operations, and cross-domain business orchestration. | `sn-skill-creator`, `sn-webhook-triage` |
+| `sre-*` | **Sentinel Runtime Environment** — authoring kits, flows, connectors, modules, triggers, forms, content planes (`fcms`/`ccms`/`wpcms`), and kit-backed procedural automation. | `sre-kit-release` |
+| `sn-*` | **Sentinel Platform** — meta-skills, invoking/observing a running harness via MCP, HTTP API, or webhooks, CLI operations, and cross-domain business orchestration. | `sn-harness-deploy`, `sn-execution-triage`, `sn-kit-db-recovery` |
 
 ### Agent Skills vs. SRE Skill Twins
 
@@ -74,7 +74,7 @@ The foundational skill in the library is **`sn-skill-creator`** (`skills/sn-skil
 ### Using `npx skills`
 
 ```bash
-npx skills add ndx-au/sentinel-docs --skill sn-skill-creator
+npx skills add ndx-au/sentinel-docs --skill sn-harness-deploy
 ```
 
 ### Manual Installation
@@ -92,7 +92,7 @@ Clone `sentinel-docs` and copy the skill folder into your harness's skills direc
 ```bash
 git clone https://github.com/ndx-au/sentinel-docs.git
 mkdir -p /path/to/your-project/.agents/skills
-cp -r sentinel-docs/skills/sn-skill-creator /path/to/your-project/.agents/skills/
+cp -r sentinel-docs/skills/sn-harness-deploy /path/to/your-project/.agents/skills/
 ```
 
 ---

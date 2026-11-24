@@ -66,7 +66,7 @@ For developers building external integrations against the Sentinel HTTP API:
 | 6 | [HTTP API Reference](/api-reference) | 45 min | All REST endpoints, authentication, flow execution, execution history and logs, trigger management, forms, secrets, webhooks, git operations, error codes |
 |  | [Harness HTTP routes](/harness-http-routes) | 10 min | Canonical `/hl/*`, `/kt/*`, `/fcms`, gateway/keyhole behavior, dashboard proxy mapping — complements harness `system-specs/api.yaml` |
 |  | [MCP Agent Integration](/mcp-agent-integration) | 15 min | Connect Cursor and other MCP clients to a running harness. Bind/listen flags, tools, debugging |
-|  | [Agent Skills Library](/agent-skills) | 10 min | Public `sre-*` and `sn-*` Agent Skills library and `sn-skill-creator` meta-skill for cross-harness AI orchestration |
+|  | [Agent Skills Library](/agent-skills) | 10 min | Choose a skill for harness deployment, kit release, execution triage, database recovery, or skill authoring |
 |  | [The `.sentinel/` directory](/sentinel-directory) | 15 min | Gitignored harness artifacts — what each file is, what depends on it, backup/restore notes |
 |  | [fcms — file CMS (operator guide)](/sentinel-cms) | 25 min | **fcms** plane: `ct/` content, `/fcms` JSON (legacy `/cm`), `/fcms/render` HTML (legacy `/ct`), `cms.db` |
 |  | [Content planes (fcms / ccms / wpcms)](/content-planes) | 20 min | Pluralistic content model, Graphile **1880**, `dd/` migrations, dashboard Collections, ports |
