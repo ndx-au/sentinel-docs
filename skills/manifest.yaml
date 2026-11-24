@@ -1,0 +1,64 @@
+schema_version: 1
+library: sentinel-skills
+docs_base_url: "https://docs.ndx-sentinel.com"
+prefixes:
+  sre: "Sentinel Runtime Environment — kits, flows, triggers, forms, content planes, and SRE-backed procedural work"
+  sn: "Sentinel platform — meta-skills, MCP/API/webhook orchestration, CLI operations, and cross-domain workflows"
+
+skills:
+  - name: sn-skill-creator
+    prefix: sn
+    version: "1.0.0"
+    status: stable
+    category: meta
+    summary: "Create Sentinel-native AI agent skills that combine SRE kits for procedural work with MCP, HTTP API, and webhook orchestration."
+    surfaces:
+      - mcp
+      - api
+      - webhooks
+      - triggers
+      - cli
+      - sre-kits
+    path: skills/sn-skill-creator
+  - name: sn-harness-deploy
+    prefix: sn
+    version: "1.0.0"
+    status: stable
+    category: deployment
+    summary: "Bring a harness online and verify its listener, kit inventory, and workload."
+    surfaces:
+      - cli
+      - api
+    path: skills/sn-harness-deploy
+  - name: sre-kit-release
+    prefix: sre
+    version: "1.0.0"
+    status: stable
+    category: deployment
+    summary: "Validate, test, promote, and verify a kit revision with a rollback path."
+    surfaces:
+      - cli
+      - sre-kits
+      - api
+      - mcp
+    path: skills/sre-kit-release
+  - name: sn-execution-triage
+    prefix: sn
+    version: "1.0.0"
+    status: stable
+    category: operations
+    summary: "Trace a missing or failed execution and reconcile uncertain submissions."
+    surfaces:
+      - api
+      - mcp
+      - cli
+    path: skills/sn-execution-triage
+  - name: sn-kit-db-recovery
+    prefix: sn
+    version: "1.0.0"
+    status: stable
+    category: recovery
+    summary: "Back up kit SQLite data and verify a restore in an offline SRE."
+    surfaces:
+      - cli
+    path: skills/sn-kit-db-recovery

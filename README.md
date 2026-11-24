@@ -23,7 +23,19 @@ sn.docs/
   fl/                  smoke tests (validated by `sentinel sre validate`)
 tools/relink.py        rewrites old relative doc links → /slug links
 tools/bundle_docs.py   OKF / NotebookLM sidecar (writes notebooklm/ only)
+tools/validate_skills.py validates skills/ frontmatter, links, manifest, and public-safety rules
+skills/                canonical public Sentinel Agent Skills library (sre-* and sn-*)
 notebooklm/            generated index.md + sentinel-docs.md — not fcms content
+```
+
+## Agent Skills Library
+
+Public, cross-harness Agent Skills (`SKILL.md` packages) for Sentinel live in [`skills/`](skills/README.md), including the Sentinel-specific meta-skill [`sn-skill-creator`](skills/sn-skill-creator/SKILL.md).
+
+Validate skills after any edit:
+
+```bash
+python3 tools/validate_skills.py
 ```
 
 ## Run locally
