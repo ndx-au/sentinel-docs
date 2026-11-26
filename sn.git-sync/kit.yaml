@@ -1,0 +1,6 @@
+name: Git Sync
+description: Scheduled 5-minute SRE git sync gated to production via machine-local vault secret
+namespace: sn
+kit-name: git-sync
+version: "1.0.0"
+public: false
